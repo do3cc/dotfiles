@@ -68,6 +68,7 @@ Why? Because I often completely break this repo while updating. Which means that
 
 1. [Read my gently-worded note](#heed-this-critically-important-warning-before-you-install)
 1. Fork this repo
+1. Install git, curl, g++
 1. Open a terminal/shell and do this:
 
 ```sh
