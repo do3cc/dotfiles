@@ -1,5 +1,5 @@
 # Ubuntu-only stuff. Abort if not Ubuntu.
-is_ubuntu || return 1
+is_mint || return 1
 
 # Update APT.
 e_header "Updating APT"
@@ -17,9 +17,17 @@ packages=(
   ack-grep
   byobu
   vim
+  zsh
+  apt-file
+  virtualenvwrapper
+  python-pip
+  owncloud-client
+  keepass2
 )
 
 packages=($(setdiff "${packages[*]}" "$(dpkg --get-selections | grep -v deinstall | awk '{print $1}')"))
+echo 123
+echo $packages
 
 if (( ${#packages[@]} > 0 )); then
   e_header "Installing APT packages: ${packages[*]}"

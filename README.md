@@ -1,6 +1,6 @@
 # Dotfiles
 
-My Ubuntu dotfiles.
+My mint dotfiles.
 
 ## About this project
 
@@ -14,7 +14,7 @@ That command is [dotfiles][dotfiles], and this is my "dotfiles" Git repo.
 
 When [dotfiles][dotfiles] is run for the first time, it does a few things:
 
-1. In Ubuntu, Git is installed if necessary via APT (it's already there in OSX).
+1. In mint, Git is installed if necessary via APT (it's already there in OSX).
 1. This repo is cloned into your user directory, under `~/.dotfiles`.
 1. Files in `/copy` are copied into `~/`. ([read more](#the-copy-step))
 1. Files in `/link` are symlinked into `~/`. ([read more](#the-link-step))
@@ -42,8 +42,8 @@ Any file in the `/link` subdirectory gets symlinked into `~/` with `ln -s`. Edit
 ### The "init" step
 Scripts in the `/init` subdirectory will be executed. A whole bunch of things will be installed, but _only_ if they aren't already.
 
-#### Ubuntu
-* APT packages and git-extras via the [init/20_ubuntu_apt.sh](init/20_ubuntu_apt.sh) script
+#### mint
+* APT packages and git-extras via the [init/20_mint_apt.sh](init/20_ubuntu_apt.sh) script
 * Node.js, npm and nave via the [init/50_node.sh](init/50_node.sh) script
 * Ruby, gems and rbenv via the [init/50_ruby.sh](init/50_ruby.sh) script
 * Vim plugins via the [init/50_vim.sh](init/50_vim.sh) script
