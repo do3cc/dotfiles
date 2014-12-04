@@ -31,3 +31,6 @@
 [submodule "rbenv-update"]
 	path = link/.rbenv/plugins/rbenv-update
 	url = git://github.com/rkh/rbenv-update.git
+[submodule "nerdtree"]
+    path = link/.vim/bundle/nerdtree
+    url = https://github.com/scrooloose/nerdtree.git
