@@ -23,6 +23,11 @@ packages=(
   python-pip
   owncloud-client
   keepass2
+  mutt-patched
+  offlineimap
+  notmuch
+  pycarddav
+  keychain
 )
 
 packages=($(setdiff "${packages[*]}" "$(dpkg --get-selections | grep -v deinstall | awk '{print $1}')"))
