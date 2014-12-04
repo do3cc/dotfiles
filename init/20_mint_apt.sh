@@ -23,6 +23,7 @@ packages=(
   python-pip
   owncloud-client
   keepass2
+  xdotool
   mutt-patched
   offlineimap
   notmuch

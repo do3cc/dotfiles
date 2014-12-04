@@ -1,0 +1,23 @@
+[general]
+ui = ttyui
+accounts = PatrickGerken
+#pythonfile=~/.mutt/offlineimap.py
+fsync = False
+
+[Account PatrickGerken]
+localrepository = PatrickGerken-Local
+remoterepository = PatrickGerken-Remote
+status_backend = sqlite
+postsynchook = notmuch new
+
+[Repository PatrickGerken-Local]
+type = Maildir
+localfolders = ~/.mail/patrickgerken
+
+[Repository PatrickGerken-Remote]
+type = IMAP
+remoteuser = 
+remotepass = 
+remotehost = wp164.webpack.hosteurope.de
+ssl = yes
+cert_fingerprint = 16b5289e4c6158ba99204fb6cb9b89c50a576852
