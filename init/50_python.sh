@@ -3,7 +3,8 @@ packages=(
     checkoutmanager 
     zest.releaser 
     check-manifest 
-    zest.pocompile 
+    zest.pocompile
+    checkoutmanager
     )
 
 for package in "${packages[@]}"; do
