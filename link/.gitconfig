@@ -1,0 +1,89 @@
+[user]
+	email = do3cc@patrick-gerken.de
+	name = Patrick Gerken
+[core]
+	excludesfile = /home/do3cc/.gitglobalignore
+	editor = vim
+	whitespace = cr-at-eol
+
+[color]
+	branch = true
+	diff = auto
+	status = auto
+	ui = auto
+
+[color "diff"]
+	plain = normal
+	meta = bold
+	frag = cyan
+	old = white red
+	new = white green
+	commit = yellow
+	whitespace = normal red
+
+[color "branch"]
+	current = normal
+	local = normal
+	remote = red
+	plain = normal
+
+[color "status"]
+	header = normal
+	added = red
+	updated = green
+	changed = white red
+	untracked = white red
+	nobranch = white red
+
+[color "grep"]
+	match = normal
+
+[color "interactive"]
+	prompt = normal
+	header = normal
+	help = normal
+	error = normal
+
+[diff]
+	renames = true
+	tool = meld
+
+[alias]
+	ai = add -i
+	ap = add -p
+	b = branch -a
+	cf = config
+	ci = commit -v
+	cia = commit -v -a
+	cam = commit -a -m
+	co = checkout
+	cp = cherry-pick
+	d = diff
+	dc = diff --cached
+	dw = diff --color-words
+	dwc = diff --cached --color-words
+	lf = log --follow
+	llf = log -p --follow
+	l = log
+	ll = log -p
+	lt = log trunk..
+	llt = log -p trunk..
+	lm = log master..
+	llm = log -p master..
+	resh1 = reset HEAD^
+	s = !git --no-pager status
+	sm = submodule
+	st = status
+	tl = tag -l
+	copr = "!f() { git fetch -fu ${2:-origin} refs/pull/$1/head:pr/$1 && git checkout pr/$1; }; f"
+
+[push]
+	default = current
+
+
+[http]
+
+[rerere]
+	enabled = 1
+[commit]
+	template = /home/do3cc/.gitmessage.txt

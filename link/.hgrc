@@ -1,0 +1,4 @@
+%include ~/.hgrc_secrets
+
+[ui]
+username=do3cc

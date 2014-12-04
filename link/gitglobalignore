@@ -1,0 +1,11 @@
+*.egg
+.svn
+*.egg-info
+*.pyc
+\#*
+.installed.cfg
+.mr.developer.cfg
+buildout.cfg
+develop-eggs/
+*.swp
+.idea
