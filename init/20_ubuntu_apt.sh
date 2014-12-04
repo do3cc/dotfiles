@@ -14,6 +14,9 @@ packages=(
   git-core
   htop
   nmap
+  ack-grep
+  byobu
+  vim
 )
 
 packages=($(setdiff "${packages[*]}" "$(dpkg --get-selections | grep -v deinstall | awk '{print $1}')"))
