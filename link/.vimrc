@@ -49,6 +49,9 @@ set formatoptions=qrn1
 set colorcolumn=85
 au BufRead ~/.mutt* set tw=72
 
+" Writing tocs
+au BufRead *.rst set tw=0
+
 " Autosave
 au FocusLost * :wa
 

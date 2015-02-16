@@ -10,3 +10,4 @@ develop-eggs/
 *.swp
 .idea
 .*un~
+nohup.out

@@ -48,7 +48,7 @@ alias sort="LC_ALL=C sort"
 alias t="todo.sh -d /home/do3cc/ownCloud/todo/todo.cfg"
 
 #(which keychain > /dev/null && eval `keychain /home/do3cc/Private/ssh/id_rsa /home/do3cc/Private/ssh/id_rsa_old /home/do3cc/Private/ssh/blog.pem`)
-(which keychain > /dev/null && eval `keychain 671A13DE`)
+(which keychain > /dev/null && eval `keychain A9516641`)
 
 PATH=$PATH:$HOME/.rvm/bin # Add RVM to PATH for scripting
 
