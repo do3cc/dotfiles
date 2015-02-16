@@ -9,6 +9,7 @@
 
 # Don't commit Vim plugins, vim-plug will install them.
 /link/.vim/plugged
+/link/.vim/bundle
 
 # Don't commit rbenv temp files.
 /link/.rbenv/shims/
