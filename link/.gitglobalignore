@@ -7,7 +7,7 @@
 .mr.developer.cfg
 buildout.cfg
 develop-eggs/
-*.swp
+.*.sw[a-z]
 .idea
 .*un~
 nohup.out
