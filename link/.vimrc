@@ -1,6 +1,29 @@
 set nocompatible
-filetype off
-execute pathogen#infect()
+let iCanHazNeoBundle=1
+let neobundle_readme=expand($HOME.'/.vim/bundle/neobundle.vim/README.md')
+if !filereadable(neobundle_readme)
+    echo "Installing NeoBundle.."
+    echo ""
+    silent !mkdir -p $HOME/.vim/bundle
+    silent !git clone https://github.com/Shougo/neobundle.vim $HOME/.vim/bundle/neobundle.vim
+    let iCanHazNeoBundle=0
+endif
+if has('vim_starting')
+    set rtp+=$HOME/.vim/bundle/neobundle.vim/
+endif
+call neobundle#begin(expand($HOME.'/.vim/bundle/'))
+NeoBundle 'Shougo/neobundle.vim' " Neobundle
+NeoBundle 'scrooloose/nerdtree'  " navigation
+NeoBundle 'Rykka/riv.vim'        " rst
+NeoBundle 'scrooloose/syntastic' " syntax checker
+NeoBundle 'ntpeters/vim-better-whitespace' " highlight trailing white space
+NeoBundle 'hynek/vim-python-pep8-indent' " better python indent
+NeoBundle 'bkad/CamelCaseMotion' " Camelcase moving
+NeoBundle 'Shougo/neocomplete.vim' " tab complete
+NeoBundle 'bling/vim-airline'    " statusbar hip
+NeoBundle 'justinmk/vim-sneak'   " regex preview
+call neobundle#end()
+
 filetype plugin indent on
 
 
