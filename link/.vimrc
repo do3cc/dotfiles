@@ -29,7 +29,6 @@ filetype plugin indent on
 
 set modelines=0
 
-set nowrap        " don't wrap lines
 set tabstop=4     " a tab is four spaces
 "set backspace=indent,eol,start
                   " allow backspacing over everything in insert mode
@@ -80,3 +79,6 @@ au FocusLost * :wa
 
 " Python
 autocmd FileType python autocmd BufWritePre <buffer> StripWhitespace
+
+" Rst
+autocmd BufRead,BufNewFile *.rst setfiletype rst setlocal nowrap
