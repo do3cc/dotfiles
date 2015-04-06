@@ -15,9 +15,6 @@
 
 # Source the prompt <<1
 #-------------------------------------------------------------------------------
-if [[ ! -n "$ZSHRUN" ]]; then
-    source $HOME/.zsh_prompt
-fi
 # Precmd functions local array variable <<2
 #-------------------------------------------------------------------------------
 local -a precmd_functions
@@ -34,6 +31,7 @@ precmd_functions=( precmd_prompt )
 # Autoload tab completion <<2
 #-------------------------------------------------------------------------------
 autoload -U compinit
+autoload -U colors && colors
 compinit -C
 # >> 2
 # Modify default zsh directory coloring on ls commands <<2
@@ -158,10 +156,14 @@ source ~/.antigen.zsh
 
 # Set antigen bundles <<1
 #-------------------------------------------------------------------------------
+antigen use oh-my-zsh
 antigen bundle zsh-users/zsh-syntax-highlighting
 antigen bundle robbyrussell/oh-my-zsh plugins/django
+antigen bundle git
 antigen bundle hchbaw/opp.zsh opp.plugin.zsh
 # >>1
+#
+antigen theme agnoster
 
 # Source antigen bundles <<1
 #-------------------------------------------------------------------------------
@@ -473,5 +475,9 @@ done
 # >>1
 
 # EOF
+
+# Agnoster theme tricks
+DEFAULT_USER=do3cc
+eval `dircolors ~/.dircolors`
 
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
