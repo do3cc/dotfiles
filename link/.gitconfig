@@ -87,3 +87,5 @@
 	enabled = 1
 [commit]
 	template = /home/do3cc/.gitmessage.txt
+[branch]
+	autosetuprebase = always
