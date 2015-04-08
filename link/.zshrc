@@ -109,7 +109,7 @@ export GREP_OPTIONS='--color=auto'
 # >>2
 # Use the correct ctags <<2
 #-------------------------------------------------------------------------------
-PATH="/usr/local/bin:$PATH"
+PATH="/home/do3cc/.local/bin:/usr/local/bin:$PATH"
 # >>2
 # Editor and display configurations <<2
 #-------------------------------------------------------------------------------
