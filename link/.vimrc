@@ -13,8 +13,9 @@ if has('vim_starting')
 endif
 call neobundle#begin(expand($HOME.'/.vim/bundle/'))
 NeoBundle 'Shougo/neobundle.vim' " Neobundle
+NeoBundle 'https://github.com/mattn/emmet-vim/'  " Emmet
 NeoBundle 'osyo-manga/vim-over'  " visual find and replace
-NeoBundle 'kien/ctrlp.vim' "  findfiles 
+NeoBundle 'kien/ctrlp.vim'       " findfiles
 NeoBundle 'scrooloose/nerdtree'  " navigation
 NeoBundle 'Rykka/riv.vim'        " rst
 NeoBundle 'scrooloose/syntastic' " syntax checker
@@ -90,13 +91,13 @@ autocmd FileType python autocmd BufWritePre <buffer> StripWhitespace
 autocmd BufRead,BufNewFile *.rst setfiletype rst setlocal nowrap
 
 " Colors
+syntax enable
 set background=dark
 colorscheme solarized
-set t_Co=256      " 256 colors
+"set t_Co=256      " 256 colors
 let g:airline_powerline_fonts = 1
-let g:solarized_termcolors = &t_Co
+"let g:solarized_termcolors = &t_Co
 "let g:solarized_termtrans = 1
-"let g:solarized_termcolors=256
 "let g:solarized_visibility = "high"
 "let g:solarized_contrast = "high"
 set background=dark
@@ -166,3 +167,8 @@ let g:NERDTreeMapJumpNextSibling = ''
 let g:NERDTreeMapJumpPrevSibling = ''
 map <Leader>d :NERDTreeToggle<CR>
 nmap <Leader>nt :NERDTreeFind<CR>
+
+" Configure emmet
+let g:user_emmet_install_global = 0
+autocmd FileType html,css EmmetInstall
+let g:user_emmet_leader_key=','
