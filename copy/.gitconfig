@@ -5,6 +5,11 @@
 	excludesfile = /home/do3cc/.gitglobalignore
 	editor = vim
 	whitespace = cr-at-eol
+        autocrlf = input
+        whitespace = fix,space-before-tab,tab-in-indent,trailing-space
+
+[apply]
+        whitespace = fix
 
 [color]
 	branch = true
@@ -52,6 +57,7 @@
 	ai = add -i
 	ap = add -p
 	b = branch -a
+        br = branch
 	cf = config
 	ci = commit -v
 	cia = commit -v -a
@@ -70,6 +76,7 @@
 	llt = log -p trunk..
 	lm = log master..
 	llm = log -p master..
+        pp = !"echo 'Pull'; git pull; echo 'Push'; git push"
 	resh1 = reset HEAD^
 	s = !git --no-pager status
 	sm = submodule
@@ -78,8 +85,7 @@
 	copr = "!f() { git fetch -fu ${2:-origin} refs/pull/$1/head:pr/$1 && git checkout pr/$1; }; f"
 
 [push]
-	default = current
-
+	default = simple
 
 [http]
 

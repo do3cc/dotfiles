@@ -58,6 +58,22 @@ Also, before installing, be sure to [read my gently-worded note](#heed-this-crit
 
 ## Installation
 
+### OS X Notes
+
+You need to have [XCode](https://developer.apple.com/downloads/index.action?=xcode) or, at the very minimum, the [XCode Command Line Tools](https://developer.apple.com/downloads/index.action?=command%20line%20tools), which are available as a much smaller download.
+
+The easiest way to install the XCode Command Line Tools in OSX 10.9+ is to open up a terminal, type `xcode-select --install` and [follow the prompts](http://osxdaily.com/2014/02/12/install-command-line-tools-mac-os-x/).
+
+_Tested in OSX 10.15_
+
+### Ubuntu Notes
+
+You might want to set up your ubuntu server [like I do it](https://github.com/cowboy/dotfiles/wiki/ubuntu-setup), but then again, you might not.
+
+Either way, you should at least update/upgrade APT with `sudo apt-get -qq update && sudo apt-get -qq dist-upgrade` first.
+
+_Tested in Ubuntu 14.04 LTS_
+
 ### Heed this critically important warning before you install
 
 **If you're not me, please _do not_ install dotfiles directly from this repo!**
@@ -68,20 +84,37 @@ Why? Because I often completely break this repo while updating. Which means that
 
 1. [Read my gently-worded note](#heed-this-critically-important-warning-before-you-install)
 1. Fork this repo
-1. Install git, curl, g++
-1. Open a terminal/shell and do this:
+1. Open a terminal/shell and do this (change `cowboy` and `master` as appropriate):
+
+#### Ubuntu
 
 ```sh
-export github_user=YOUR_GITHUB_USER_NAME
-
-bash -c "$(curl -fsSL https://raw.github.com/$github_user/dotfiles/master/bin/dotfiles)" && source ~/.bashrc
+export DOTFILES_GH_USER=cowboy
+export DOTFILES_GH_BRANCH=master
+bash -c "$(wget -qO- https://raw.github.com/$DOTFILES_GH_USER/dotfiles/$DOTFILES_GH_BRANCH/bin/dotfiles)" && source ~/.bashrc
 ```
 
-Since you'll be using the [dotfiles][dotfiles] command on subsequent runs, you'll only have to export the `github_user` variable for the initial install.
+#### macOS
+
+```sh
+export DOTFILES_GH_USER=cowboy
+export DOTFILES_GH_BRANCH=master
+bash -c "$(curl -fsSL https://raw.github.com/$DOTFILES_GH_USER/dotfiles/$DOTFILES_GH_BRANCH/bin/dotfiles)" && source ~/.bashrc
+```
+
+Since you'll be using the [dotfiles][dotfiles] command on subsequent runs, you'll only have to set the `DOTFILES_GH_USER` variable for the initial install, but if you have a custom branch, you _will_ need to export `DOTFILES_GH_BRANCH` for subsequent runs.
 
 There's a lot of stuff that requires admin access via `sudo`, so be warned that you might need to enter your password here or there.
 
 ### Actual installation (for me)
+
+#### Ubuntu
+
+```sh
+bash -c "$(wget -qO- https://bit.ly/cowboy-dotfiles)" && source ~/.bashrc
+```
+
+#### macOS
 
 ```sh
 bash -c "$(curl -fsSL https://bit.ly/do3cc-dotfiles)" && source ~/.bashrc
