@@ -149,7 +149,6 @@ antigen use oh-my-zsh
 antigen bundle zsh-users/zsh-syntax-highlighting
 antigen bundle robbyrussell/oh-my-zsh plugins/django
 antigen bundle git
-antigen bundle hchbaw/opp.zsh opp.plugin.zsh
 # >>1
 #
 antigen theme agnoster
@@ -157,7 +156,6 @@ antigen theme agnoster
 # Source antigen bundles <<1
 #-------------------------------------------------------------------------------
 # Antigen should handle this but doesn't seem to
-#source ~/.antigen/repos/https-COLON--SLASH--SLASH-github.com-SLASH-hchbaw-SLASH-opp.zsh.git/opp.zsh
 #source ~/.antigen/repos/https-COLON--SLASH--SLASH-github.com-SLASH-robbyrussell-SLASH-oh-my-zsh.git/plugins/django/django.plugin.zsh
 # >>1
 
