@@ -1,3 +1,10 @@
+# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
+# Initialization code that may require console input (password prompts, [y/n]
+# confirmations, etc.) must go above this block; everything else may go below.
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
 #!/bin/zsh
 # vim: set foldmarker=<<,>> foldlevel=0 foldmethod=marker:
 #===================================================================================
@@ -103,10 +110,6 @@ export LANG=en_US.UTF-8
 export LC_ALL=$LANG
 export LC_COLLATE=C
 # >>2
-# Set grepoptions <<2
-#-------------------------------------------------------------------------------
-export GREP_OPTIONS='--color=auto'
-# >>2
 # Use the correct ctags <<2
 #-------------------------------------------------------------------------------
 PATH="/home/do3cc/.local/bin:/usr/local/bin:$PATH"
@@ -138,7 +141,7 @@ export KEYTIMEOUT=1
 # Source antigen <<1
 #-------------------------------------------------------------------------------
 if [[ ! -f ~/.antigen.zsh ]]; then
-    curl https://raw.githubusercontent.com/zsh-users/antigen/master/antigen.zsh > ~/.antigen.zsh
+    curl -L git.io/antigen > ~/.antigen.zsh
 fi
 source ~/.antigen.zsh
 # >>1
@@ -147,17 +150,13 @@ source ~/.antigen.zsh
 #-------------------------------------------------------------------------------
 antigen use oh-my-zsh
 antigen bundle zsh-users/zsh-syntax-highlighting
-antigen bundle robbyrussell/oh-my-zsh plugins/django
 antigen bundle git
 # >>1
 #
-antigen theme agnoster
+#antigen theme agnoster
+antigen theme romkatv/powerlevel10k
+antigen apply
 
-# Source antigen bundles <<1
-#-------------------------------------------------------------------------------
-# Antigen should handle this but doesn't seem to
-#source ~/.antigen/repos/https-COLON--SLASH--SLASH-github.com-SLASH-robbyrussell-SLASH-oh-my-zsh.git/plugins/django/django.plugin.zsh
-# >>1
 
 # Key Bindings <<1
 #-------------------------------------------------------------------------------
@@ -365,16 +364,12 @@ bindkey . traverse_up
 # >>2
 # >>1
 
-# Source Custom Configurations <<1
-for fname in $(find ~/dotfiles/custom-configs -name "*.sh*"); do
-    source $fname
-done
-# >>1
-
 # EOF
 
 # Agnoster theme tricks
 DEFAULT_USER=do3cc
-eval `dircolors ~/.dircolors`
 
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
+
+# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
+[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
