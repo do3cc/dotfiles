@@ -1,35 +1,30 @@
 set nocompatible
-let iCanHazNeoBundle=1
-let neobundle_readme=expand($HOME.'/.vim/bundle/neobundle.vim/README.md')
-if !filereadable(neobundle_readme)
-    echo "Installing NeoBundle.."
-    echo ""
-    silent !mkdir -p $HOME/.vim/bundle
-    silent !git clone https://github.com/Shougo/neobundle.vim $HOME/.vim/bundle/neobundle.vim
-    let iCanHazNeoBundle=0
-endif
-if has('vim_starting')
-    set rtp+=$HOME/.vim/bundle/neobundle.vim/
-endif
-call neobundle#begin(expand($HOME.'/.vim/bundle/'))
-NeoBundle 'Shougo/neobundle.vim' " Neobundle
-NeoBundle 'https://github.com/mattn/emmet-vim/'  " Emmet
-NeoBundle 'osyo-manga/vim-over'  " visual find and replace
-NeoBundle 'kien/ctrlp.vim'       " findfiles
-NeoBundle 'scrooloose/nerdtree'  " navigation
-NeoBundle 'Rykka/riv.vim'        " rst
-NeoBundle 'scrooloose/syntastic' " syntax checker
-NeoBundle 'ntpeters/vim-better-whitespace' " highlight trailing white space
-NeoBundle 'hynek/vim-python-pep8-indent' " better python indent
-NeoBundle 'bkad/CamelCaseMotion' " Camelcase moving
-NeoBundle 'Shougo/neocomplete.vim' " tab complete
-NeoBundle 'bling/vim-airline'    " statusbar hip
-NeoBundle 'justinmk/vim-sneak'   " regex preview
-NeoBundle 'hhff/SpacegrayEighties.vim'  "  colorscheme
-NeoBundle 'altercation/vim-colors-solarized' " colorscheme
-call neobundle#end()
+
+" Dein config
+set runtimepath+=/home/do3cc/.cache/dein/repos/github.com/Shougo/dein.vim
+call dein#begin('/home/do3cc/.cache/dein')
+call dein#add('/home/do3cc/.cache/dein/repos/github.com/Shougo/dein.vim')
+
+
+call dein#add('https://github.com/mattn/emmet-vim/')  " Emmet
+call dein#add('osyo-manga/vim-over')  " visual find and replace
+call dein#add('ctrlpvim/ctrlp.vim')       " findfiles
+call dein#add('preservim/nerdtree')  " navigation
+call dein#add('gu-fan/riv.vim')        " rst
+call dein#add('vim-syntastic/syntastic') " syntax checker
+call dein#add('ntpeters/vim-better-whitespace') " highlight trailing white space
+call dein#add('bkad/CamelCaseMotion') " Camelcase moving
+call dein#add('vim-airline/vim-airline')    " statusbar hip
+call dein#add('vim-airline/vim-airline-themes')    " statusbar hip
+call dein#add('justinmk/vim-sneak')   " regex preview
+call dein#add('altercation/vim-colors-solarized') " colorscheme
+call dein#end()
 
 filetype plugin indent on
+
+if dein#check_install()
+ call dein#install()
+endif
 
 set autoindent    " always set autoindenting on
 set autoread      " Read open files again when changed outside Vim
@@ -103,7 +98,8 @@ let g:airline_powerline_fonts = 1
 set background=dark
 
 " Airline
-let g:airline_theme='understated'                   " Use the custom theme I wrote
+let g:airline_theme='solarized'                   " Use the custom theme I wrote
+let g:airline_solarized_bg='dark'
 let g:airline_left_sep=''                           " No separator as they seem to look funky
 let g:airline_right_sep=''                          " No separator as they seem to look funky
 let g:airline#extensions#branch#enabled = 0         " Do not show the git branch in the status line
