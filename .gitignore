@@ -58,6 +58,7 @@ Desktop.ini
 .swo
 .*.swp
 .*.swo
+.*.un~
 
 # VS Code
 .vscode
