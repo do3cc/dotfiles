@@ -1,5 +1,4 @@
 set nocompatible
-
 " Dein config
 set runtimepath+=/home/do3cc/.cache/dein/repos/github.com/Shougo/dein.vim
 call dein#begin('/home/do3cc/.cache/dein')
@@ -18,6 +17,7 @@ call dein#add('vim-airline/vim-airline')    " statusbar hip
 call dein#add('vim-airline/vim-airline-themes')    " statusbar hip
 call dein#add('justinmk/vim-sneak')   " regex preview
 call dein#add('altercation/vim-colors-solarized') " colorscheme
+call dein#add('dense-analysis/ale') " Generic linter
 call dein#end()
 
 filetype plugin indent on
@@ -140,6 +140,13 @@ let g:syntastic_filetype_map = { 'handlebars.html': 'handlebars' }
 let g:syntastic_mode_map={ 'mode': 'active',
                      \ 'active_filetypes': [],
                      \ 'passive_filetypes': ['html', 'handlebars'] }
+
+" ALE Linting config
+let b:ale_fixers = {
+            \'javascript': ['prettier', 'eslint'],
+            \'*': ['remove_trailing_lines', 'trim_whitespace']
+            \}
+let g:ale_fix_on_save = 1
 
 " ctrlp config
 let g:ctrlp_use_caching=0
