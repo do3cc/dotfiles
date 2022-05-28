@@ -95,3 +95,5 @@
 	template = /home/do3cc/.gitmessage.txt
 [branch]
 	autosetuprebase = always
+[pull]
+	rebase = true
