@@ -143,15 +143,16 @@ let g:syntastic_mode_map={ 'mode': 'active',
                      \ 'passive_filetypes': ['html', 'handlebars'] }
 
 " ALE Linting config
-let b:ale_fixers = {
+let g:ale_fixers = {
             \'javascript': ['prettier', 'eslint'],
+            \'python': ['black', 'isort'],
             \'*': ['remove_trailing_lines', 'trim_whitespace']
             \}
 let g:ale_fix_on_save = 1
 
 " ctrlp config
 let g:ctrlp_use_caching=0
-let g:ctrlp_custom_ignore = '\v[\/](transpiled)|dist|tmp|node_modules|(\.(swp|git|bak|pyc|DS_Store))$'
+let g:ctrlp_custom_ignore = '\v[\/](transpiled)|dist|tmp|node_modules|(\.(swp|git|bak|pyc|DS_Store))$|lib|lib64|share|bin'
 let g:ctrlp_working_path_mode = 0
 let g:ctrlp_max_files=0
 let g:ctrlp_max_height = 18
