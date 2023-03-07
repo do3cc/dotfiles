@@ -19,6 +19,7 @@ call dein#add('justinmk/vim-sneak')   " regex preview
 call dein#add('altercation/vim-colors-solarized') " colorscheme
 call dein#add('dense-analysis/ale') " Generic linter
 call dein#add('christoomey/vim-tmux-navigator') " tmux integration
+call dein#add('fatih/vim-go') " Go support
 call dein#end()
 
 filetype plugin indent on
