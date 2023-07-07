@@ -4,7 +4,6 @@ set runtimepath+=/home/do3cc/.cache/dein/repos/github.com/Shougo/dein.vim
 call dein#begin('/home/do3cc/.cache/dein')
 call dein#add('/home/do3cc/.cache/dein/repos/github.com/Shougo/dein.vim')
 
-
 call dein#add('https://github.com/mattn/emmet-vim/')  " Emmet
 call dein#add('osyo-manga/vim-over')  " visual find and replace
 call dein#add('ctrlpvim/ctrlp.vim')       " findfiles
@@ -20,6 +19,7 @@ call dein#add('altercation/vim-colors-solarized') " colorscheme
 call dein#add('dense-analysis/ale') " Generic linter
 call dein#add('christoomey/vim-tmux-navigator') " tmux integration
 call dein#add('fatih/vim-go') " Go support
+call dein#add('neoclide/coc.nvim', { 'merged': 0, 'rev': 'release' })  " Autocomplete
 call dein#end()
 
 filetype plugin indent on
@@ -146,6 +146,7 @@ let g:syntastic_mode_map={ 'mode': 'active',
 " ALE Linting config
 let g:ale_fixers = {
             \'javascript': ['prettier', 'eslint'],
+            \'typescriptreact': ['prettier', 'tslint'],
             \'python': ['black', 'isort'],
             \'*': ['remove_trailing_lines', 'trim_whitespace']
             \}
