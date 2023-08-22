@@ -28,6 +28,9 @@ if dein#check_install()
  call dein#install()
 endif
 
+" neovim shall not use venv python
+let g:python3_host_prog = '/usr/bin/python3'
+
 set autoindent    " always set autoindenting on
 set autoread      " Read open files again when changed outside Vim
 set noswapfile    " We need no swap file

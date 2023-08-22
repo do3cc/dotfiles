@@ -202,6 +202,7 @@ alias tmuxp='tmux attach -t pair-session || tmux new-session -t host-session -s 
 alias delete_pyc='find . -name \*.pyc -exec rm \{\} \+'
 alias c='clear'
 alias vom='vim'
+alias vim='nvim'
 # >>1
 
 # Functions <<1
