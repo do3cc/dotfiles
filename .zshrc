@@ -150,8 +150,10 @@ source ~/.antigen.zsh
 #-------------------------------------------------------------------------------
 antigen use oh-my-zsh
 antigen bundle zsh-users/zsh-syntax-highlighting
-antigen bundle ssh-agent
 antigen bundle git
+if [ -z "$SSH_CLIENT" ]; then
+    antigen bundle ssh-agent
+fi
 # >>1
 #
 #antigen theme agnoster
