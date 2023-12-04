@@ -72,17 +72,17 @@ set wrap
 set textwidth=79
 set formatoptions=qrn1
 set colorcolumn=85
-au BufRead ~/.mutt* set tw=72
+autocmd BufRead ~/.mutt* set tw=72
 
 " remappings
 let mapleader=" "
 set pastetoggle=<leader>p  " Toggle paste mode
 
 " Writing tocs
-au BufRead *.rst set tw=0
+autocmd BufRead *.rst set tw=0
 
 " Autosave
-au FocusLost * :wa
+autocmd FocusLost * :wa
 
 " Python
 autocmd FileType python autocmd BufWritePre <buffer> StripWhitespace
@@ -90,6 +90,18 @@ autocmd FileType python autocmd BufWritePre <buffer> StripWhitespace
 " Rst
 autocmd BufRead,BufNewFile *.rst setfiletype rst setlocal nowrap
 
+" Javascript
+autocmd FileType javascript setlocal shiftwidth=2 softtabstop=2 expandtab
+
+" Typescript
+autocmd FileType typescript setlocal shiftwidth=2 softtabstop=2 expandtab
+"
+" Yaml
+autocmd FileType yaml setlocal shiftwidth=2 softtabstop=2 expandtab
+"
+" Terraform
+autocmd FileType tf setlocal shiftwidth=2 softtabstop=2 expandtab
+"
 " Colors
 syntax enable
 set background=dark
@@ -100,7 +112,6 @@ let g:airline_powerline_fonts = 1
 "let g:solarized_termtrans = 1
 "let g:solarized_visibility = "high"
 "let g:solarized_contrast = "high"
-set background=dark
 
 " Airline
 let g:airline_theme='solarized'                   " Use the custom theme I wrote
@@ -151,6 +162,7 @@ let g:ale_fixers = {
             \'javascript': ['prettier', 'eslint'],
             \'typescriptreact': ['prettier', 'tslint'],
             \'python': ['black', 'isort'],
+            \'typescript': ['prettier', 'eslint'],
             \'*': ['remove_trailing_lines', 'trim_whitespace']
             \}
 let g:ale_fix_on_save = 1
@@ -180,3 +192,15 @@ nmap <Leader>nt :NERDTreeFind<CR>
 
 " Configure emmet
 let g:user_emmet_install_global = 0
+
+" coc autocomplete
+inoremap <silent><expr> <TAB>
+      \ coc#pum#visible() ? coc#pum#next(1) :
+      \ CheckBackspace() ? "\<Tab>" :
+      \ coc#refresh()
+inoremap <expr><S-TAB> coc#pum#visible() ? coc#pum#prev(1) : "\<C-h>"
+
+" Make <CR> to accept selected completion item or notify coc.nvim to format
+" <C-g>u breaks current undo, please make your own choice
+inoremap <silent><expr> <CR> coc#pum#visible() ? coc#pum#confirm()
+                              \: "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
