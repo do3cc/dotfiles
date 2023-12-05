@@ -4,7 +4,7 @@ set runtimepath+=/home/do3cc/.cache/dein/repos/github.com/Shougo/dein.vim
 call dein#begin('/home/do3cc/.cache/dein')
 call dein#add('/home/do3cc/.cache/dein/repos/github.com/Shougo/dein.vim')
 
-call dein#add('https://github.com/mattn/emmet-vim/')  " Emmet
+call dein#add('https://github.com/mattn/emmet-vim/')  " Emmet completion tricks
 call dein#add('osyo-manga/vim-over')  " visual find and replace
 call dein#add('ctrlpvim/ctrlp.vim')       " findfiles
 call dein#add('preservim/nerdtree')  " navigation
@@ -15,7 +15,8 @@ call dein#add('bkad/CamelCaseMotion') " Camelcase moving
 call dein#add('vim-airline/vim-airline')    " statusbar hip
 call dein#add('vim-airline/vim-airline-themes')    " statusbar hip
 call dein#add('justinmk/vim-sneak')   " regex preview
-call dein#add('altercation/vim-colors-solarized') " colorscheme
+"call dein#add('altercation/vim-colors-solarized') " colorscheme
+call dein#add('sainnhe/gruvbox-material') " colorscheme
 call dein#add('dense-analysis/ale') " Generic linter
 call dein#add('christoomey/vim-tmux-navigator') " tmux integration
 call dein#add('fatih/vim-go') " Go support
@@ -104,27 +105,23 @@ autocmd FileType tf setlocal shiftwidth=2 softtabstop=2 expandtab
 "
 " Colors
 syntax enable
-set background=dark
-colorscheme solarized
 "set t_Co=256      " 256 colors
-let g:airline_powerline_fonts = 1
+set background=light
+set termguicolors
+let g:gruvbox_material_background = 'soft'
+let g:gruvbox_material_better_performance = 1
+colorscheme gruvbox-material
 "let g:solarized_termcolors = &t_Co
 "let g:solarized_termtrans = 1
 "let g:solarized_visibility = "high"
 "let g:solarized_contrast = "high"
 
 " Airline
-let g:airline_theme='solarized'                   " Use the custom theme I wrote
-let g:airline_solarized_bg='dark'
-let g:airline_left_sep=''                           " No separator as they seem to look funky
-let g:airline_right_sep=''                          " No separator as they seem to look funky
-let g:airline#extensions#branch#enabled = 0         " Do not show the git branch in the status line
+let g:airline_theme='gruvbox_material'                   " Use the custom theme I wrote
+let g:airline_powerline_fonts = 1
+let g:airline_solarized_bg='light'
+"let g:airline#extensions#branch#enabled = 0         " Do not show the git branch in the status line
 let g:airline#extensions#syntastic#enabled = 1      " Do show syntastic warnings in the status line
-let g:airline#extensions#tabline#show_buffers = 0   " Do not list buffers in the status line
-let g:airline_section_x = ''                        " Do not list the filetype or virtualenv in the status line
-let g:airline_section_y = '[R%04l,C%04v] [LEN=%L]'  " Replace file encoding and file format info with fileosition
-let g:airline_section_z = ''                        " Do not show the default fileosition info
-let g:airline#extensions#virtualenv#enabled = 0
 
 " Resize windows
 nnoremap <Left> :vertical resize +1<CR>
@@ -204,3 +201,46 @@ inoremap <expr><S-TAB> coc#pum#visible() ? coc#pum#prev(1) : "\<C-h>"
 " <C-g>u breaks current undo, please make your own choice
 inoremap <silent><expr> <CR> coc#pum#visible() ? coc#pum#confirm()
                               \: "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
+" Use `[g` and `]g` to navigate diagnostics
+" Use `:CocDiagnostics` to get all diagnostics of current buffer in location list
+nmap <silent> [g <Plug>(coc-diagnostic-prev)
+nmap <silent> ]g <Plug>(coc-diagnostic-next)
+
+" GoTo code navigation
+nmap <silent> gd <Plug>(coc-definition)
+nmap <silent> gy <Plug>(coc-type-definition)
+nmap <silent> gi <Plug>(coc-implementation)
+nmap <silent> gr <Plug>(coc-references)
+
+" Use K to show documentation in preview window
+nnoremap <silent> K :call ShowDocumentation()<CR>
+
+function! ShowDocumentation()
+  if CocAction('hasProvider', 'hover')
+    call CocActionAsync('doHover')
+  else
+    call feedkeys('K', 'in')
+  endif
+endfunction
+" Symbol renaming
+nmap <leader>rn <Plug>(coc-rename)
+
+" Formatting selected code
+xmap <leader>f  <Plug>(coc-format-selected)
+nmap <leader>f  <Plug>(coc-format-selected)
+
+augroup mygroup
+  autocmd!
+  " Setup formatexpr specified filetype(s)
+  autocmd FileType typescript,json setl formatexpr=CocAction('formatSelected')
+  " Update signature help on jump placeholder
+  autocmd User CocJumpPlaceholder call CocActionAsync('showSignatureHelp')
+augroup end
+
+" Applying code actions to the selected code block
+" Example: `<leader>aap` for current paragraph
+xmap <leader>a  <Plug>(coc-codeaction-selected)
+nmap <leader>a  <Plug>(coc-codeaction-selected)
+
+autocmd CursorHold * silent call CocActionAsync('highlight')
+set updatetime=300 "default 4000=4s, which may be slow
