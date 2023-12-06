@@ -2,7 +2,7 @@
 	email = do3cc@patrick-gerken.de
 	name = Patrick Gerken
 [core]
-	editor = vim
+	editor = /usr/bin/nvim
 	whitespace = cr-at-eol
     autocrlf = input
     whitespace = fix,space-before-tab,tab-in-indent,trailing-space

@@ -116,8 +116,8 @@ PATH="/home/do3cc/.local/bin:/usr/local/bin:$PATH"
 # >>2
 # Editor and display configurations <<2
 #-------------------------------------------------------------------------------
-export EDITOR='vim'
-export VISUAL='vim'
+export EDITOR='nvim'
+export VISUAL='nvim'
 export GIT_EDITOR=$EDITOR
 export LESS='-imJMWR'
 export PAGER="less $LESS"

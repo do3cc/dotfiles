@@ -103,6 +103,7 @@ autocmd FileType yaml setlocal shiftwidth=2 softtabstop=2 expandtab
 " Terraform
 autocmd FileType tf setlocal shiftwidth=2 softtabstop=2 expandtab
 "
+
 " Colors
 syntax enable
 "set t_Co=256      " 256 colors
@@ -158,6 +159,7 @@ let g:syntastic_mode_map={ 'mode': 'active',
 let g:ale_fixers = {
             \'javascript': ['prettier', 'eslint'],
             \'typescriptreact': ['prettier', 'tslint'],
+            \'typescript': ['prettier', 'eslint'],
             \'python': ['black', 'isort'],
             \'typescript': ['prettier', 'eslint'],
             \'*': ['remove_trailing_lines', 'trim_whitespace']
