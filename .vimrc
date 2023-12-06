@@ -159,7 +159,6 @@ let g:syntastic_mode_map={ 'mode': 'active',
 let g:ale_fixers = {
             \'javascript': ['prettier', 'eslint'],
             \'typescriptreact': ['prettier', 'tslint'],
-            \'typescript': ['prettier', 'eslint'],
             \'python': ['black', 'isort'],
             \'typescript': ['prettier', 'eslint'],
             \'*': ['remove_trailing_lines', 'trim_whitespace']
