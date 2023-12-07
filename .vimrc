@@ -9,7 +9,6 @@ call dein#add('osyo-manga/vim-over')  " visual find and replace
 call dein#add('ctrlpvim/ctrlp.vim')       " findfiles
 call dein#add('preservim/nerdtree')  " navigation
 call dein#add('gu-fan/riv.vim')        " rst
-call dein#add('vim-syntastic/syntastic') " syntax checker
 call dein#add('ntpeters/vim-better-whitespace') " highlight trailing white space
 call dein#add('bkad/CamelCaseMotion') " Camelcase moving
 call dein#add('vim-airline/vim-airline')    " statusbar hip
@@ -17,11 +16,8 @@ call dein#add('vim-airline/vim-airline-themes')    " statusbar hip
 call dein#add('justinmk/vim-sneak')   " regex preview
 "call dein#add('altercation/vim-colors-solarized') " colorscheme
 call dein#add('sainnhe/gruvbox-material') " colorscheme
-call dein#add('dense-analysis/ale') " Generic linter
 call dein#add('christoomey/vim-tmux-navigator') " tmux integration
-call dein#add('fatih/vim-go') " Go support
 call dein#add('neoclide/coc.nvim', { 'merged': 0, 'rev': 'release' })  " Autocomplete
-call dein#add('neoclide/coc-pyright.nvim')  " Autocomplete
 call dein#end()
 
 filetype plugin indent on
@@ -123,7 +119,6 @@ let g:airline_theme='gruvbox_material'                   " Use the custom theme 
 let g:airline_powerline_fonts = 1
 let g:airline_solarized_bg='light'
 "let g:airline#extensions#branch#enabled = 0         " Do not show the git branch in the status line
-let g:airline#extensions#syntastic#enabled = 1      " Do show syntastic warnings in the status line
 
 " Resize windows
 nnoremap <Left> :vertical resize +1<CR>
@@ -145,26 +140,6 @@ endfunction
 
 " Force write
 cmap w!! w !sudo tee %
-
-" syntastic checks
-let g:syntastic_check_on_open=1                   " check for errors when file is loaded
-let g:syntastic_loc_list_height=5                 " the height of the error list defaults to 10
-let g:syntastic_python_checkers = ['flake8']      " sets flake8 as the default for checkingython files
-let g:syntastic_javascript_checkers = ['jshint']  " sets jshint as our javascript linter
-let g:syntastic_filetype_map = { 'handlebars.html': 'handlebars' }
-let g:syntastic_mode_map={ 'mode': 'active',
-                     \ 'active_filetypes': [],
-                     \ 'passive_filetypes': ['html', 'handlebars'] }
-
-" ALE Linting config
-let g:ale_fixers = {
-            \'javascript': ['prettier', 'eslint'],
-            \'typescriptreact': ['prettier', 'tslint'],
-            \'python': ['black', 'isort'],
-            \'typescript': ['prettier', 'eslint'],
-            \'*': ['remove_trailing_lines', 'trim_whitespace']
-            \}
-let g:ale_fix_on_save = 1
 
 " ctrlp config
 let g:ctrlp_use_caching=0
@@ -193,10 +168,11 @@ nmap <Leader>nt :NERDTreeFind<CR>
 let g:user_emmet_install_global = 0
 
 " coc autocomplete
-inoremap <silent><expr> <TAB>
+let g:coc_global_extensions = ['coc-json', 'coc-git', '@yaegassy/coc-ansible', 'coc-docker', 'coc-esbonio', 'coc-eslint', 'coc-highlight', 'coc-html', '@yaegassy/coc-nginx', 'coc-pyright', 'coc-snippets', 'coc-sql', 'coc-tsserver', 'coc-yaml', 'coc-lightbulb', 'coc-prettier', '@yaegassy/coc-black-formatter']
+inoremap <silent><expr> <TAB>aa
       \ coc#pum#visible() ? coc#pum#next(1) :
       \ CheckBackspace() ? "\<Tab>" :
-      \ coc#refresh()
+      \ coc#refresh()l
 inoremap <expr><S-TAB> coc#pum#visible() ? coc#pum#prev(1) : "\<C-h>"
 
 function! CheckBackspace() abort
