@@ -21,6 +21,7 @@ call dein#add('dense-analysis/ale') " Generic linter
 call dein#add('christoomey/vim-tmux-navigator') " tmux integration
 call dein#add('fatih/vim-go') " Go support
 call dein#add('neoclide/coc.nvim', { 'merged': 0, 'rev': 'release' })  " Autocomplete
+call dein#add('neoclide/coc-pyright.nvim')  " Autocomplete
 call dein#end()
 
 filetype plugin indent on
@@ -197,6 +198,11 @@ inoremap <silent><expr> <TAB>
       \ CheckBackspace() ? "\<Tab>" :
       \ coc#refresh()
 inoremap <expr><S-TAB> coc#pum#visible() ? coc#pum#prev(1) : "\<C-h>"
+
+function! CheckBackspace() abort
+  let col = col('.') - 1
+  return !col || getline('.')[col - 1]  =~# '\s'
+endfunction
 
 " Make <CR> to accept selected completion item or notify coc.nvim to format
 " <C-g>u breaks current undo, please make your own choice
