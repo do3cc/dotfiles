@@ -62,3 +62,5 @@ Desktop.ini
 
 # VS Code
 .vscode
+
+.byobu/.ssh-agent
