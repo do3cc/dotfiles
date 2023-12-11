@@ -227,53 +227,6 @@ function pyserve() {
         python -m SimpleHTTPServer > /dev/null 2>&1
     }
 # >>2
-# Workon virtualenv <<2
-#--------------------------------------------------------------------
-# If we cd into a directory that is named the same as a virtualenv
-# auto activate that virtualenv
-# -------------------------------------------------------------------
-[[ -a /usr/local/share/python/virtualenvwrapper.sh ]] && source /usr/local/share/python/virtualenvwrapper.sh
-[[ -a /usr/local/bin/virtualenvwrapper.sh ]] && source /usr/local/bin/virtualenvwrapper.sh
-
-workon_virtualenv() {
-  if [[ -d .git ]]; then
-     VENV_CUR_DIR="${PWD##*/}"
-     if [[ -a ~/.dev/$VENV_CUR_DIR ]]; then
-       deactivate > /dev/null 2>&1
-       source ~/.dev/$VENV_CUR_DIR/bin/activate
-     fi
-  fi
-}
-# >>2
-# Workon node env <<2
-#--------------------------------------------------------------------
-# If we cd into a directory that contains a directory named node_modules
-# we automatically add it to the $PATH
-# -------------------------------------------------------------------
-workon_node_env() {
-  if [[ -d "node_modules" ]]; then
-
-    export NPM_ORIGINAL_PATH=$PATH
-    eval NODE_NAME=$(basename $(pwd))
-    export PATH="${PATH}:$(pwd)/node_modules/.bin"
-
-    deactivatenode(){
-      export PATH=$NPM_ORIGINAL_PATH
-      unset -f deactivatenode
-      unset NODE_NAME
-    }
-  fi
-}
-# >>2
-# Run the virtual environments functions for the prompt on each cd <<2
-# -------------------------------------------------------------------
-cd() {
-  builtin cd "$@"
-  unset NODE_NAME
-  workon_virtualenv
-  workon_node_env
-}
-# >>2
 # Display a neatly formatted path <<2
 # -------------------------------------------------------------------
 path() {
@@ -289,30 +242,6 @@ echo $PATH | tr ":" "\n" | \
 #--------------------------------------------------------------------
 agv() {
    vim +"Search"
-}
-# >>2
-# Extract the most common compression types <<2
-#--------------------------------------------------------------------
-function extract()
-{
-    if [ -f $1 ] ; then
-        case $1 in
-            *.tar.bz2)   tar xvjf $1     ;;
-            *.tar.gz)    tar xvzf $1     ;;
-            *.bz2)       bunzip2 $1      ;;
-            *.rar)       unrar x $1      ;;
-            *.gz)        gunzip $1       ;;
-            *.tar)       tar xvf $1      ;;
-            *.tbz2)      tar xvjf $1     ;;
-            *.tgz)       tar xvzf $1     ;;
-            *.zip)       unzip $1        ;;
-            *.Z)         uncompress $1   ;;
-            *.7z)        7z x $1         ;;
-            *)           echo "'$1' cannot be extracted via >extract<" ;;
-        esac
-    else
-        echo "'$1' is not a valid file!"
-    fi
 }
 # >>2
 # Find a file with a pattern in name: <<2
@@ -383,3 +312,5 @@ export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+eval "$(direnv hook zsh)"

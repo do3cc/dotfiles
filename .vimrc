@@ -104,7 +104,7 @@ autocmd FileType tf setlocal shiftwidth=2 softtabstop=2 expandtab
 " Colors
 syntax enable
 "set t_Co=256      " 256 colors
-set background=light
+set background=dark
 set termguicolors
 let g:gruvbox_material_background = 'soft'
 let g:gruvbox_material_better_performance = 1
