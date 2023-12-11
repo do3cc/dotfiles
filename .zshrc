@@ -7,18 +7,6 @@ fi
 
 #!/bin/zsh
 # vim: set foldmarker=<<,>> foldlevel=0 foldmethod=marker:
-#===================================================================================
-#  DESCRIPTION:  You realize, Dr. Angelo, that my intelligence has surpassed yours.
-#       AUTHOR:  Jarrod Taylor
-#                 .__
-#  ________  _____|  |_________   ____
-#  \___   / /  ___/  |  \_  __ \_/ ___\
-#   /    /  \___ \|   Y  \  | \/\  \___
-#  /_____ \/____  >___|  /__|    \___  >
-#        \/     \/     \/            \/
-#
-#===================================================================================
-#
 
 # Source the prompt <<1
 #-------------------------------------------------------------------------------
@@ -112,7 +100,6 @@ export LC_COLLATE=C
 # >>2
 # Use the correct ctags <<2
 #-------------------------------------------------------------------------------
-PATH="/home/do3cc/.local/bin:/usr/local/bin:$PATH"
 # >>2
 # Editor and display configurations <<2
 #-------------------------------------------------------------------------------
@@ -124,12 +111,6 @@ export PAGER="less $LESS"
 export MANPAGER=$PAGER
 export GIT_PAGER=$PAGER
 export BROWSER='firefox'
-# >>2
-# Add postgress to the path on osx <<2
-#-------------------------------------------------------------------------------
-if [ "$(uname)" = "Darwin" ]; then
-    PATH="/Applications/Postgres.app/Contents/Versions/9.4/bin:$PATH"
-fi
 # >>2
 # Eliminate lag between transition from normal/insert mode <<2
 #-------------------------------------------------------------------------------
@@ -156,7 +137,7 @@ if [ -z "$SSH_CLIENT" ]; then
 fi
 # >>1
 #
-#antigen theme agnoster
+#antigen theme powerlevel10k
 antigen theme romkatv/powerlevel10k
 antigen apply
 
@@ -176,22 +157,14 @@ bindkey '^H' backward-delete-char
 #-------------------------------------------------------------------------------
 if [ "$(uname)" = "Darwin" ]; then
     alias ls='ls -FHG'
-    alias update='brew update && brew upgrade'
-    alias upgrade='brew upgrade'
-    alias clean='brew doctor'
 else
     alias ls='ls -F --color'
-    alias update='sudo apt update && sudo apt upgrade'
-    alias upgrade='sudo apt upgrade'
-    alias clean='sudo apt autoclean && sudo apt autoremove'
-    alias root_trash='sudo bash -c "exec rm -r /root/.local/share/Trash/{files,info}/*"'
 fi
 alias ll='ls -lh'
 alias la='ls -la'
 alias lls='ll -Sr'
 alias less='less -imJMW'
 alias tmux="TERM=screen-256color-bce tmux"  # Fix tmux making vim colors funky
-alias ping='ping -c 5'      # Pings with 5 packets, not unlimited
 alias gs='git status'
 alias gd='git diff'
 alias gc='git commit'
@@ -200,108 +173,13 @@ alias pull='git pull --rebase'
 alias ts='tig status'
 alias tigr='git reflog --pretty=raw | tig --pretty=raw'
 alias tmuxh='tmux attach -t host-session || tmux new-session -s host-session'
-alias tmuxp='tmux attach -t pair-session || tmux new-session -t host-session -s pair-session'
-alias delete_pyc='find . -name \*.pyc -exec rm \{\} \+'
-alias c='clear'
-alias vom='vim'
 alias vim='nvim'
 # >>1
-
-# Functions <<1
-#===============================================================================
-
-# Python webserver <<2
-#-------------------------------------------------------------------------------
-#  cd into a directory you want to share and then
-#  type webshare. You will be able to connect to that directory
-#  with other machines on the local net work with IP:8000
-#  the function will display the current machines ip address
-#-------------------------------------------------------------------------------
-function pyserve() {
-    if [ "$(uname)" = "Darwin" ]; then
-        local_ip=`ifconfig | grep 192 | cut -d ' ' -f 2`
-    else
-        local_ip=`hostname -I | cut -d " " -f 1`
-    fi
-    echo "connect to http://$local_ip:8000"
-        python -m SimpleHTTPServer > /dev/null 2>&1
-    }
-# >>2
-# Display a neatly formatted path <<2
-# -------------------------------------------------------------------
-path() {
-echo $PATH | tr ":" "\n" | \
-    awk "{ sub(\"/usr\",   \"$fg_no_bold[green]/usr$reset_color\"); \
-           sub(\"/bin\",   \"$fg_no_bold[blue]/bin$reset_color\"); \
-           sub(\"/opt\",   \"$fg_no_bold[cyan]/opt$reset_color\"); \
-           sub(\"/sbin\",  \"$fg_no_bold[magenta]/sbin$reset_color\"); \
-           sub(\"/local\", \"$fg_no_bold[yellow]/local$reset_color\"); \
-           print }"
-  }
-# agvim open ag results in vim <<2
-#--------------------------------------------------------------------
-agv() {
-   vim +"Search"
-}
-# >>2
-# Find a file with a pattern in name: <<2
-#--------------------------------------------------------------------
-function ff() { find . -type f -iname '*'"$*"'*' -ls ; }
-# >>2
-# Create an archive (*.tar.gz) from given directory <<2
-#--------------------------------------------------------------------
-function maketar() { tar cvzf "${1%%/}.tar.gz"  "${1%%/}/"; }
-# >>2
-# Create a ZIP archive of a file or folder <<2
-#--------------------------------------------------------------------
-function makezip() { zip -r "${1%%/}.zip" "$1" ; }
-# >>2
-# Get info about an ip or url <<2
-#--------------------------------------------------------------------
-# Usage:
-# ipinfo -i 199.59.150.7
-# ipinfo -u github.com
-#--------------------------------------------------------------------
-ipinfo() {
-    if [ $# -lt 2 ]; then
-      echo "Usage: `basename $0` -i ipaddress" 1>&2
-      echo "Usage: `basename $0` -u url" 1>&2
-      return
-    fi
-    if [ "$1" = "-i" ]; then
-        desiredIP=$2
-    fi
-    if [ "$1" = "-u" ]; then
-        # Aleternate ways to get desired IP
-        # desitedIP=$(host unix.stackexchange.com | awk '/has address/ { print $4 ; exit }')
-        # desiredIP=$(nslookup google.com | awk '/^Address: / { print $2 ; exit }')
-        desiredIP=$(dig +short $2)
-    fi
-    curl freegeoip.net/json/$desiredIP | python -mjson.tool
-}
-# >>2
-# Upwards directory traversal shortcut <<2
-#--------------------------------------------------------------------
-# Hitting `...` will produce `../..` an additional `/..` will be added
-# for every `.` after that
-# -------------------------------------------------------------------
-traverse_up() {
-    if [[ $LBUFFER = *.. ]]; then
-        LBUFFER+=/..
-    else
-        LBUFFER+=.
-    fi
-}
-zle -N traverse_up
-bindkey . traverse_up
-# >>2
-# >>1
-
-# EOF
 
 # Agnoster theme tricks
 DEFAULT_USER=do3cc
 
+PATH="/home/do3cc/.local/bin:/usr/local/bin:$PATH"
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
