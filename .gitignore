@@ -64,3 +64,4 @@ Desktop.ini
 .vscode
 
 .byobu/.ssh-agent
+.byobu/.metadata_available
