@@ -18,6 +18,9 @@ call dein#add('justinmk/vim-sneak')   " regex preview
 call dein#add('sainnhe/gruvbox-material') " colorscheme
 call dein#add('christoomey/vim-tmux-navigator') " tmux integration
 call dein#add('neoclide/coc.nvim', { 'merged': 0, 'rev': 'release' })  " Autocomplete
+" Tope goodness
+call dein#add('tpope/vim-surround') " surround magic
+call dein#add('tpope/vim-commentary') " commenting
 call dein#end()
 
 filetype plugin indent on
