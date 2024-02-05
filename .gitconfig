@@ -98,3 +98,5 @@
 	autosetuprebase = always
 [pull]
 	rebase = true
+[credential]
+    helper = store

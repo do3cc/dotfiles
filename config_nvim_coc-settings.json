@@ -1,6 +1,6 @@
 {
-    "python.formatting.provider": "none",
-    "typescript.format.enable": false,
-    "javascript.format.enable": false,
-    "coc.preferences.formatOnSave": ["css", "typescript"]
+  "coc.preferences.formatOnSave": true,
+  "python.linting.lintOnSave": true,
+  "python.linting.ruffEnabled": true,
+  "python.formatting.provider": "ruff"
 }

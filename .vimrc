@@ -87,6 +87,7 @@ autocmd FocusLost * :wa
 
 " Python
 autocmd FileType python autocmd BufWritePre <buffer> StripWhitespace
+autocmd BufWritePre *.py silent! :call CocAction('runCommand', 'python.sortImports').
 
 " Rst
 autocmd BufRead,BufNewFile *.rst setfiletype rst setlocal nowrap
@@ -171,7 +172,7 @@ nmap <Leader>nt :NERDTreeFind<CR>
 let g:user_emmet_install_global = 0
 
 " coc autocomplete
-let g:coc_global_extensions = ['coc-json', 'coc-git', '@yaegassy/coc-ansible', 'coc-docker', 'coc-esbonio', 'coc-eslint', 'coc-highlight', 'coc-html', '@yaegassy/coc-nginx', 'coc-pyright', 'coc-snippets', 'coc-sql', 'coc-tsserver', 'coc-yaml', 'coc-lightbulb', 'coc-prettier', '@yaegassy/coc-black-formatter']
+let g:coc_global_extensions = ['coc-json', 'coc-git', '@yaegassy/coc-ansible', 'coc-docker', 'coc-esbonio', 'coc-eslint', 'coc-highlight', 'coc-html', '@yaegassy/coc-nginx', 'coc-pyright', 'coc-snippets', 'coc-sql', 'coc-tsserver', 'coc-yaml', 'coc-lightbulb', 'coc-prettier', 'coc-clangd']
 inoremap <silent><expr> <TAB>aa
       \ coc#pum#visible() ? coc#pum#next(1) :
       \ CheckBackspace() ? "\<Tab>" :
@@ -189,8 +190,8 @@ inoremap <silent><expr> <CR> coc#pum#visible() ? coc#pum#confirm()
                               \: "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
 " Use `[g` and `]g` to navigate diagnostics
 " Use `:CocDiagnostics` to get all diagnostics of current buffer in location list
-nmap <silent> [g <Plug>(coc-diagnostic-prev)
-nmap <silent> ]g <Plug>(coc-diagnostic-next)
+nmap <silent> [g <Plug>(coc-diagnostic-prev-error)
+nmap <silent> ]g <Plug>(coc-diagnostic-next-error)
 
 " GoTo code navigation
 nmap <silent> gd <Plug>(coc-definition)
