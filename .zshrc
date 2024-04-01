@@ -5,6 +5,17 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
+
+## explicitly set XDG vars
+export XDG_DATA_HOME=$HOME/.local/share
+export XDG_CONFIG_HOME=$HOME/.config
+export XDG_STATE_HOME=$HOME/.local/state
+export XDG_CACHE_HOME=$HOME/.cache
+
+# move everything to XDG
+export ADOTDIR="$XDG_DATA_HOME"/antigen
+export HISTFILE="$XDG_STATE_HOME"/zsh/history
+
 #!/bin/zsh
 # vim: set foldmarker=<<,>> foldlevel=0 foldmethod=marker:
 
@@ -28,7 +39,8 @@ precmd_functions=( precmd_prompt )
 autoload -U compinit
 autoload -U colors && colors
 compinit -C
-# >> 2
+compinit -d "$XDG_CACHE_HOME"/zsh/zcompdump-"$ZSH_VERSION"
+
 # Modify default zsh directory coloring on ls commands <<2
 #-------------------------------------------------------------------------------
 export LSCOLORS=gxfxcxdxbxegedabagacad
@@ -86,7 +98,6 @@ setopt  prompt_subst
 # >>2
 # History settings <<2
 #-------------------------------------------------------------------------------
-HISTFILE=$HOME/.zsh_history
 HISTFILESIZE=65536  # search this with `grep | sort -u`
 HISTSIZE=4096
 SAVEHIST=4096
