@@ -21,6 +21,7 @@ call dein#add('neoclide/coc.nvim', { 'merged': 0, 'rev': 'release' })  " Autocom
 " Tope goodness
 call dein#add('tpope/vim-surround') " surround magic
 call dein#add('tpope/vim-commentary') " commenting
+call dein#add('pearofducks/ansible-vim') " ansible support
 call dein#end()
 
 filetype plugin indent on
@@ -104,7 +105,8 @@ autocmd FileType yaml setlocal shiftwidth=2 softtabstop=2 expandtab
 " Terraform
 autocmd FileType tf setlocal shiftwidth=2 softtabstop=2 expandtab
 "
-
+" Ansible
+let g:coc_filetype_map = {'yaml.ansible': 'ansible'}
 " Colors
 syntax enable
 "set t_Co=256      " 256 colors
