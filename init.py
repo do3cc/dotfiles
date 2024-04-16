@@ -46,7 +46,6 @@ dotfiles_home = [
     ".p10k.zsh",
     ".tmux.conf",
     ".vimrc",
-    ".zshrc",
 ]
 
 other_dotfiles = [
@@ -70,6 +69,7 @@ subprocess.run(["sudo", "apt-get", "upgrade", "--assume-yes"])
 subprocess.run(
     ["sudo", "apt-get", "install", "--assume-yes"] + apt_packages, check=True
 )
+subprocess.run(["sudo", "apt-file", "update"])
 
 for dotfile in dotfiles_home:
     if not exists(expand(f"~/{dotfile}")):
