@@ -65,3 +65,4 @@ Desktop.ini
 
 .byobu/.ssh-agent
 .byobu/.metadata_available
+.direnv
