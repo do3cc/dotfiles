@@ -1,1 +1,0 @@
-/home/do3cc/.irssi/scripts/notifier-minivan.pl

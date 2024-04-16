@@ -93,7 +93,7 @@
 [rerere]
 	enabled = 1
 [commit]
-	template = /home/do3cc/.gitmessage.txt
+	template = /home/do3cc/.config/git/message.txt
 [branch]
 	autosetuprebase = always
 [pull]

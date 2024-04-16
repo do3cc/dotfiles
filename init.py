@@ -2,6 +2,7 @@ from datetime import datetime
 import os
 import os.path
 from os.path import abspath, exists, expanduser
+import pdb
 import socket
 import subprocess
 import urllib.request
@@ -14,6 +15,7 @@ apt_packages = [
     "curl",
     "direnv",
     "fish",
+    "gh",
     "jq",
     "libbz2-dev",
     "libffi-dev",
@@ -36,23 +38,16 @@ apt_packages = [
 ]
 
 
-dotfiles_home = [
-    ".byobu",
-    ".gitconfig",
-    ".gitmessage.txt",
-    ".gitignore",
-    ".inputrc",
-    ".irssi",
-    ".p10k.zsh",
-    ".tmux.conf",
-    ".vimrc",
-]
-
-other_dotfiles = [
-    ("config_direnv_direnvrc", ".config", "direnv", "direnvrc"),
-    ("config_nvim_coc-settings.json", ".config", "nvim", "coc-settings.json"),
-    ("config_fish_config.fish", ".config", "fish", "config.fish"),
-]
+config_dirs = [
+        "alacritty",
+        "direnv",
+        "fish",
+        "irssi",
+        "nvim",
+        "tmux",
+        "byobu",
+        "git",
+        ]
 
 
 def expand(path):
@@ -71,24 +66,20 @@ subprocess.run(
 )
 subprocess.run(["sudo", "apt-file", "update"])
 
-for dotfile in dotfiles_home:
-    if not exists(expand(f"~/{dotfile}")):
-        os.symlink(expand(f"./{dotfile}"), expand(f"~/{dotfile}"))
-
-for source, *target in other_dotfiles:
-    ensure_path(f"~/{os.path.join(*target[:-1])}")
-    if not exists(expand(f"~/{os.path.join(*target)}")):
-        os.symlink(expand(f"./{source}"), expand(f"~/{os.path.join(*target)}"))
+;pdb.set_trace()
+for config_dir in config_dirs:
+    if not exists(expand(f"~/.config/{config_dir}")):
+        os.symlink(expand(f"./{config_dir}"), expand(f"~/.config/{config_dir}"))
 
 if "fish" not in str(subprocess.run(["ps"], check=True, capture_output=True).stdout):
     subprocess.run(["chsh", "-s", "/usr/bin/fish"])
 
-if not exists(expand("~/.nvm")):
+if not exists(expand("~/.local/share/nvm")):
     subprocess.run(
         ["/usr/bin/bash", expand("./install_scripts/install_nvm.sh")], check=True
     )
 
-if not exists(expand("~/.pyenv")):
+if not exists(expand("~/.config/pyenv")):
     subprocess.run(
         ["/usr/bin/bash", expand("./install_scripts/install_pyenv.sh")], check=True
     )
@@ -104,21 +95,12 @@ if not exists(expand("./nvim.appimage")):
     os.chmod(expand("./nvim.appimage"), 0o744)
     ensure_path(expand("~/bin"))
     if not exists(expand("~/bin/nvim")):
+        ensure_path(expand("~/bin"))
         os.symlink(expand("./nvim.appimage"), expand("~/bin/nvim"))
         os.chmod("~/bin/nvim", 0o744)
 
-for addon in ["fish-ssh-agent-master", "nvm.fish-main", "plugin-pyenv-master"]:
-    for dir in ("completions", "conf.d", "functions"):
-        if exists(expand(f"./fish_addons/{addon}/{dir}")):
-            for filename in os.listdir(expand(f"./fish_addons/{addon}/{dir}")):
-                if not exists(expand(f"~/.config/fish/{dir}/{filename}")):
-                    os.symlink(
-                        expand(f"./fish_addons/{addon}/{dir}/{filename}"),
-                        expand(f"~/.config/fish/{dir}/{filename}"),
-                    )
-
 if "Logged in" not in subprocess.run(
-    ["/usr/bin/gh", "auth", "status"], check=True, capture_output=True
+    ["/usr/bin/gh", "auth", "status"], capture_output=True
 ).stderr.decode("utf-8"):
     subprocess.run(["/usr/bin/gh", "auth", "login"])
 

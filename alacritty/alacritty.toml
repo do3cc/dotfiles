@@ -1,0 +1,22 @@
+import = [
+  "~/.config/alacritty/themes/themes/gruvbox_material_dark.toml"
+  ]
+
+[font]
+#size=12
+
+#[font.normal]
+#family = "terminal-font"
+#style = "Regular"
+
+# [font.bold]
+# family = "terminal-font"
+# style = "Bold"
+
+# [font.italic]
+# family = "terminal-font"
+# style = "Italic"
+
+# [font.bold_italic]
+# family = "terminal-font"
+# style = "Bold Italic"

@@ -1,9 +1,0 @@
-[submodule "rbenv-gem-rehash"]
-  path = link/.rbenv/plugins/rbenv-gem-rehash
-  url = https://github.com/sstephenson/rbenv-gem-rehash.git
-[submodule "rbenv-whatis"]
-  path = link/.rbenv/plugins/rbenv-whatis
-  url = https://github.com/rkh/rbenv-whatis.git
-[submodule "rbenv-use"]
-  path = link/.rbenv/plugins/rbenv-use
-  url = https://github.com/rkh/rbenv-use.git
