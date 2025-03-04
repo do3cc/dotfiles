@@ -1,6 +1,15 @@
 {
   "coc.preferences.formatOnSave": true,
+  "pyright.inlayHints.variableTypes": false,
+  "pyright.inlayHints.parameterTypes": false,
+  "pyright.inlayHints.functionReturnTypes": false,
   "python.linting.lintOnSave": true,
   "python.linting.ruffEnabled": true,
-  "python.formatting.provider": "ruff"
+  "python.formatting.provider": "ruff",
+  "Lua.workspace.library": [
+    "/usr/share/nvim/runtime/lua",
+    "/usr/share/nvim/runtime/lua/vim",
+    "/usr/share/nvim/runtime/lua/vim/lsp"
+  ],
+  "Lua.diagnostics.globals": ["vim"]
 }

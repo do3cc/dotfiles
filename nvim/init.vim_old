@@ -21,7 +21,9 @@ call dein#add('/home/do3cc/.cache/dein/repos/github.com/Shougo/dein.vim')
 
 call dein#add('https://github.com/mattn/emmet-vim/')  " Emmet completion tricks
 call dein#add('osyo-manga/vim-over')  " visual find and replace
-call dein#add('ctrlpvim/ctrlp.vim')       " findfiles
+"call dein#add('ctrlpvim/ctrlp.vim')       " findfiles
+call dein#add('junegunn/fzf')       " findfiles
+call dein#add('junegunn/fzf.vim')       " findfiles
 call dein#add('preservim/nerdtree')  " navigation
 call dein#add('gu-fan/riv.vim')        " rst
 call dein#add('ntpeters/vim-better-whitespace') " highlight trailing white space
@@ -162,21 +164,24 @@ endfunction
 " Force write
 cmap w!! w !sudo tee %
 
-" ctrlp config
-let g:ctrlp_use_caching=0
-let g:ctrlp_custom_ignore = '\v[\/](transpiled)|dist|tmp|node_modules|(\.(swp|git|bak|pyc|DS_Store))$|lib|lib64|share|bin'
-let g:ctrlp_working_path_mode = 0
-let g:ctrlp_max_files=0
-let g:ctrlp_max_height = 18
-let g:ctrlp_open_multiple_files = '1vjr'
-let g:ctrlp_buffer_func = { 'enter': 'MyCtrlPMappings' }
-nnoremap <Leader>ff :CtrlP<CR>
-map <Leader>fs :CtrlPTag<CR>
-map <Leader>fd :CtrlPCurFile<CR>
-map <Leader>fb :CtrlPBuffer<CR>
-func! MyCtrlPMappings()
-    nnoremap <buffer> <silent> <F6> :call <sid>DeleteBuffer()<cr>
-endfunc
+" " ctrlp config
+" let g:ctrlp_use_caching=0
+" let g:ctrlp_custom_ignore = '\v[\/](transpiled)|dist|tmp|node_modules|(\.(swp|git|bak|pyc|DS_Store))$|lib|lib64|share|bin'
+" let g:ctrlp_working_path_mode = 0
+" let g:ctrlp_max_files=0
+" let g:ctrlp_max_height = 18
+" let g:ctrlp_open_multiple_files = '1vjr'
+" let g:ctrlp_buffer_func = { 'enter': 'MyCtrlPMappings' }
+" nnoremap <Leader>ff :CtrlP<CR>
+" map <Leader>fs :CtrlPTag<CR>
+" map <Leader>fd :CtrlPCurFile<CR>
+" map <Leader>fb :CtrlPBuffer<CR>
+" func! MyCtrlPMappings()
+"     nnoremap <buffer> <silent> <F6> :call <sid>DeleteBuffer()<cr>
+" endfunc
+
+" FZF
+map <Leader>ff :Files<CR>
 
 " Nerdtree
 let NERDTreeIgnore = ['\.pyc$']
