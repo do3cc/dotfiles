@@ -42,7 +42,6 @@ class Linux:
     def link_configs(self):
         for config_dir_src, config_dir_target in self.config_dirs:
             if not exists(expand(f"~/.config/{config_dir_target}")):
-                import pdb;pdb.set_trace()
                 os.symlink(
                     expand(f"./{config_dir_src}"),
                     expand(f"~/.config/{config_dir_target}"),
