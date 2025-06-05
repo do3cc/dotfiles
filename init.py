@@ -86,6 +86,13 @@ class Linux:
                 check=True,
             )
 
+        if "Logged in" not in subprocess.run(
+            ["tailscale", "status"], check=True, capture_output=True
+        ).stdout.decode("utf-8"):
+            subprocess.run(
+                ["sudo", "tailscale", "login", "--operator=do3cc", "--qr"], check=True
+            )
+
 
 class Arch(Linux):
     aur_packages = [
@@ -140,6 +147,7 @@ class Arch(Linux):
         "rsync",
         "slurp",
         "starship",
+        "tailscale",
         "tectonic",
         "the_silver_searcher",
         "tig",
@@ -153,6 +161,10 @@ class Arch(Linux):
         "xdg-desktop-portal-gtk",
         "xdg-desktop-portal-hyprland",
         "yarn",
+    ]
+
+    systemd_services_to_enable = [
+        "tailscaled",
     ]
 
     def install_dependencies(self):
@@ -188,6 +200,9 @@ class Arch(Linux):
             ["yay", "-S", "--needed", "--noconfirm"] + self.aur_packages,
             check=True,
         )
+
+        for service in self.systemd_services_to_enable:
+            subprocess.run(["systemctl", "enable", "--now", service], check=True)
         super().install_dependencies()
 
 
