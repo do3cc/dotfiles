@@ -1,5 +1,5 @@
 layout_python_uv() {
-  local python=${1:-python}
+  local python=${1:-python3}
   [[ $# -gt 0 ]] && shift
   unset PYTHONHOME
   local python_version=$($python -V | cut -f 2 | cut -d . -f 1-2)

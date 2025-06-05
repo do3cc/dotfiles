@@ -1,53 +1,9 @@
 from datetime import datetime
 import os
-import os.path
 from os.path import abspath, exists, expanduser
-import pdb
 import socket
 import subprocess
 import urllib.request
-
-apt_packages = [
-    "ack",
-    "apt-file",
-    "build-essential",
-    "byobu",
-    "curl",
-    "direnv",
-    "fish",
-    "gh",
-    "jq",
-    "libbz2-dev",
-    "libffi-dev",
-    "libfuse2",
-    "liblzma-dev",
-    "libncursesw5-dev",
-    "libreadline-dev",
-    "libsqlite3-dev",
-    "libssl-dev",
-    "libxml2-dev",
-    "libxmlsec1-dev",
-    "neovim",
-    "nmap",
-    "npm",
-    "silversearcher-ag",
-    "tig",
-    "tk-dev",
-    "xz-utils",
-    "zlib1g-dev",
-]
-
-
-config_dirs = [
-        "alacritty",
-        "direnv",
-        "fish",
-        "irssi",
-        "nvim",
-        "tmux",
-        "byobu",
-        "git",
-        ]
 
 
 def expand(path):
@@ -59,66 +15,236 @@ def ensure_path(path):
         os.makedirs(expand(path))
 
 
-subprocess.run(["sudo", "apt-get", "update"])
-subprocess.run(["sudo", "apt-get", "upgrade", "--assume-yes"])
-subprocess.run(
-    ["sudo", "apt-get", "install", "--assume-yes"] + apt_packages, check=True
-)
-subprocess.run(["sudo", "apt-file", "update"])
+class Linux:
+    config_dirs = [
+        "alacritty",
+        "direnv",
+        "fish",
+        "irssi",
+        "nvim",
+        "tmux",
+        "byobu",
+        "git",
+    ]
 
-;pdb.set_trace()
-for config_dir in config_dirs:
-    if not exists(expand(f"~/.config/{config_dir}")):
-        os.symlink(expand(f"./{config_dir}"), expand(f"~/.config/{config_dir}"))
+    def install_dependencies(self):
+        if not exists(expand("~/.local/share/nvm")):
+            subprocess.run(
+                ["/usr/bin/bash", expand("./install_scripts/install_nvm.sh")],
+                check=True,
+            )
+        if not exists(expand("~/.config/pyenv")):
+            subprocess.run(
+                ["/usr/bin/bash", expand("./install_scripts/install_pyenv.sh")],
+                check=True,
+            )
 
-if "fish" not in str(subprocess.run(["ps"], check=True, capture_output=True).stdout):
-    subprocess.run(["chsh", "-s", "/usr/bin/fish"])
+    def link_configs(self):
+        for config_dir in self.config_dirs:
+            if not exists(expand(f"~/.config/{config_dir}")):
+                os.symlink(expand(f"./{config_dir}"), expand(f"~/.config/{config_dir}"))
+            else:
+                print(
+                    f"Skipping configuration directory {config_dir}, it already exists"
+                )
 
-if not exists(expand("~/.local/share/nvm")):
-    subprocess.run(
-        ["/usr/bin/bash", expand("./install_scripts/install_nvm.sh")], check=True
-    )
+    def setup_shell(self):
+        if "fish" not in str(
+            subprocess.run(["ps"], check=True, capture_output=True).stdout
+        ):
+            subprocess.run(["chsh", "-s", "/usr/bin/fish"])
 
-if not exists(expand("~/.config/pyenv")):
-    subprocess.run(
-        ["/usr/bin/bash", expand("./install_scripts/install_pyenv.sh")], check=True
-    )
-ensure_path("~/.config/nvim")
-if not exists(expand("~/.config/nvim/init.vim")):
-    os.symlink(expand("./.vimrc"), expand("~/.config/nvim/init.vim"))
+    def link_accounts(self):
+        if "Logged in" not in subprocess.run(
+            ["/usr/bin/gh", "auth", "status"], capture_output=True
+        ).stdout.decode("utf-8"):
+            subprocess.run(["/usr/bin/gh", "auth", "login"])
+            subprocess.run(
+                ["gh", "auth", "refresh", "-h", "github.com", "-s", "admin:public_key"]
+            )
 
-if not exists(expand("./nvim.appimage")):
-    urllib.request.urlretrieve(
-        "https://github.com/neovim/neovim/releases/latest/download/nvim.appimage",
-        "nvim.appimage",
-    )
-    os.chmod(expand("./nvim.appimage"), 0o744)
-    ensure_path(expand("~/bin"))
-    if not exists(expand("~/bin/nvim")):
-        ensure_path(expand("~/bin"))
-        os.symlink(expand("./nvim.appimage"), expand("~/bin/nvim"))
-        os.chmod("~/bin/nvim", 0o744)
+        current_key = expand("~/.ssh/id_ed_" + datetime.now().strftime("%Y%m"))
+        if not exists(current_key):
+            subprocess.run(
+                [
+                    "ssh-keygen",
+                    "-t",
+                    "ed25519",
+                    "-C",
+                    f"'Patrick Gerken {socket.gethostname()} sshkeys@patrick-gerken.de {datetime.now().strftime('%Y%m')}'",
+                    "-f",
+                    current_key,
+                ]
+            )
+            key_name = f'"{socket.gethostname()} {datetime.now().strftime("%Y%m")}"'
+            subprocess.run(
+                ["/usr/bin/gh", "ssh-key", "add", f"{current_key}.pub", "-t", key_name],
+                check=True,
+            )
 
-if "Logged in" not in subprocess.run(
-    ["/usr/bin/gh", "auth", "status"], capture_output=True
-).stderr.decode("utf-8"):
-    subprocess.run(["/usr/bin/gh", "auth", "login"])
 
-current_key = expand("~/.ssh/id_ed_" + datetime.now().strftime("%Y%m"))
-if not exists(current_key):
-    subprocess.run(
-        [
-            "ssh-keygen",
-            "-t",
-            "ed25519",
-            "-C",
-            f"'Patrick Gerken {socket.gethostname()} sshkeys@patrick-gerken.de {datetime.now().strftime('%Y%m')}'",
-            "-f",
-            current_key,
-        ]
-    )
-    key_name = f"\"{socket.gethostname()} {datetime.now().strftime('%Y%m')}\""
-    subprocess.run(
-        ["/usr/bin/gh", "ssh-key", "add", f"{current_key}.pub", "-t", key_name],
-        check=True,
-    )
+class Arch(Linux):
+    aur_packages = [
+        "hyprshot",
+    ]
+    pacman_packages = [
+        "bat",
+        "bitwarden",
+        "brightnessctl",
+        "byobu",
+        "direnv",
+        "dolphin",
+        "eza",
+        "firefox",
+        "fish",
+        "git",
+        "github-cli",
+        "htop",
+        "hyprland",
+        "hyprpaper",
+        "jq",
+        "less",
+        "libnotify",
+        "lua51",
+        "luarocks",
+        "mako",
+        "man-db",
+        "mpd",
+        "neovim",
+        "nmap",
+        "noto-fonts-emoji",
+        "npm",
+        "otf-font-awesome",
+        "pavucontrol",
+        "pipewire",
+        "pipewire-alsa",
+        "pipewire-jack",
+        "pipewire-pulse",
+        "polkit-kde-agent",
+        "powerline-fonts",
+        "power-profiles-daemon",
+        "python-gobject",
+        "qt5-wayland",
+        "qt6-wayland",
+        "rofi-wayland",
+        "rsync",
+        "slurp",
+        "starship",
+        "the_silver_searcher",
+        "tig",
+        "tldr",
+        "tree-sitter-cli",
+        "uv",
+        "waybar",
+        "wget",
+        "wireplumber",
+        "wl-clipboard",
+        "xdg-desktop-portal-gtk",
+        "xdg-desktop-portal-hyprland",
+        "yarn",
+    ]
+
+    def install_dependencies(self):
+        def pacman(*args, **kwargs):
+            subprocess.run(["sudo", "pacman"] + list(args), **kwargs)
+
+        pacman("-S", "--needed", "git", "base-devel", check=True)
+        ensure_path(expand("~/projects"))
+        if not exists(expand("~/projects/yay-bin")):
+            subprocess.run(
+                [
+                    "git",
+                    "clone",
+                    "https://aur.archlinux.org/yay-bin.git",
+                    expand("~/projects/yay-bin"),
+                ],
+                check=True,
+            )
+            subprocess.run(
+                ["makepkg", "-si", "--needed", "--noconfirm"],
+                check=True,
+                cwd=expand("~/projects/yay-bin"),
+            )
+
+        pacman(
+            "-S",
+            "--needed",
+            "--noconfirm",
+            *self.pacman_packages,
+            check=True,
+        )
+        subprocess.run(
+            ["yay", "-S", "--needed", "--noconfirm"] + self.aur_packages,
+            check=True,
+        )
+        super().install_dependencies()
+
+
+class Debian(Linux):
+    apt_packages = [
+        "ack",
+        "apt-file",
+        "build-essential",
+        "byobu",
+        "curl",
+        "direnv",
+        "fish",
+        "github-cli",
+        "jq",
+        "libbz2-dev",
+        "libffi-dev",
+        "libfuse2",
+        "liblzma-dev",
+        "libncursesw5-dev",
+        "libreadline-dev",
+        "libsqlite3-dev",
+        "libssl-dev",
+        "libxml2-dev",
+        "libxmlsec1-dev",
+        "neovim",
+        "nmap",
+        "npm",
+        "silversearcher-ag",
+        "tig",
+        "tk-dev",
+        "xz-utils",
+        "zlib1g-dev",
+    ]
+
+    def install_dependencies(self):
+        subprocess.run(["sudo", "apt-get", "update"])
+        subprocess.run(["sudo", "apt-get", "upgrade", "--assume-yes"])
+        subprocess.run(
+            ["sudo", "apt-get", "install", "--assume-yes"] + self.apt_packages,
+            check=True,
+        )
+        subprocess.run(["sudo", "apt-file", "update"])
+        if not exists(expand("./nvim.appimage")):
+            urllib.request.urlretrieve(
+                "https://github.com/neovim/neovim/releases/latest/download/nvim.appimage",
+                "nvim.appimage",
+            )
+            os.chmod(expand("./nvim.appimage"), 0o744)
+            ensure_path(expand("~/bin"))
+            if not exists(expand("~/bin/nvim")):
+                ensure_path(expand("~/bin"))
+                os.symlink(expand("./nvim.appimage"), expand("~/bin/nvim"))
+                os.chmod("~/bin/nvim", 0o744)
+
+        super().install_dependencies()
+
+
+operating_system = None
+
+with open("/etc/os-release") as release_file:
+    content = release_file.read()
+    if 'NAME="Arch Linux"' in content:
+        operating_system = Arch()
+    else:
+        raise NotImplementedError
+
+
+operating_system.install_dependencies()
+operating_system.link_configs()
+operating_system.setup_shell()
+operating_system.link_accounts()
