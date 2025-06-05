@@ -76,6 +76,7 @@ class Linux:
                     current_key,
                 ]
             )
+            subprocess.run(["ssh-add", current_key])
             key_name = f'"{socket.gethostname()} {datetime.now().strftime("%Y%m")}"'
             subprocess.run(
                 ["/usr/bin/gh", "ssh-key", "add", f"{current_key}.pub", "-t", key_name],
