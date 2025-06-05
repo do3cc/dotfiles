@@ -4,30 +4,31 @@ local global = vim.g
 local option_local = vim.opt_local
 
 global.mapleader = " "
-
-vim.call('plug#begin')
-
-Plug("sainnhe/gruvbox-material")                      -- colorscheme
-Plug("osyo-manga/vim-over")                           -- visual find and replace
-Plug("junegunn/fzf")                                  -- findfiles
-Plug("junegunn/fzf.vim")
-Plug("preservim/nerdtree")                            -- navigation
-Plug("gu-fan/riv.vim")                                -- rst
-Plug("ntpeters/vim-better-whitespace")                -- highlight trailing white space
-Plug("bkad/CamelCaseMotion")                          -- Camelcase Movement
-Plug("vim-airline/vim-airline")
-Plug("vim-airline/vim-airline-themes")                -- statusbar
-Plug("justinmk/vim-sneak")                            -- Regex preview
-Plug("christoomey/vim-tmux-navigator")                -- tmux integration
-Plug("neoclide/coc.nvim", { ['branch'] = 'release' }) -- autocomplete
-Plug("pearofducks/ansible-vim")                       -- ansible support
-Plug("tpope/vim-surround")                            -- Surround tools
-Plug("tpope/vim-commentary")                          -- Commenting
-
-vim.call('plug#end')
+require("config.lazy")
 
 
-vim.cmd('silent! colorscheme gruvbox-material')
+-- Plug("sainnhe/gruvbox-material")                                  -- colorscheme
+-- Plug("osyo-manga/vim-over")                                       -- visual find and replace
+-- Plug("junegunn/fzf")                                              -- findfiles
+-- Plug("junegunn/fzf.vim")
+-- Plug("preservim/nerdtree")                                        -- navigation
+-- Plug("gu-fan/riv.vim")                                            -- rst
+-- Plug("ntpeters/vim-better-whitespace")                            -- highlight trailing white space
+-- Plug("bkad/CamelCaseMotion")                                      -- Camelcase Movement
+-- Plug("vim-airline/vim-airline")
+-- Plug("vim-airline/vim-airline-themes")                            -- statusbar
+-- Plug("justinmk/vim-sneak")                                        -- Regex preview
+-- Plug("christoomey/vim-tmux-navigator")                            -- tmux integration
+-- Plug("neoclide/coc.nvim", { ['branch'] = 'release' })             -- autocomplete
+-- Plug("pearofducks/ansible-vim")                                   -- ansible support
+-- Plug("tpope/vim-surround")                                        -- Surround tools
+-- Plug("tpope/vim-commentary")                                      -- Commenting
+-- Plug("nvim-treesitter/nvim-treesitter", { ['do'] = ':TSUpdate' }) -- Parsers used by render-markdown
+-- Plug("MeanderingProgrammer/render-markdown.nvim")                 -- Markdown preview in nvim
+-- Plug("echasnovski/mini.icons", { branch = 'stable' })             -- Icons
+--
+-- vim.call('plug#end')
+
 
 option.cursorline = true                                                       --Show current editor line
 option.expandtab = true                                                        -- Convert tabs to spaces
@@ -73,7 +74,7 @@ vim.api.nvim_create_autocmd("BufWritePre", {
     pattern = "*.py",
     callback = function()
         vim.cmd("StripWhitespace")
-        vim.fn.CocAction('runCommand', 'python.sortImports')
+        --        vim.fn.CocAction('runCommand', 'python.sortImports')
     end,
 })
 
@@ -234,3 +235,13 @@ vim.cmd([[
 autocmd CursorHold * silent call CocActionAsync('highlight')
 set updatetime=300 "default 4000=4s, which may be slow
 ]])
+
+require("render-markdown").setup({
+    latex = { enabled = false, }, d
+})
+
+require('nvim-treesitter.configs').setup({
+    highlight = { enable = true },
+})
+
+require("mini.icons").setup()
