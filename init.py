@@ -17,14 +17,14 @@ def ensure_path(path):
 
 class Linux:
     config_dirs = [
-        "alacritty",
-        "direnv",
-        "fish",
-        "irssi",
-        "nvim",
-        "tmux",
-        "byobu",
-        "git",
+        ("alacritty", "alacritty"),
+        ("direnv", "direnv"),
+        ("fish", "fish"),
+        ("irssi", "irssi"),
+        ("lazy_nvim", "nvim"),
+        ("tmux", "tmux"),
+        ("byobu", "byobu"),
+        ("git", "git"),
     ]
 
     def install_dependencies(self):
@@ -40,12 +40,16 @@ class Linux:
             )
 
     def link_configs(self):
-        for config_dir in self.config_dirs:
-            if not exists(expand(f"~/.config/{config_dir}")):
-                os.symlink(expand(f"./{config_dir}"), expand(f"~/.config/{config_dir}"))
+        for config_dir_src, config_dir_target in self.config_dirs:
+            if not exists(expand(f"~/.config/{config_dir_target}")):
+                import pdb;pdb.set_trace()
+                os.symlink(
+                    expand(f"./{config_dir_src}"),
+                    expand(f"~/.config/{config_dir_target}"),
+                )
             else:
                 print(
-                    f"Skipping configuration directory {config_dir}, it already exists"
+                    f"Skipping configuration directory {config_dir_target}, it already exists"
                 )
 
     def setup_shell(self):
@@ -89,6 +93,7 @@ class Arch(Linux):
         "hyprshot",
     ]
     pacman_packages = [
+        "ast-grep",
         "bat",
         "bitwarden",
         "brightnessctl",
@@ -96,13 +101,17 @@ class Arch(Linux):
         "direnv",
         "dolphin",
         "eza",
+        "fd",
         "firefox",
         "fish",
+        "ghostscript",
         "git",
         "github-cli",
         "htop",
         "hyprland",
         "hyprpaper",
+        "imagemagick",
+        "jdk-openjdk",
         "jq",
         "less",
         "libnotify",
@@ -110,6 +119,7 @@ class Arch(Linux):
         "luarocks",
         "mako",
         "man-db",
+        "mermaid-cli",
         "mpd",
         "neovim",
         "nmap",
@@ -131,6 +141,7 @@ class Arch(Linux):
         "rsync",
         "slurp",
         "starship",
+        "tectonic",
         "the_silver_searcher",
         "tig",
         "tldr",
@@ -245,7 +256,11 @@ with open("/etc/os-release") as release_file:
         raise NotImplementedError
 
 
+print("Installing dependencies")
 operating_system.install_dependencies()
+print("Linking configurations")
 operating_system.link_configs()
+print("Setting up shell")
 operating_system.setup_shell()
+print("Link online accounts")
 operating_system.link_accounts()
