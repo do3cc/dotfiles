@@ -151,7 +151,7 @@ class Arch(Linux):
         "tectonic",
         "the_silver_searcher",
         "tig",
-        "tldr",
+        "tealdeer",
         "tree-sitter-cli",
         "uv",
         "waybar",
@@ -266,8 +266,10 @@ with open("/etc/os-release") as release_file:
     content = release_file.read()
     if 'NAME="Arch Linux"' in content:
         operating_system = Arch()
+    if 'NAME="Garuda Linux"' in content:
+        operating_system = Arch()
     else:
-        raise NotImplementedError
+        raise NotImplementedError(f"Unknown operating system, found {content}")
 
 
 print("Installing dependencies")
