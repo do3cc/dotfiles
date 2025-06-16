@@ -1,0 +1,48 @@
+---
+name: CI Tests
+
+"on":
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  test-arch:
+    name: Test Arch Linux Installation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+
+      - name: Test Arch Linux minimal environment
+        run: |
+          chmod +x test/run_tests.sh
+          ./test/run_tests.sh --arch --environment minimal --cleanup
+        timeout-minutes: 45
+
+  test-debian:
+    name: Test Debian Installation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+
+      - name: Test Debian minimal environment
+        run: |
+          chmod +x test/run_tests.sh
+          ./test/run_tests.sh --debian --environment minimal --cleanup
+        timeout-minutes: 45
