@@ -560,7 +560,6 @@ class Debian(Linux):
         "curl",  # command line URL tool
         "direnv",  # environment variable manager
         "fish",  # friendly interactive shell
-        "gh",  # GitHub command line interface
         "jq",  # JSON command line processor
         "libbz2-dev",  # bzip2 development library
         "libffi-dev",  # foreign function interface library
