@@ -38,8 +38,9 @@ class Linux:
         "ssh_key_email": {"work": "patrick.gerken@zumtobelgroup.com"},
     }
 
-    def __init__(self, environment="minimal"):
+    def __init__(self, environment="minimal", test_mode=False):
         self.environment = environment
+        self.test_mode = test_mode
 
     def install_dependencies(self):
         if not exists(expand("~/.local/share/nvm")):
@@ -75,6 +76,12 @@ class Linux:
             subprocess.run(["chsh", "-s", "/usr/bin/fish"])
 
     def link_accounts(self):
+        if self.test_mode:
+            print("Test mode: Skipping GitHub and SSH key setup")
+            if self.environment in ["private"]:
+                print("Test mode: Skipping Tailscale setup")
+            return
+
         if "Logged in" not in subprocess.run(
             ["/usr/bin/gh", "auth", "status"], capture_output=True
         ).stdout.decode("utf-8"):
@@ -299,22 +306,62 @@ class Debian(Linux):
         super().install_dependencies()
 
 
-def detect_operating_system(environment="minimal"):
+def detect_operating_system(environment="minimal", test_mode=False):
     """Detect and return the appropriate operating system class"""
     with open("/etc/os-release") as release_file:
         content = release_file.read()
         if 'NAME="Arch Linux"' in content:
-            return Arch(environment=environment)
+            return Arch(environment=environment, test_mode=test_mode)
         if 'NAME="Garuda Linux"' in content:
-            return Arch(environment=environment)
+            return Arch(environment=environment, test_mode=test_mode)
         else:
             raise NotImplementedError(f"Unknown operating system, found {content}")
+
+
+def show_help():
+    """Display detailed help information"""
+    help_text = """
+Dotfiles Installation Script
+
+USAGE:
+    uv run init.py [OPTIONS]
+
+OPTIONS:
+    --environment {minimal,work,private}
+                        Environment configuration to install (default: minimal)
+    --test             Skip remote activities (GitHub, SSH keys, Tailscale) for testing
+    --help             Show this help message and exit
+
+ENVIRONMENTS:
+    minimal            Basic development tools and CLI utilities
+    work               Minimal environment + work-specific configurations
+    private            Full desktop environment with window manager and GUI apps
+
+WHAT THIS SCRIPT DOES:
+    1. Detects your operating system (Arch/Garuda or Debian-based)
+    2. Installs required packages via package managers
+    3. Creates symlinks for configuration directories to ~/.config/
+    4. Sets up development tools (NVM, Pyenv)
+    5. Configures shell (fish) and prompt (starship)
+    6. Sets up GitHub authentication and SSH keys
+    7. Configures Tailscale (private environment only)
+
+EXAMPLES:
+    uv run init.py                    # Install minimal environment
+    uv run init.py --environment work # Install work environment
+    uv run init.py --environment private # Install full desktop environment
+    uv run init.py --test             # Test installation without remote activities
+
+For more information, see the README or CLAUDE.md files.
+"""
+    print(help_text)
 
 
 def main():
     """Main entry point for the dotfiles installation script"""
     parser = argparse.ArgumentParser(
-        description="Install and configure dotfiles for Linux systems"
+        description="Install and configure dotfiles for Linux systems",
+        add_help=False,  # Disable default help to use custom help
     )
     parser.add_argument(
         "--environment",
@@ -322,12 +369,28 @@ def main():
         default="minimal",
         help="Environment configuration to install (default: minimal)",
     )
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Skip remote activities (GitHub, SSH keys, Tailscale) for testing",
+    )
+    parser.add_argument(
+        "--help", action="store_true", help="Show detailed help information"
+    )
 
     args = parser.parse_args()
 
-    operating_system = detect_operating_system(environment=args.environment)
+    if args.help:
+        show_help()
+        return
 
-    print(f"Installing dotfiles for {args.environment} environment")
+    operating_system = detect_operating_system(
+        environment=args.environment, test_mode=args.test
+    )
+
+    print(
+        f"Installing dotfiles for {args.environment} environment{' (test mode)' if args.test else ''}"
+    )
 
     print("Installing dependencies")
     operating_system.install_dependencies()
