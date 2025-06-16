@@ -560,7 +560,7 @@ class Debian(Linux):
         "curl",  # command line URL tool
         "direnv",  # environment variable manager
         "fish",  # friendly interactive shell
-        "github-cli",  # GitHub command line interface
+        "gh",  # GitHub command line interface
         "jq",  # JSON command line processor
         "libbz2-dev",  # bzip2 development library
         "libffi-dev",  # foreign function interface library
@@ -583,25 +583,169 @@ class Debian(Linux):
     ]
 
     def install_dependencies(self):
-        subprocess.run(["sudo", "apt-get", "update"])
-        subprocess.run(["sudo", "apt-get", "upgrade", "--assume-yes"])
-        subprocess.run(
-            ["sudo", "apt-get", "install", "--assume-yes"] + self.apt_packages,
-            check=True,
-        )
-        subprocess.run(["sudo", "apt-file", "update"])
-        if not exists(expand("./nvim.appimage")):
-            urllib.request.urlretrieve(
-                "https://github.com/neovim/neovim/releases/latest/download/nvim.appimage",
-                "nvim.appimage",
-            )
-            os.chmod(expand("./nvim.appimage"), 0o744)
-            ensure_path(expand("~/bin"))
-            if not exists(expand("~/bin/nvim")):
-                ensure_path(expand("~/bin"))
-                os.symlink(expand("./nvim.appimage"), expand("~/bin/nvim"))
-                os.chmod("~/bin/nvim", 0o744)
+        """Install packages with retry logic and comprehensive error handling"""
+        
+        def apt_get(*args, **kwargs):
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    result = subprocess.run(
+                        ["sudo", "apt-get"] + list(args),
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                        timeout=1800,  # 30 minute timeout
+                        **kwargs
+                    )
+                    return result
+                except subprocess.TimeoutExpired:
+                    print(f"❌ APT operation timed out (attempt {attempt + 1}/{max_retries})")
+                    if attempt == max_retries - 1:
+                        print("💡 Try: Check internet connection or use different mirror")
+                        raise
+                    print("🔄 Retrying in 10 seconds...")
+                    time.sleep(10)
+                except subprocess.CalledProcessError as e:
+                    if "unable to lock" in e.stderr.lower():
+                        print("❌ ERROR: APT database is locked")
+                        print("💡 Try: Wait for other package operations to complete")
+                    elif "no space left" in e.stderr.lower():
+                        print("❌ ERROR: No space left on device")
+                        print("💡 Try: Free up disk space and try again")
+                    elif "permission denied" in e.stderr.lower():
+                        print("❌ ERROR: Permission denied - sudo may not be configured")
+                        print("💡 Try: Configure sudo or run as appropriate user")
+                    elif "failed to fetch" in e.stderr.lower():
+                        print("❌ ERROR: Failed to fetch packages")
+                        print("💡 Try: Check internet connection and repository availability")
+                    else:
+                        print(f"❌ ERROR: APT operation failed: {e.stderr}")
+                    raise
 
+        try:
+            # Update package databases
+            print("Updating package databases...")
+            apt_get("update")
+            print("✅ Package databases updated")
+
+            # Upgrade existing packages
+            print("Upgrading existing packages...")
+            try:
+                apt_get("upgrade", "--assume-yes")
+                print("✅ System packages upgraded")
+            except subprocess.CalledProcessError as e:
+                print("⚠️  WARNING: Some packages failed to upgrade")
+                print("💡 This is often non-critical, continuing with installation...")
+
+            # Install main packages
+            print(f"Installing {len(self.apt_packages)} APT packages...")
+            try:
+                apt_get("install", "--assume-yes", *self.apt_packages)
+                print("✅ All APT packages installed successfully")
+            except subprocess.CalledProcessError as e:
+                print("❌ ERROR: Some APT packages failed to install")
+                print("💡 Try: Check package names and fix any dependency conflicts")
+                raise
+
+            # Update apt-file database
+            print("Updating apt-file database...")
+            try:
+                subprocess.run(
+                    ["sudo", "apt-file", "update"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=600
+                )
+                print("✅ Apt-file database updated")
+            except subprocess.CalledProcessError as e:
+                print("⚠️  WARNING: apt-file update failed")
+                print("💡 This is non-critical, continuing...")
+            except subprocess.TimeoutExpired:
+                print("⚠️  WARNING: apt-file update timed out")
+                print("💡 This is non-critical, continuing...")
+
+            # Download and install latest Neovim AppImage
+            nvim_appimage = expand("./nvim.appimage")
+            if not exists(nvim_appimage):
+                print("Downloading latest Neovim AppImage...")
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        import urllib.request
+                        import urllib.error
+                        
+                        # Download with timeout
+                        request = urllib.request.Request(
+                            "https://github.com/neovim/neovim/releases/latest/download/nvim.appimage",
+                            headers={'User-Agent': 'dotfiles-installer/1.0'}
+                        )
+                        
+                        with urllib.request.urlopen(request, timeout=300) as response:
+                            with open(nvim_appimage, 'wb') as f:
+                                # Download in chunks to handle large files
+                                while True:
+                                    chunk = response.read(8192)
+                                    if not chunk:
+                                        break
+                                    f.write(chunk)
+                        
+                        print("✅ Neovim AppImage downloaded successfully")
+                        break
+                        
+                    except urllib.error.URLError as e:
+                        print(f"❌ ERROR: Failed to download Neovim (attempt {attempt + 1}/{max_retries}): {e}")
+                        if attempt == max_retries - 1:
+                            print("💡 Try: Check internet connection or download manually")
+                            raise
+                        print("🔄 Retrying in 5 seconds...")
+                        time.sleep(5)
+                    except Exception as e:
+                        print(f"❌ ERROR: Unexpected error downloading Neovim: {e}")
+                        raise
+
+                # Make AppImage executable
+                try:
+                    os.chmod(nvim_appimage, 0o755)
+                    print("✅ Neovim AppImage made executable")
+                except OSError as e:
+                    print(f"❌ ERROR: Failed to make Neovim executable: {e}")
+                    raise
+
+                # Create ~/bin directory
+                bin_dir = expand("~/bin")
+                try:
+                    ensure_path(bin_dir)
+                    print("✅ ~/bin directory created")
+                except OSError as e:
+                    print(f"❌ ERROR: Cannot create ~/bin directory: {e}")
+                    print("💡 Try: Check home directory permissions")
+                    raise
+
+                # Create symlink to nvim
+                nvim_symlink = expand("~/bin/nvim")
+                if not exists(nvim_symlink):
+                    try:
+                        os.symlink(nvim_appimage, nvim_symlink)
+                        print("✅ Neovim symlink created in ~/bin/nvim")
+                    except OSError as e:
+                        print(f"❌ ERROR: Failed to create Neovim symlink: {e}")
+                        print("💡 Try: Check ~/bin directory permissions")
+                        raise
+                else:
+                    print("✅ Neovim symlink already exists")
+            else:
+                print("✅ Neovim AppImage already exists")
+
+        except KeyboardInterrupt:
+            print("\n❌ Installation interrupted by user")
+            raise
+        except Exception as e:
+            print(f"❌ FATAL ERROR during package installation: {e}")
+            print("💡 Try: Check logs above for specific error details")
+            raise
+
+        # Call parent class
         super().install_dependencies()
 
 
