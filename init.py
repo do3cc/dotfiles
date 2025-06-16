@@ -147,7 +147,10 @@ class Linux:
 
 
 class Arch(Linux):
-    aur_packages = []
+    aur_packages = [
+        "google-java-format",  # Java formatting tool
+        "nodejs-markdown-toc",  # TOC Generator in javascript
+    ]
     pacman_packages = [
         "ast-grep",  # structural code search tool
         "bat",  # syntax highlighted cat alternative
@@ -161,14 +164,18 @@ class Arch(Linux):
         "htop",  # interactive process viewer
         "jdk-openjdk",  # Java development kit
         "jq",  # JSON command line processor
+        "texlive-latex",  # for markdown rendering
+        "lazygit",  # git cli used by lazy vim
         "less",  # terminal pager
         "lua51",  # Lua scripting language
         "luarocks",  # Lua package manager
         "man-db",  # manual page database
+        "markdownlint-cli2",  # linter for markdown
         "mermaid-cli",  # diagram generation tool
         "neovim",  # modern Vim text editor
         "nmap",  # network discovery and scanning
         "npm",  # Node.js package manager
+        "python-pip",  # Global pip
         "rsync",  # file synchronization tool
         "starship",  # cross-shell prompt
         "tectonic",  # LaTeX engine
