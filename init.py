@@ -4,6 +4,8 @@ import os
 from os.path import abspath, exists, expanduser
 import socket
 import subprocess
+import sys
+import time
 import urllib.request
 
 
@@ -43,66 +45,193 @@ class Linux:
         self.test_mode = test_mode
 
     def install_dependencies(self):
-        if not exists(expand("~/.local/share/nvm")):
-            subprocess.run(
-                ["/usr/bin/bash", expand("./install_scripts/install_nvm.sh")],
-                check=True,
-            )
-        if not exists(expand("~/.config/pyenv")):
-            subprocess.run(
-                ["/usr/bin/bash", expand("./install_scripts/install_pyenv.sh")],
-                check=True,
-            )
+        """Install NVM and Pyenv with proper error handling"""
+        # Install NVM
+        nvm_path = expand("~/.local/share/nvm")
+        if not exists(nvm_path):
+            try:
+                print("Installing NVM...")
+                nvm_script = expand("./install_scripts/install_nvm.sh")
+                if not exists(nvm_script):
+                    print("❌ ERROR: NVM installation script not found")
+                    print(f"💡 Expected: {nvm_script}")
+                    raise FileNotFoundError(f"NVM script not found: {nvm_script}")
+
+                result = subprocess.run(
+                    ["/usr/bin/bash", nvm_script],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,  # 5 minute timeout
+                )
+                print("✅ NVM installed successfully")
+            except subprocess.TimeoutExpired:
+                print("❌ ERROR: NVM installation timed out (network issues?)")
+                print("💡 Try: Check internet connection and run again")
+                raise
+            except subprocess.CalledProcessError as e:
+                print(
+                    f"❌ ERROR: NVM installation failed with exit code {e.returncode}"
+                )
+                if e.stderr:
+                    print(f"💡 Error output: {e.stderr}")
+                print("💡 Try: Check network connection and script permissions")
+                raise
+            except FileNotFoundError as e:
+                if "/usr/bin/bash" in str(e):
+                    print("❌ ERROR: Bash not found at /usr/bin/bash")
+                    print("💡 Try: Install bash or update the script")
+                else:
+                    print(f"❌ ERROR: {e}")
+                raise
+        else:
+            print("✅ NVM already installed")
+
+        # Install Pyenv
+        pyenv_path = expand("~/.config/pyenv")
+        if not exists(pyenv_path):
+            try:
+                print("Installing Pyenv...")
+                pyenv_script = expand("./install_scripts/install_pyenv.sh")
+                if not exists(pyenv_script):
+                    print("❌ ERROR: Pyenv installation script not found")
+                    print(f"💡 Expected: {pyenv_script}")
+                    raise FileNotFoundError(f"Pyenv script not found: {pyenv_script}")
+
+                subprocess.run(
+                    ["/usr/bin/bash", pyenv_script],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
+                print("✅ Pyenv installed successfully")
+            except subprocess.TimeoutExpired:
+                print("❌ ERROR: Pyenv installation timed out")
+                print("💡 Try: Check internet connection and run again")
+                raise
+            except subprocess.CalledProcessError as e:
+                print(
+                    f"❌ ERROR: Pyenv installation failed with exit code {e.returncode}"
+                )
+                if e.stderr:
+                    print(f"💡 Error output: {e.stderr}")
+                raise
+            except FileNotFoundError as e:
+                print(f"❌ ERROR: {e}")
+                raise
+        else:
+            print("✅ Pyenv already installed")
 
     def link_configs(self):
+        """Create symlinks with comprehensive error handling"""
+        # Ensure ~/.config exists
+        config_base_dir = expand("~/.config")
+        try:
+            ensure_path(config_base_dir)
+        except OSError as e:
+            print(f"❌ ERROR: Cannot create ~/.config directory: {e}")
+            print("💡 Try: Check home directory permissions")
+            raise
+
         for config_dir_src, config_dir_target in (
             self.config_dirs
             + self.environment_specific["config_dirs"].get(self.environment, [])
         ):
             target_path = expand(f"~/.config/{config_dir_target}")
-            if not exists(target_path):
-                os.symlink(
-                    expand(f"./{config_dir_src}"),
-                    target_path,
-                )
-            else:
-                # Check if it's a directory or symlink to another location
-                if os.path.isdir(target_path):
-                    if os.path.islink(target_path):
-                        # It's a symlink to a directory
-                        current_target = os.readlink(target_path)
-                        expected_target = expand(f"./{config_dir_src}")
-                        if current_target != expected_target:
+            source_path = expand(f"./{config_dir_src}")
+
+            try:
+                # Verify source exists
+                if not exists(source_path):
+                    print(f"❌ ERROR: Source directory {source_path} does not exist")
+                    print(f"💡 Expected config directory: {config_dir_src}")
+                    continue
+
+                if not exists(target_path):
+                    try:
+                        os.symlink(source_path, target_path)
+                        print(f"✅ Linked {config_dir_target}")
+                    except OSError as e:
+                        if e.errno == 13:  # Permission denied
                             print(
-                                f"⚠️  WARNING: {config_dir_target} is linked to {current_target}, "
-                                f"but should be linked to {expected_target}"
+                                f"❌ ERROR: Permission denied creating symlink for {config_dir_target}"
+                            )
+                            print(
+                                "💡 Try: Check ~/.config directory ownership and permissions"
+                            )
+                        elif e.errno == 17:  # File exists (race condition)
+                            print(
+                                f"⚠️  WARNING: {config_dir_target} was created by another process"
+                            )
+                        elif e.errno == 30:  # Read-only file system
+                            print(
+                                f"❌ ERROR: Cannot create symlink on read-only filesystem for {config_dir_target}"
                             )
                         else:
-                            print(f"✅ {config_dir_target} is already correctly linked")
-                    else:
-                        # It's a regular directory
-                        print(
-                            f"⚠️  WARNING: {config_dir_target} exists as a directory, "
-                            f"but should be a symlink to {expand(f'./{config_dir_src}')}"
-                        )
+                            print(
+                                f"❌ ERROR: Failed to create symlink for {config_dir_target}: {e}"
+                            )
+                        continue
                 else:
-                    # It's a file (not a directory)
-                    print(
-                        f"⚠️  WARNING: {config_dir_target} exists as a file, "
-                        f"but should be a symlink to {expand(f'./{config_dir_src}')}"
-                    )
+                    # Check if it's a directory or symlink to another location
+                    if os.path.isdir(target_path):
+                        if os.path.islink(target_path):
+                            # It's a symlink to a directory
+                            try:
+                                current_target = os.readlink(target_path)
+                                expected_target = source_path
+                                if current_target != expected_target:
+                                    print(
+                                        f"⚠️  WARNING: {config_dir_target} is linked to {current_target}, "
+                                        f"but should be linked to {expected_target}"
+                                    )
+                                else:
+                                    print(
+                                        f"✅ {config_dir_target} is already correctly linked"
+                                    )
+                            except OSError as e:
+                                print(
+                                    f"⚠️  WARNING: Could not read symlink for {config_dir_target}: {e}"
+                                )
+                        else:
+                            # It's a regular directory
+                            print(
+                                f"⚠️  WARNING: {config_dir_target} exists as a directory, "
+                                f"but should be a symlink to {source_path}"
+                            )
+                    else:
+                        # It's a file (not a directory)
+                        print(
+                            f"⚠️  WARNING: {config_dir_target} exists as a file, "
+                            f"but should be a symlink to {source_path}"
+                        )
+            except Exception as e:
+                print(f"❌ ERROR: Unexpected error processing {config_dir_target}: {e}")
+                continue
 
     def setup_shell(self):
-        if "fish" not in str(
-            subprocess.run(["ps"], check=True, capture_output=True).stdout
-        ):
-            subprocess.run(["chsh", "-s", "/usr/bin/fish"])
+        # Check current user's default shell
+        try:
+            current_shell = os.environ.get("SHELL", "")
+            if not current_shell.endswith("/fish"):
+                # Double-check by reading from /etc/passwd
+                import pwd
+
+                user_entry = pwd.getpwuid(os.getuid())
+                if not user_entry.pw_shell.endswith("/fish"):
+                    print(f"Changing shell from {user_entry.pw_shell} to fish")
+                    subprocess.run(["chsh", "-s", "/usr/bin/fish"], check=True)
+                else:
+                    print("Shell is already set to fish")
+            else:
+                print("Shell is already set to fish")
+        except Exception as e:
+            print(f"Warning: Could not check/change shell: {e}")
 
     def link_accounts(self):
         if self.test_mode:
             print("Test mode: Skipping GitHub and SSH key setup")
-            if self.environment in ["private"]:
-                print("Test mode: Skipping Tailscale setup")
             return
 
         if "Logged in" not in subprocess.run(
@@ -241,46 +370,184 @@ class Arch(Linux):
     systemd_services_to_enable = []
 
     def install_dependencies(self):
+        """Install packages with retry logic and comprehensive error handling"""
+
         def pacman(*args, **kwargs):
-            subprocess.run(["sudo", "pacman"] + list(args), **kwargs)
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    result = subprocess.run(
+                        ["sudo", "pacman"] + list(args),
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                        timeout=1800,  # 30 minute timeout
+                        **kwargs,
+                    )
+                    return result
+                except subprocess.TimeoutExpired:
+                    print(
+                        f"❌ Package installation timed out (attempt {attempt + 1}/{max_retries})"
+                    )
+                    if attempt == max_retries - 1:
+                        print(
+                            "💡 Try: Check internet connection or use different mirror"
+                        )
+                        raise
+                    print("🔄 Retrying in 10 seconds...")
+                    time.sleep(10)
+                except subprocess.CalledProcessError as e:
+                    if "conflict" in e.stderr.lower():
+                        print("❌ ERROR: Package conflicts detected")
+                        print(
+                            "💡 Try: Resolve conflicts manually or update system first"
+                        )
+                    elif "not found" in e.stderr.lower():
+                        print("❌ ERROR: Package not found in repositories")
+                        print("💡 Try: Update package databases with 'pacman -Sy'")
+                    elif "permission denied" in e.stderr.lower():
+                        print(
+                            "❌ ERROR: Permission denied - sudo may not be configured"
+                        )
+                        print("💡 Try: Configure sudo or run as appropriate user")
+                    else:
+                        print(f"❌ ERROR: Package installation failed: {e.stderr}")
+                    raise
 
-        pacman("-S", "--needed", "git", "base-devel", check=True)
-        ensure_path(expand("~/projects"))
-        if not exists(expand("~/projects/yay-bin")):
-            subprocess.run(
-                [
-                    "git",
-                    "clone",
-                    "https://aur.archlinux.org/yay-bin.git",
-                    expand("~/projects/yay-bin"),
-                ],
-                check=True,
+        try:
+            # Install base packages
+            print("Installing base development tools...")
+            pacman("-S", "--needed", "git", "base-devel")
+            print("✅ Base development tools installed")
+
+            # Create projects directory safely
+            projects_dir = expand("~/projects")
+            try:
+                ensure_path(projects_dir)
+            except OSError as e:
+                print(f"❌ ERROR: Cannot create projects directory: {e}")
+                print("💡 Try: Check home directory permissions")
+                raise
+
+            # Install yay with error handling
+            yay_dir = expand("~/projects/yay-bin")
+            if not exists(yay_dir):
+                try:
+                    print("Cloning yay AUR helper...")
+                    subprocess.run(
+                        [
+                            "git",
+                            "clone",
+                            "https://aur.archlinux.org/yay-bin.git",
+                            yay_dir,
+                        ],
+                        check=True,
+                        timeout=120,
+                        capture_output=True,
+                        text=True,
+                    )
+
+                    print("Building yay...")
+                    subprocess.run(
+                        ["makepkg", "-si", "--needed", "--noconfirm"],
+                        check=True,
+                        cwd=yay_dir,
+                        timeout=600,
+                        capture_output=True,
+                        text=True,
+                    )
+                    print("✅ Yay AUR helper installed")
+
+                except subprocess.TimeoutExpired:
+                    print("❌ ERROR: Git clone or yay build timed out")
+                    print("💡 Try: Check internet connection")
+                    raise
+                except subprocess.CalledProcessError as e:
+                    print(f"❌ ERROR: Failed to install yay: {e}")
+                    if e.stderr:
+                        print(f"💡 Error details: {e.stderr}")
+                    raise
+            else:
+                print("✅ Yay already installed")
+
+            # Install main packages with detailed progress
+            all_packages = self.pacman_packages + self.environment_specific[
+                "pacman_packages"
+            ].get(self.environment, [])
+            print(f"Installing {len(all_packages)} pacman packages...")
+
+            try:
+                pacman("-S", "--needed", "--noconfirm", *all_packages)
+                print("✅ All pacman packages installed successfully")
+            except subprocess.CalledProcessError as e:
+                print("❌ ERROR: Some pacman packages failed to install")
+                print("💡 Try: Check package names and update system")
+                raise e
+
+            # Install AUR packages
+            aur_packages = self.aur_packages + self.environment_specific[
+                "aur_packages"
+            ].get(self.environment, [])
+            if aur_packages:
+                print(f"Installing {len(aur_packages)} AUR packages...")
+                try:
+                    subprocess.run(
+                        ["yay", "-S", "--needed", "--noconfirm"] + aur_packages,
+                        check=True,
+                        timeout=1800,
+                        capture_output=True,
+                        text=True,
+                    )
+                    print("✅ All AUR packages installed successfully")
+                except subprocess.TimeoutExpired:
+                    print("❌ ERROR: AUR package installation timed out")
+                    raise
+                except subprocess.CalledProcessError as e:
+                    print("❌ ERROR: Some AUR packages failed to install")
+                    if e.stderr:
+                        print(f"💡 Error details: {e.stderr}")
+                    raise
+
+            # Enable systemd services
+            services_to_enable = (
+                self.systemd_services_to_enable
+                + self.environment_specific["systemd_services_to_enable"].get(
+                    self.environment, []
+                )
             )
-            subprocess.run(
-                ["makepkg", "-si", "--needed", "--noconfirm"],
-                check=True,
-                cwd=expand("~/projects/yay-bin"),
-            )
+            for service in services_to_enable:
+                try:
+                    subprocess.run(
+                        ["systemctl", "enable", "--now", service],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    print(f"✅ Enabled service: {service}")
+                except subprocess.CalledProcessError as e:
+                    # In containers, systemd services often fail - this is expected
+                    if (
+                        "chroot" in e.stderr.lower()
+                        or "failed to connect to bus" in e.stderr.lower()
+                    ):
+                        print(
+                            f"⚠️  WARNING: Cannot enable {service} in container environment"
+                        )
+                    else:
+                        print(
+                            f"❌ ERROR: Failed to enable service {service}: {e.stderr}"
+                        )
+                        # Don't raise here - continue with other services
 
-        pacman(
-            "-S",
-            "--needed",
-            "--noconfirm",
-            *self.pacman_packages
-            + self.environment_specific["pacman_packages"].get(self.environment, []),
-            check=True,
-        )
-        subprocess.run(
-            ["yay", "-S", "--needed", "--noconfirm"]
-            + self.aur_packages
-            + self.environment_specific["aur_packages"].get(self.environment, []),
-            check=True,
-        )
+        except KeyboardInterrupt:
+            print("\n❌ Installation interrupted by user")
+            raise
+        except Exception as e:
+            print(f"❌ FATAL ERROR during package installation: {e}")
+            print("💡 Try: Check logs above for specific error details")
+            raise
 
-        for service in self.systemd_services_to_enable + self.environment_specific[
-            "systemd_services_to_enable"
-        ].get(self.environment, []):
-            subprocess.run(["systemctl", "enable", "--now", service], check=True)
+        # Call parent class
         super().install_dependencies()
 
 
@@ -390,49 +657,86 @@ For more information, see the README or CLAUDE.md files.
 
 
 def main():
-    """Main entry point for the dotfiles installation script"""
-    parser = argparse.ArgumentParser(
-        description="Install and configure dotfiles for Linux systems",
-        add_help=False,  # Disable default help to use custom help
-    )
-    parser.add_argument(
-        "--environment",
-        choices=["minimal", "work", "private"],
-        default="minimal",
-        help="Environment configuration to install (default: minimal)",
-    )
-    parser.add_argument(
-        "--test",
-        action="store_true",
-        help="Skip remote activities (GitHub, SSH keys, Tailscale) for testing",
-    )
-    parser.add_argument(
-        "--help", action="store_true", help="Show detailed help information"
-    )
+    """Main entry point with comprehensive error handling"""
+    try:
+        parser = argparse.ArgumentParser(
+            description="Install and configure dotfiles for Linux systems",
+            add_help=False,  # Disable default help to use custom help
+        )
+        parser.add_argument(
+            "--environment",
+            choices=["minimal", "work", "private"],
+            default="minimal",
+            help="Environment configuration to install (default: minimal)",
+        )
+        parser.add_argument(
+            "--test",
+            action="store_true",
+            help="Skip remote activities (GitHub, SSH keys, Tailscale) for testing",
+        )
+        parser.add_argument(
+            "--help", action="store_true", help="Show detailed help information"
+        )
 
-    args = parser.parse_args()
+        args = parser.parse_args()
 
-    if args.help:
-        show_help()
-        return
+        if args.help:
+            show_help()
+            return 0
 
-    operating_system = detect_operating_system(
-        environment=args.environment, test_mode=args.test
-    )
+        print(
+            f"🚀 Installing dotfiles for {args.environment} environment{' (test mode)' if args.test else ''}"
+        )
 
-    print(
-        f"Installing dotfiles for {args.environment} environment{' (test mode)' if args.test else ''}"
-    )
+        try:
+            operating_system = detect_operating_system(
+                environment=args.environment, test_mode=args.test
+            )
+        except FileNotFoundError:
+            print(
+                "❌ ERROR: Cannot detect operating system (/etc/os-release not found)"
+            )
+            print("💡 This script only supports Linux distributions")
+            return 1
+        except NotImplementedError as e:
+            print(f"❌ ERROR: {e}")
+            print(
+                "💡 This script currently supports Arch Linux, Garuda Linux, and Debian-based systems"
+            )
+            return 1
 
-    print("Installing dependencies")
-    operating_system.install_dependencies()
-    print("Linking configurations")
-    operating_system.link_configs()
-    print("Setting up shell")
-    operating_system.setup_shell()
-    print("Link online accounts")
-    operating_system.link_accounts()
+        # Execute installation steps with individual error handling
+        steps = [
+            ("Installing dependencies", operating_system.install_dependencies),
+            ("Linking configurations", operating_system.link_configs),
+            ("Setting up shell", operating_system.setup_shell),
+            ("Setting up accounts", operating_system.link_accounts),
+        ]
+
+        for step_name, step_func in steps:
+            try:
+                print(f"\n🔄 {step_name}...")
+                step_func()
+                print(f"✅ {step_name} completed successfully")
+            except KeyboardInterrupt:
+                print(f"\n❌ {step_name} interrupted by user")
+                return 130  # Standard exit code for SIGINT
+            except Exception as e:
+                print(f"❌ ERROR in {step_name}: {e}")
+                print("💡 Check the error details above and retry")
+                return 1
+
+        print("\n🎉 Dotfiles installation completed successfully!")
+        print(
+            "💡 You may need to restart your terminal or run 'source ~/.config/fish/config.fish' for changes to take effect"
+        )
+        return 0
+
+    except Exception as e:
+        print(f"❌ UNEXPECTED ERROR: {e}")
+        print("💡 Please report this issue with the full error message")
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

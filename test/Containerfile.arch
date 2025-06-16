@@ -1,0 +1,50 @@
+FROM archlinux:latest
+
+# Update system and install basic dependencies
+RUN pacman -Syu --noconfirm && \
+    pacman -S --noconfirm \
+    base-devel \
+    git \
+    python \
+    python-pip \
+    sudo \
+    fish \
+    wget \
+    curl \
+    which \
+    && pacman -Scc --noconfirm
+
+# Create a test user with sudo privileges
+RUN useradd -m -G wheel -s /bin/bash testuser && \
+    echo "testuser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+# Set up working directory
+WORKDIR /home/testuser/dotfiles
+RUN chown -R testuser:testuser /home/testuser
+
+# Switch to test user
+USER testuser
+
+# Install uv (Python package manager) as testuser
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/home/testuser/.local/bin:$PATH"
+
+# Copy dotfiles to container
+COPY --chown=testuser:testuser . /home/testuser/dotfiles/
+
+# Make sure we have a proper shell environment
+ENV HOME=/home/testuser
+ENV USER=testuser
+
+# Create necessary directories
+RUN mkdir -p ~/.config ~/.local/share
+
+# Create fake /etc/os-release for Arch detection
+USER root
+RUN echo 'NAME="Arch Linux"' > /etc/os-release && \
+    echo 'ID=arch' >> /etc/os-release && \
+    echo 'PRETTY_NAME="Arch Linux"' >> /etc/os-release
+USER testuser
+
+# Default command runs the init script in test mode
+CMD ["sh", "-c", "uv run init.py --test --environment minimal"]
