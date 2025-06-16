@@ -337,7 +337,7 @@ def detect_operating_system(environment="minimal", test_mode=False):
         content = release_file.read()
         if 'NAME="Arch Linux"' in content:
             return Arch(environment=environment, test_mode=test_mode)
-        if 'NAME="Garuda Linux"' in content:
+        elif 'NAME="Garuda Linux"' in content:
             return Arch(environment=environment, test_mode=test_mode)
         else:
             raise NotImplementedError(f"Unknown operating system, found {content}")
