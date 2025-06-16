@@ -66,3 +66,7 @@ Desktop.ini
 .byobu/.ssh-agent
 .byobu/.metadata_available
 .direnv
+
+**/.claude/settings.local.json
+
+**/CLAUDE.local.md
