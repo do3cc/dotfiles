@@ -228,6 +228,8 @@ class Arch(Linux):
                 "tailscaled",
             ]
         },
+        "config_dirs": Linux.environment_specific["config_dirs"],
+        "ssh_key_email": Linux.environment_specific["ssh_key_email"],
     }
     systemd_services_to_enable = []
 
