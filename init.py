@@ -1,3 +1,4 @@
+import argparse
 from datetime import datetime
 import os
 from os.path import abspath, exists, expanduser
@@ -20,12 +21,25 @@ class Linux:
         ("alacritty", "alacritty"),
         ("direnv", "direnv"),
         ("fish", "fish"),
-        ("irssi", "irssi"),
         ("lazy_nvim", "nvim"),
         ("tmux", "tmux"),
         ("byobu", "byobu"),
         ("git", "git"),
     ]
+
+    ssh_key_email = "sshkeys@patrick-gerken.de"
+
+    environment_specific = {
+        "config_dirs": {
+            "private": [
+                ("irssi", "irssi"),
+            ]
+        },
+        "ssh_key_email": {"work": "patrick.gerken@zumtobelgroup.com"},
+    }
+
+    def __init__(self, environment="minimal"):
+        self.environment = environment
 
     def install_dependencies(self):
         if not exists(expand("~/.local/share/nvm")):
@@ -40,7 +54,10 @@ class Linux:
             )
 
     def link_configs(self):
-        for config_dir_src, config_dir_target in self.config_dirs:
+        for config_dir_src, config_dir_target in (
+            self.config_dirs
+            + self.environment_specific["config_dirs"].get(self.environment, [])
+        ):
             if not exists(expand(f"~/.config/{config_dir_target}")):
                 os.symlink(
                     expand(f"./{config_dir_src}"),
@@ -68,13 +85,16 @@ class Linux:
 
         current_key = expand("~/.ssh/id_ed_" + datetime.now().strftime("%Y%m"))
         if not exists(current_key):
+            ssh_key_email = self.environment_specific["ssh_key_email"].get(
+                self.environment, self.ssh_key_email
+            )
             subprocess.run(
                 [
                     "ssh-keygen",
                     "-t",
                     "ed25519",
                     "-C",
-                    f"'Patrick Gerken {socket.gethostname()} sshkeys@patrick-gerken.de {datetime.now().strftime('%Y%m')}'",
+                    f"'Patrick Gerken {socket.gethostname()} {ssh_key_email} {datetime.now().strftime('%Y%m')}'",
                     "-f",
                     current_key,
                 ]
@@ -86,86 +106,100 @@ class Linux:
                 check=True,
             )
 
-        if "Logged in" not in subprocess.run(
-            ["tailscale", "status"], check=True, capture_output=True
-        ).stdout.decode("utf-8"):
-            subprocess.run(
-                ["sudo", "tailscale", "login", "--operator=do3cc", "--qr"], check=True
-            )
+        if self.environment in ["private"]:
+            if "Logged in" not in subprocess.run(
+                ["tailscale", "status"], check=True, capture_output=True
+            ).stdout.decode("utf-8"):
+                subprocess.run(
+                    ["sudo", "tailscale", "login", "--operator=do3cc", "--qr"],
+                    check=True,
+                )
 
 
 class Arch(Linux):
-    aur_packages = [
-        "hyprshot",
-    ]
+    aur_packages = []
     pacman_packages = [
-        "ast-grep",
-        "bat",
-        "bitwarden",
-        "brightnessctl",
-        "byobu",
-        "direnv",
-        "dolphin",
-        "eza",
-        "fd",
-        "firefox",
-        "fish",
-        "ghostscript",
-        "git",
-        "github-cli",
-        "htop",
-        "hyprland",
-        "hyprpaper",
-        "imagemagick",
-        "jdk-openjdk",
-        "jq",
-        "less",
-        "libnotify",
-        "lua51",
-        "luarocks",
-        "mako",
-        "man-db",
-        "mermaid-cli",
-        "mpd",
-        "neovim",
-        "nmap",
-        "noto-fonts-emoji",
-        "npm",
-        "otf-font-awesome",
-        "pavucontrol",
-        "pipewire",
-        "pipewire-alsa",
-        "pipewire-jack",
-        "pipewire-pulse",
-        "polkit-kde-agent",
-        "powerline-fonts",
-        "power-profiles-daemon",
-        "python-gobject",
-        "qt5-wayland",
-        "qt6-wayland",
-        "rofi-wayland",
-        "rsync",
-        "slurp",
-        "starship",
-        "tailscale",
-        "tectonic",
-        "the_silver_searcher",
-        "tig",
-        "tealdeer",
-        "tree-sitter-cli",
-        "uv",
-        "waybar",
-        "wget",
-        "wireplumber",
-        "wl-clipboard",
-        "xdg-desktop-portal-gtk",
-        "xdg-desktop-portal-hyprland",
-        "yarn",
+        "ast-grep",  # structural code search tool
+        "bat",  # syntax highlighted cat alternative
+        "byobu",  # terminal multiplexer frontend
+        "direnv",  # environment variable manager
+        "eza",  # modern ls replacement
+        "fd",  # fast find replacement
+        "fish",  # friendly interactive shell
+        "git",  # version control system
+        "github-cli",  # GitHub command line interface
+        "htop",  # interactive process viewer
+        "jdk-openjdk",  # Java development kit
+        "jq",  # JSON command line processor
+        "less",  # terminal pager
+        "lua51",  # Lua scripting language
+        "luarocks",  # Lua package manager
+        "man-db",  # manual page database
+        "mermaid-cli",  # diagram generation tool
+        "neovim",  # modern Vim text editor
+        "nmap",  # network discovery and scanning
+        "npm",  # Node.js package manager
+        "rsync",  # file synchronization tool
+        "starship",  # cross-shell prompt
+        "tectonic",  # LaTeX engine
+        "the_silver_searcher",  # fast text search tool
+        "tig",  # text-mode Git interface
+        "tealdeer",  # fast tldr client
+        "tree-sitter-cli",  # parser generator tool
+        "uv",  # fast Python package manager
+        "wget",  # web file downloader
+        "yarn",  # Node.js package manager
     ]
 
-    systemd_services_to_enable = [
-        "tailscaled",
-    ]
+    environment_specific = {
+        "aur_packages": {
+            "private": [
+                "hyprshot",  # Hyprland screenshot tool
+            ]
+        },
+        "pacman_packages": {
+            "private": [
+                "bitwarden",  # password manager
+                "brightnessctl",  # screen brightness control
+                "dolphin",  # KDE file manager
+                "firefox",  # web browser
+                "ghostscript",  # PostScript and PDF interpreter
+                "hyprland",  # Wayland compositor
+                "hyprpaper",  # wallpaper utility for Hyprland
+                "imagemagick",  # image manipulation toolkit
+                "libnotify",  # desktop notification library
+                "mako",  # lightweight notification daemon
+                "mpd",  # music player daemon
+                "noto-fonts-emoji",  # emoji font collection
+                "otf-font-awesome",  # icon font
+                "pavucontrol",  # PulseAudio volume control
+                "pipewire",  # multimedia framework
+                "pipewire-alsa",  # ALSA compatibility for PipeWire
+                "pipewire-jack",  # JACK compatibility for PipeWire
+                "pipewire-pulse",  # PulseAudio compatibility for PipeWire
+                "polkit-kde-agent",  # authentication agent for KDE
+                "powerline-fonts",  # fonts for powerline
+                "power-profiles-daemon",  # power management service
+                "python-gobject",  # Python GObject bindings
+                "qt5-wayland",  # Qt5 Wayland support
+                "qt6-wayland",  # Qt6 Wayland support
+                "rofi-wayland",  # application launcher for Wayland
+                "slurp",  # Wayland screen region selector
+                "tailscale",  # mesh VPN service
+                "waybar",  # Wayland status bar
+                "wireplumber",  # PipeWire session manager
+                "wl-clipboard",  # Wayland clipboard utilities
+                "xdg-desktop-portal-gtk",  # GTK desktop portal
+                "xdg-desktop-portal-hyprland",  # Hyprland desktop portal
+            ]
+        },
+        "systemd_services_to_enable": {
+            "private": [
+                "tailscaled",
+            ]
+        },
+    }
+    systemd_services_to_enable = []
 
     def install_dependencies(self):
         def pacman(*args, **kwargs):
@@ -193,48 +227,53 @@ class Arch(Linux):
             "-S",
             "--needed",
             "--noconfirm",
-            *self.pacman_packages,
+            *self.pacman_packages
+            + self.environment_specific["pacman_packages"].get(self.environment, []),
             check=True,
         )
         subprocess.run(
-            ["yay", "-S", "--needed", "--noconfirm"] + self.aur_packages,
+            ["yay", "-S", "--needed", "--noconfirm"]
+            + self.aur_packages
+            + self.environment_specific["aur_packages"].get(self.environment, []),
             check=True,
         )
 
-        for service in self.systemd_services_to_enable:
+        for service in self.systemd_services_to_enable + self.environment_specific[
+            "systemd_services_to_enable"
+        ].get(self.environment, []):
             subprocess.run(["systemctl", "enable", "--now", service], check=True)
         super().install_dependencies()
 
 
 class Debian(Linux):
     apt_packages = [
-        "ack",
-        "apt-file",
-        "build-essential",
-        "byobu",
-        "curl",
-        "direnv",
-        "fish",
-        "github-cli",
-        "jq",
-        "libbz2-dev",
-        "libffi-dev",
-        "libfuse2",
-        "liblzma-dev",
-        "libncursesw5-dev",
-        "libreadline-dev",
-        "libsqlite3-dev",
-        "libssl-dev",
-        "libxml2-dev",
-        "libxmlsec1-dev",
-        "neovim",
-        "nmap",
-        "npm",
-        "silversearcher-ag",
-        "tig",
-        "tk-dev",
-        "xz-utils",
-        "zlib1g-dev",
+        "ack",  # text search tool
+        "apt-file",  # search files in packages
+        "build-essential",  # compilation tools and libraries
+        "byobu",  # terminal multiplexer frontend
+        "curl",  # command line URL tool
+        "direnv",  # environment variable manager
+        "fish",  # friendly interactive shell
+        "github-cli",  # GitHub command line interface
+        "jq",  # JSON command line processor
+        "libbz2-dev",  # bzip2 development library
+        "libffi-dev",  # foreign function interface library
+        "libfuse2",  # filesystem in userspace library
+        "liblzma-dev",  # XZ compression library
+        "libncursesw5-dev",  # terminal control library
+        "libreadline-dev",  # GNU readline library
+        "libsqlite3-dev",  # SQLite development library
+        "libssl-dev",  # SSL development library
+        "libxml2-dev",  # XML development library
+        "libxmlsec1-dev",  # XML security library
+        "neovim",  # modern Vim text editor
+        "nmap",  # network discovery and scanning
+        "npm",  # Node.js package manager
+        "silversearcher-ag",  # fast text search tool
+        "tig",  # text-mode Git interface
+        "tk-dev",  # Tk GUI toolkit
+        "xz-utils",  # XZ compression utilities
+        "zlib1g-dev",  # compression library
     ]
 
     def install_dependencies(self):
@@ -260,23 +299,45 @@ class Debian(Linux):
         super().install_dependencies()
 
 
-operating_system = None
+def detect_operating_system(environment="minimal"):
+    """Detect and return the appropriate operating system class"""
+    with open("/etc/os-release") as release_file:
+        content = release_file.read()
+        if 'NAME="Arch Linux"' in content:
+            return Arch(environment=environment)
+        if 'NAME="Garuda Linux"' in content:
+            return Arch(environment=environment)
+        else:
+            raise NotImplementedError(f"Unknown operating system, found {content}")
 
-with open("/etc/os-release") as release_file:
-    content = release_file.read()
-    if 'NAME="Arch Linux"' in content:
-        operating_system = Arch()
-    if 'NAME="Garuda Linux"' in content:
-        operating_system = Arch()
-    else:
-        raise NotImplementedError(f"Unknown operating system, found {content}")
+
+def main():
+    """Main entry point for the dotfiles installation script"""
+    parser = argparse.ArgumentParser(
+        description="Install and configure dotfiles for Linux systems"
+    )
+    parser.add_argument(
+        "--environment",
+        choices=["minimal", "work", "private"],
+        default="minimal",
+        help="Environment configuration to install (default: minimal)",
+    )
+
+    args = parser.parse_args()
+
+    operating_system = detect_operating_system(environment=args.environment)
+
+    print(f"Installing dotfiles for {args.environment} environment")
+
+    print("Installing dependencies")
+    operating_system.install_dependencies()
+    print("Linking configurations")
+    operating_system.link_configs()
+    print("Setting up shell")
+    operating_system.setup_shell()
+    print("Link online accounts")
+    operating_system.link_accounts()
 
 
-print("Installing dependencies")
-operating_system.install_dependencies()
-print("Linking configurations")
-operating_system.link_configs()
-print("Setting up shell")
-operating_system.setup_shell()
-print("Link online accounts")
-operating_system.link_accounts()
+if __name__ == "__main__":
+    main()
