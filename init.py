@@ -613,6 +613,8 @@ def detect_operating_system(environment="minimal", test_mode=False):
             return Arch(environment=environment, test_mode=test_mode)
         elif 'NAME="Garuda Linux"' in content:
             return Arch(environment=environment, test_mode=test_mode)
+        elif 'ID=debian' in content or 'ID_LIKE=debian' in content:
+            return Debian(environment=environment, test_mode=test_mode)
         else:
             raise NotImplementedError(f"Unknown operating system, found {content}")
 
