@@ -59,15 +59,38 @@ class Linux:
             self.config_dirs
             + self.environment_specific["config_dirs"].get(self.environment, [])
         ):
-            if not exists(expand(f"~/.config/{config_dir_target}")):
+            target_path = expand(f"~/.config/{config_dir_target}")
+            if not exists(target_path):
                 os.symlink(
                     expand(f"./{config_dir_src}"),
-                    expand(f"~/.config/{config_dir_target}"),
+                    target_path,
                 )
             else:
-                print(
-                    f"Skipping configuration directory {config_dir_target}, it already exists"
-                )
+                # Check if it's a directory or symlink to another location
+                if os.path.isdir(target_path):
+                    if os.path.islink(target_path):
+                        # It's a symlink to a directory
+                        current_target = os.readlink(target_path)
+                        expected_target = expand(f"./{config_dir_src}")
+                        if current_target != expected_target:
+                            print(
+                                f"⚠️  WARNING: {config_dir_target} is linked to {current_target}, "
+                                f"but should be linked to {expected_target}"
+                            )
+                        else:
+                            print(f"✅ {config_dir_target} is already correctly linked")
+                    else:
+                        # It's a regular directory
+                        print(
+                            f"⚠️  WARNING: {config_dir_target} exists as a directory, "
+                            f"but should be a symlink to {expand(f'./{config_dir_src}')}"
+                        )
+                else:
+                    # It's a file (not a directory)
+                    print(
+                        f"⚠️  WARNING: {config_dir_target} exists as a file, "
+                        f"but should be a symlink to {expand(f'./{config_dir_src}')}"
+                    )
 
     def setup_shell(self):
         if "fish" not in str(
