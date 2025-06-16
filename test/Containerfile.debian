@@ -1,0 +1,51 @@
+FROM debian:bookworm
+
+# Update system and install basic dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    git \
+    python3 \
+    python3-pip \
+    sudo \
+    fish \
+    wget \
+    curl \
+    which \
+    ca-certificates \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Create a test user with sudo privileges
+RUN useradd -m -s /bin/bash testuser && \
+    usermod -aG sudo testuser && \
+    echo "testuser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+# Set up working directory
+WORKDIR /home/testuser/dotfiles
+RUN chown -R testuser:testuser /home/testuser
+
+# Switch to test user
+USER testuser
+
+# Install uv (Python package manager) as testuser
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/home/testuser/.local/bin:$PATH"
+
+# Copy dotfiles to container
+COPY --chown=testuser:testuser . /home/testuser/dotfiles/
+
+# Make sure we have a proper shell environment
+ENV HOME=/home/testuser
+ENV USER=testuser
+
+# Create necessary directories
+RUN mkdir -p ~/.config ~/.local/share
+
+# Create fake /etc/os-release for Debian detection
+USER root
+RUN echo 'NAME="Debian GNU/Linux"' > /etc/os-release && \
+    echo 'ID=debian' >> /etc/os-release && \
+    echo 'PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"' >> /etc/os-release
+USER testuser
+
+# Default command runs the init script in test mode
+CMD ["sh", "-c", "uv run init.py --test --environment minimal"]
