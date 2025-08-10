@@ -6,7 +6,7 @@
 	whitespace = cr-at-eol
     autocrlf = input
     whitespace = fix,space-before-tab,tab-in-indent,trailing-space
-	excludesFile = ~/.gitignore
+	excludesFile = ~/.config/git/ignore
 
 [apply]
     whitespace = fix
@@ -99,4 +99,6 @@
 [pull]
 	rebase = true
 [credential]
-    helper = store
+	helper = /usr/lib/git-core/git-credential-libsecret
+[http "https://git.dev.zgrp.net/"]
+	sslVerify = false
