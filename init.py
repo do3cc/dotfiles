@@ -388,7 +388,7 @@ class Arch(Linux):
         "fish",  # friendly interactive shell
         "git",  # version control system
         "github-cli",  # GitHub command line interface
-        "gitlab-cli",  # GitLab command line interface
+        "glab",  # GitLab command line interface
         "htop",  # interactive process viewer
         "jdk-openjdk",  # Java development kit
         "jq",  # JSON command line processor
