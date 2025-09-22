@@ -3,6 +3,7 @@ return {
   opts = {
     formatters_by_ft = {
       java = { "google-java-format" }, -- Formatting
+      json = { "prettier" },
       -- java = { "checkstyle" },      -- Linting (optional)
     },
     -- Custom formatter definition (if needed)
