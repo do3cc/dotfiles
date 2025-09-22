@@ -6,11 +6,42 @@ import socket
 import subprocess
 import sys
 import time
+import traceback
 import urllib.request
 
 
 def expand(path):
     return abspath(expanduser(path))
+
+
+def run_command_with_error_handling(command, description="Command", timeout=300, **kwargs):
+    """Run a subprocess command with comprehensive error handling"""
+    try:
+        result = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            **kwargs
+        )
+        return result
+    except subprocess.TimeoutExpired as e:
+        print(f"❌ ERROR: {description} timed out after {timeout} seconds")
+        print(f"🔍 Command: {' '.join(command)}")
+        raise
+    except subprocess.CalledProcessError as e:
+        print(f"❌ ERROR: {description} failed: {e}")
+        print(f"🔍 Command: {' '.join(command)}")
+        if e.stdout:
+            print(f"📄 STDOUT:\n{e.stdout}")
+        if e.stderr:
+            print(f"📄 STDERR:\n{e.stderr}")
+        raise
+    except Exception as e:
+        print(f"❌ ERROR: Unexpected error running {description}: {e}")
+        print(f"🔍 Command: {' '.join(command)}")
+        raise
 
 
 def ensure_path(path):
@@ -260,7 +291,10 @@ class Linux:
                 user_entry = pwd.getpwuid(os.getuid())
                 if not user_entry.pw_shell.endswith("/fish"):
                     print(f"Changing shell from {user_entry.pw_shell} to fish")
-                    subprocess.run(["chsh", "-s", "/usr/bin/fish"], check=True)
+                    run_command_with_error_handling(
+                        ["chsh", "-s", "/usr/bin/fish"],
+                        "Change shell to fish"
+                    )
                 else:
                     print("Shell is already set to fish")
             else:
@@ -273,12 +307,24 @@ class Linux:
             print("Test mode: Skipping GitHub and SSH key setup")
             return
 
-        if "Logged in" not in subprocess.run(
-            ["/usr/bin/gh", "auth", "status"], capture_output=True
-        ).stdout.decode("utf-8"):
+        try:
+            result = run_command_with_error_handling(
+                ["/usr/bin/gh", "auth", "status"],
+                "Check GitHub auth status"
+            )
+            if "Logged in" not in result.stdout:
+                # Interactive command - don't capture output
+                subprocess.run(["/usr/bin/gh", "auth", "login"])
+                run_command_with_error_handling(
+                    ["gh", "auth", "refresh", "-h", "github.com", "-s", "admin:public_key"],
+                    "Refresh GitHub auth"
+                )
+        except subprocess.CalledProcessError:
+            print("GitHub CLI not authenticated, running login...")
             subprocess.run(["/usr/bin/gh", "auth", "login"])
-            subprocess.run(
-                ["gh", "auth", "refresh", "-h", "github.com", "-s", "admin:public_key"]
+            run_command_with_error_handling(
+                ["gh", "auth", "refresh", "-h", "github.com", "-s", "admin:public_key"],
+                "Refresh GitHub auth"
             )
 
         current_key = expand("~/.ssh/id_ed_" + datetime.now().strftime("%Y%m"))
@@ -286,7 +332,7 @@ class Linux:
             ssh_key_email = self.environment_specific["ssh_key_email"].get(
                 self.environment, self.ssh_key_email
             )
-            subprocess.run(
+            run_command_with_error_handling(
                 [
                     "ssh-keygen",
                     "-t",
@@ -295,22 +341,35 @@ class Linux:
                     f"'Patrick Gerken {socket.gethostname()} {ssh_key_email} {datetime.now().strftime('%Y%m')}'",
                     "-f",
                     current_key,
-                ]
+                    "-N", ""  # No passphrase
+                ],
+                "Generate SSH key"
             )
-            subprocess.run(["ssh-add", current_key])
+            run_command_with_error_handling(
+                ["ssh-add", current_key],
+                "Add SSH key to agent"
+            )
             key_name = f'"{socket.gethostname()} {datetime.now().strftime("%Y%m")}"'
-            subprocess.run(
+            run_command_with_error_handling(
                 ["/usr/bin/gh", "ssh-key", "add", f"{current_key}.pub", "-t", key_name],
-                check=True,
+                "Add SSH key to GitHub"
             )
 
         if self.environment in ["private"]:
-            if "Logged in" not in subprocess.run(
-                ["tailscale", "status"], check=True, capture_output=True
-            ).stdout.decode("utf-8"):
+            try:
+                result = run_command_with_error_handling(
+                    ["tailscale", "status"],
+                    "Check Tailscale status"
+                )
+                if "Logged in" not in result.stdout:
+                    # Interactive command - don't capture output
+                    subprocess.run(
+                        ["sudo", "tailscale", "login", "--operator=do3cc", "--qr"]
+                    )
+            except subprocess.CalledProcessError:
+                print("Tailscale not logged in, running login...")
                 subprocess.run(
-                    ["sudo", "tailscale", "login", "--operator=do3cc", "--qr"],
-                    check=True,
+                    ["sudo", "tailscale", "login", "--operator=do3cc", "--qr"]
                 )
 
 
@@ -430,20 +489,14 @@ class Arch(Linux):
 
         print("🔄 Updating system packages...")
         try:
-            # Update package database and upgrade packages
-            subprocess.run(
+            run_command_with_error_handling(
                 ["sudo", "pacman", "-Syu", "--noconfirm"],
-                check=True,
-                timeout=1800,  # 30 minute timeout
+                "System update",
+                timeout=1800
             )
             print("✅ System update completed successfully")
             self.mark_system_updated()
-        except subprocess.TimeoutExpired:
-            print("❌ ERROR: System update timed out")
-            print("💡 Try: Check internet connection or run manually")
-            raise
-        except subprocess.CalledProcessError as e:
-            print(f"❌ ERROR: System update failed: {e}")
+        except Exception:
             print("💡 Try: Run 'sudo pacman -Syu' manually to check for issues")
             raise
 
@@ -478,21 +531,23 @@ class Arch(Linux):
                     print("🔄 Retrying in 10 seconds...")
                     time.sleep(10)
                 except subprocess.CalledProcessError as e:
-                    if "conflict" in e.stderr.lower():
-                        print("❌ ERROR: Package conflicts detected")
-                        print(
-                            "💡 Try: Resolve conflicts manually or update system first"
-                        )
-                    elif "not found" in e.stderr.lower():
-                        print("❌ ERROR: Package not found in repositories")
+                    print(f"❌ ERROR: Package installation failed: {e}")
+                    print(f"🔍 Command: sudo pacman {' '.join(args)}")
+                    if e.stdout:
+                        print(f"📄 STDOUT:\n{e.stdout}")
+                    if e.stderr:
+                        print(f"📄 STDERR:\n{e.stderr}")
+
+                    # Provide specific advice based on error
+                    stderr_lower = e.stderr.lower() if e.stderr else ""
+                    if "conflict" in stderr_lower:
+                        print("💡 Try: Resolve conflicts manually or update system first")
+                    elif "not found" in stderr_lower:
                         print("💡 Try: Update package databases with 'pacman -Sy'")
-                    elif "permission denied" in e.stderr.lower():
-                        print(
-                            "❌ ERROR: Permission denied - sudo may not be configured"
-                        )
-                        print("💡 Try: Configure sudo or run as appropriate user")
+                    elif "permission denied" in stderr_lower or "password" in stderr_lower:
+                        print("💡 Try: Configure sudo or run in interactive terminal")
                     else:
-                        print(f"❌ ERROR: Package installation failed: {e.stderr}")
+                        print("💡 Try: Check the error details above")
                     raise
 
         try:
@@ -515,33 +570,28 @@ class Arch(Linux):
             if not exists(yay_dir):
                 try:
                     print("Cloning yay AUR helper...")
-                    subprocess.run(
+                    run_command_with_error_handling(
                         [
                             "git",
                             "clone",
                             "https://aur.archlinux.org/yay-bin.git",
                             yay_dir,
                         ],
-                        check=True,
-                        timeout=120,
-                        capture_output=True,
-                        text=True,
+                        "Clone yay AUR helper",
+                        timeout=120
                     )
 
                     print("Building yay...")
-                    subprocess.run(
+                    run_command_with_error_handling(
                         ["makepkg", "-si", "--needed", "--noconfirm"],
-                        check=True,
-                        cwd=yay_dir,
+                        "Build yay AUR helper",
                         timeout=600,
-                        capture_output=True,
-                        text=True,
+                        cwd=yay_dir
                     )
                     print("✅ Yay AUR helper installed")
 
-                except subprocess.TimeoutExpired:
-                    print("❌ ERROR: Git clone or yay build timed out")
-                    print("💡 Try: Check internet connection")
+                except Exception:
+                    print("💡 Try: Check internet connection and build dependencies")
                     raise
                 except subprocess.CalledProcessError as e:
                     print(f"❌ ERROR: Failed to install yay: {e}")
@@ -874,10 +924,14 @@ WHAT THIS SCRIPT DOES:
     7. Configures Tailscale (private environment only)
 
 EXAMPLES:
-    uv run init.py                    # Install minimal environment
-    uv run init.py --environment work # Install work environment
-    uv run init.py --environment private # Install full desktop environment
-    uv run init.py --test             # Test installation without remote activities
+    export DOTFILES_ENVIRONMENT=minimal && uv run init.py   # Install minimal environment
+    export DOTFILES_ENVIRONMENT=work && uv run init.py      # Install work environment
+    export DOTFILES_ENVIRONMENT=private && uv run init.py   # Install full desktop environment
+    DOTFILES_ENVIRONMENT=minimal uv run init.py --test      # Test installation without remote activities
+
+ENVIRONMENT VARIABLE:
+    DOTFILES_ENVIRONMENT    Required. Must be set to: minimal, work, or private
+                           This prevents accidentally running the wrong environment configuration
 
 For more information, see the README or CLAUDE.md files.
 """
@@ -891,12 +945,8 @@ def main():
             description="Install and configure dotfiles for Linux systems",
             add_help=False,  # Disable default help to use custom help
         )
-        parser.add_argument(
-            "--environment",
-            choices=["minimal", "work", "private"],
-            default="minimal",
-            help="Environment configuration to install (default: minimal)",
-        )
+        # Environment must be set via DOTFILES_ENVIRONMENT environment variable
+        # No longer accepting --environment argument to prevent accidental runs
         parser.add_argument(
             "--test",
             action="store_true",
@@ -912,13 +962,34 @@ def main():
             show_help()
             return 0
 
+        # Get environment from environment variable
+        environment = os.environ.get("DOTFILES_ENVIRONMENT")
+        if not environment:
+            print("❌ ERROR: DOTFILES_ENVIRONMENT environment variable is not set")
+            print("")
+            print("💡 You must set the environment variable to one of: minimal, work, private")
+            print("💡 Examples:")
+            print("   export DOTFILES_ENVIRONMENT=minimal && uv run init.py")
+            print("   export DOTFILES_ENVIRONMENT=work && uv run init.py")
+            print("   export DOTFILES_ENVIRONMENT=private && uv run init.py")
+            print("")
+            print("💡 This prevents accidentally running the wrong environment configuration")
+            return 1
+
+        # Validate environment value
+        valid_environments = ["minimal", "work", "private"]
+        if environment not in valid_environments:
+            print(f"❌ ERROR: Invalid DOTFILES_ENVIRONMENT '{environment}'")
+            print(f"💡 Must be one of: {', '.join(valid_environments)}")
+            return 1
+
         print(
-            f"🚀 Installing dotfiles for {args.environment} environment{' (test mode)' if args.test else ''}"
+            f"🚀 Installing dotfiles for {environment} environment{' (test mode)' if args.test else ''}"
         )
 
         try:
             operating_system = detect_operating_system(
-                environment=args.environment, test_mode=args.test
+                environment=environment, test_mode=args.test
             )
         except FileNotFoundError:
             print(
@@ -952,6 +1023,10 @@ def main():
                 return 130  # Standard exit code for SIGINT
             except Exception as e:
                 print(f"❌ ERROR in {step_name}: {e}")
+                print("\n🔍 DETAILED ERROR INFORMATION:")
+                print("-" * 50)
+                traceback.print_exc()
+                print("-" * 50)
                 print("💡 Check the error details above and retry")
                 return 1
 
@@ -963,6 +1038,10 @@ def main():
 
     except Exception as e:
         print(f"❌ UNEXPECTED ERROR: {e}")
+        print("\n🔍 DETAILED ERROR INFORMATION:")
+        print("-" * 50)
+        traceback.print_exc()
+        print("-" * 50)
         print("💡 Please report this issue with the full error message")
         return 1
 
