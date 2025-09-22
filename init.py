@@ -109,6 +109,31 @@ def check_apt_packages_installed(packages):
         return [], packages
 
 
+def check_systemd_service_status(service):
+    """Check if a systemd service is enabled and active"""
+    try:
+        # Check if service is enabled
+        enabled_result = subprocess.run(
+            ["systemctl", "is-enabled", service],
+            capture_output=True,
+            text=True
+        )
+        is_enabled = enabled_result.returncode == 0 and "enabled" in enabled_result.stdout
+
+        # Check if service is active
+        active_result = subprocess.run(
+            ["systemctl", "is-active", service],
+            capture_output=True,
+            text=True
+        )
+        is_active = active_result.returncode == 0 and "active" in active_result.stdout
+
+        return is_enabled, is_active
+    except Exception:
+        # If systemctl check fails, assume service needs setup
+        return False, False
+
+
 def ensure_path(path):
     if not exists(expand(path)):
         os.makedirs(expand(path))
@@ -248,6 +273,7 @@ class Linux:
                     try:
                         os.symlink(source_path, target_path)
                         print(f"✅ Linked {config_dir_target}")
+                        self.restart_required = True
                     except OSError as e:
                         if e.errno == 13:  # Permission denied
                             print(
@@ -361,6 +387,7 @@ class Linux:
                     run_command_with_error_handling(
                         ["chsh", "-s", "/usr/bin/fish"], "Change shell to fish"
                     )
+                    self.restart_required = True
                 else:
                     print("Shell is already set to fish")
             else:
@@ -660,6 +687,7 @@ class Arch(Linux):
                 print(f"Installing {len(missing)} base development tools: {', '.join(missing)}")
                 pacman("-S", "--needed", *missing)
                 print("✅ Base development tools installed")
+                self.restart_required = True
             else:
                 print("✅ All base development tools already installed")
 
@@ -729,6 +757,7 @@ class Arch(Linux):
                 try:
                     pacman("-S", "--needed", "--noconfirm", *missing)
                     print("✅ All missing pacman packages installed successfully")
+                    self.restart_required = True
                 except subprocess.CalledProcessError as e:
                     print("❌ ERROR: Some pacman packages failed to install")
                     print("💡 Try: Check package names and update system")
@@ -771,35 +800,54 @@ class Arch(Linux):
             elif aur_packages and not yay_installed:
                 print("⚠️  WARNING: AUR packages requested but yay not available")
 
-            # Enable systemd services
+            # Check and enable systemd services
             services_to_enable = (
                 self.systemd_services_to_enable
                 + self.environment_specific["systemd_services_to_enable"].get(
                     self.environment, []
                 )
             )
+            if services_to_enable:
+                print(f"Checking {len(services_to_enable)} systemd services...")
+
             for service in services_to_enable:
                 try:
-                    subprocess.run(
-                        ["systemctl", "enable", "--now", service],
-                        check=True,
-                        capture_output=True,
-                        text=True,
-                    )
-                    print(f"✅ Enabled service: {service}")
+                    is_enabled, is_active = check_systemd_service_status(service)
+
+                    if is_enabled and is_active:
+                        print(f"✅ Service already enabled and active: {service}")
+                        continue
+                    elif is_enabled and not is_active:
+                        print(f"🔄 Starting already enabled service: {service}")
+                        subprocess.run(
+                            ["systemctl", "start", service],
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                        )
+                        print(f"✅ Started service: {service}")
+                    else:
+                        print(f"🔄 Enabling and starting service: {service}")
+                        subprocess.run(
+                            ["systemctl", "enable", "--now", service],
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                        )
+                        print(f"✅ Enabled and started service: {service}")
+
                 except subprocess.CalledProcessError as e:
                     # In containers, systemd services often fail - this is expected
                     if (
                         "chroot" in e.stderr.lower()
                         or "failed to connect to bus" in e.stderr.lower()
+                        or "not available" in e.stderr.lower()
                     ):
                         print(
                             f"⚠️  WARNING: Cannot enable {service} in container environment"
                         )
                     else:
-                        print(
-                            f"❌ ERROR: Failed to enable service {service}: {e.stderr}"
-                        )
+                        print(f"❌ ERROR: Failed to enable service {service}: {e.stderr}")
                         # Don't raise here - continue with other services
 
         except KeyboardInterrupt:
@@ -1162,6 +1210,9 @@ def main():
             return 1
 
         # Execute installation steps with individual error handling
+        # Track if changes require terminal restart
+        operating_system.restart_required = False
+
         steps = [
             ("Installing dependencies", operating_system.install_dependencies),
             ("Linking configurations", operating_system.link_configs),
@@ -1191,9 +1242,12 @@ def main():
                 return 1
 
         print("\n🎉 Dotfiles installation completed successfully!")
-        print(
-            "💡 You may need to restart your terminal or run 'source ~/.config/fish/config.fish' for changes to take effect"
-        )
+
+        # Only show restart warning if changes were made
+        if operating_system.restart_required:
+            print(
+                "💡 You may need to restart your terminal or run 'source ~/.config/fish/config.fish' for changes to take effect"
+            )
         return 0
 
     except Exception as e:
