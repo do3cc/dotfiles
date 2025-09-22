@@ -439,7 +439,6 @@ class Arch(Linux):
                 "imagemagick",  # image manipulation toolkit
                 "noto-fonts-emoji",  # emoji font collection
                 "otf-font-awesome",  # icon font
-                "powerline-fonts",  # fonts for powerline
                 "python-gobject",  # Python GObject bindings
                 "tailscale",  # mesh VPN service
             ]
