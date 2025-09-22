@@ -12,6 +12,11 @@ layout_python_uv() {
       local REPLY
       realpath.absolute "$VIRTUAL_ENV"
       VIRTUAL_ENV=$REPLY
+  elif [[ -d ".venv" ]]; then
+      # Use existing .venv directory if it exists
+      local REPLY
+      realpath.absolute ".venv"
+      VIRTUAL_ENV=$REPLY
   else
       VIRTUAL_ENV=$(direnv_layout_dir)/python-$python_version
   fi
