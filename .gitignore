@@ -2,4 +2,4 @@
 byobu/.ssh-agent
 nvim.appimage
 __pycache__/
-
+.envrc
