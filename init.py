@@ -387,8 +387,71 @@ class Arch(Linux):
     }
     systemd_services_to_enable = []
 
+    def should_update_system(self):
+        """Check if system update should be performed (not done in last 24 hours)"""
+        update_marker = expand("~/.cache/dotfiles_last_update")
+
+        if not exists(update_marker):
+            return True
+
+        try:
+            with open(update_marker, 'r') as f:
+                last_update_str = f.read().strip()
+
+            last_update = datetime.fromisoformat(last_update_str)
+            time_since_update = datetime.now() - last_update
+
+            # Update if more than 24 hours have passed
+            return time_since_update.total_seconds() > 24 * 60 * 60
+
+        except (ValueError, OSError):
+            # If we can't read/parse the file, assume we should update
+            return True
+
+    def mark_system_updated(self):
+        """Mark that system update was performed"""
+        update_marker = expand("~/.cache/dotfiles_last_update")
+
+        # Ensure cache directory exists
+        cache_dir = os.path.dirname(update_marker)
+        os.makedirs(cache_dir, exist_ok=True)
+
+        try:
+            with open(update_marker, 'w') as f:
+                f.write(datetime.now().isoformat())
+        except OSError as e:
+            print(f"⚠️  WARNING: Could not write update marker: {e}")
+
+    def update_system(self):
+        """Perform system update if needed"""
+        if not self.should_update_system():
+            print("✅ System updated within last 24 hours, skipping update")
+            return
+
+        print("🔄 Updating system packages...")
+        try:
+            # Update package database and upgrade packages
+            subprocess.run(
+                ["sudo", "pacman", "-Syu", "--noconfirm"],
+                check=True,
+                timeout=1800,  # 30 minute timeout
+            )
+            print("✅ System update completed successfully")
+            self.mark_system_updated()
+        except subprocess.TimeoutExpired:
+            print("❌ ERROR: System update timed out")
+            print("💡 Try: Check internet connection or run manually")
+            raise
+        except subprocess.CalledProcessError as e:
+            print(f"❌ ERROR: System update failed: {e}")
+            print("💡 Try: Run 'sudo pacman -Syu' manually to check for issues")
+            raise
+
     def install_dependencies(self):
         """Install packages with retry logic and comprehensive error handling"""
+
+        # Perform system update if needed
+        self.update_system()
 
         def pacman(*args, **kwargs):
             max_retries = 3
