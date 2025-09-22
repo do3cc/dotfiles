@@ -1,4 +1,5 @@
 .direnv
 byobu/.ssh-agent
 nvim.appimage
+__pycache__/
 
