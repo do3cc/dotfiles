@@ -14,7 +14,9 @@ def expand(path):
     return abspath(expanduser(path))
 
 
-def run_command_with_error_handling(command, description="Command", timeout=300, **kwargs):
+def run_command_with_error_handling(
+    command, description="Command", timeout=300, **kwargs
+):
     """Run a subprocess command with comprehensive error handling"""
     try:
         result = subprocess.run(
@@ -23,7 +25,7 @@ def run_command_with_error_handling(command, description="Command", timeout=300,
             capture_output=True,
             text=True,
             timeout=timeout,
-            **kwargs
+            **kwargs,
         )
         return result
     except subprocess.TimeoutExpired as e:
@@ -247,7 +249,9 @@ class Linux:
             # Check if libsecret binary exists
             libsecret_path = "/usr/lib/git-core/git-credential-libsecret"
             if not exists(libsecret_path):
-                print(f"⚠️  WARNING: git-credential-libsecret not found at {libsecret_path}")
+                print(
+                    f"⚠️  WARNING: git-credential-libsecret not found at {libsecret_path}"
+                )
                 print("💡 Try: Install libsecret package")
                 return False
 
@@ -264,7 +268,7 @@ class Linux:
                     input="",
                     text=True,
                     capture_output=True,
-                    timeout=5
+                    timeout=5,
                 )
                 # libsecret helper should exit cleanly when given empty input
                 print("✅ Git credential helper (libsecret) is properly configured")
@@ -292,8 +296,7 @@ class Linux:
                 if not user_entry.pw_shell.endswith("/fish"):
                     print(f"Changing shell from {user_entry.pw_shell} to fish")
                     run_command_with_error_handling(
-                        ["chsh", "-s", "/usr/bin/fish"],
-                        "Change shell to fish"
+                        ["chsh", "-s", "/usr/bin/fish"], "Change shell to fish"
                     )
                 else:
                     print("Shell is already set to fish")
@@ -309,22 +312,29 @@ class Linux:
 
         try:
             result = run_command_with_error_handling(
-                ["/usr/bin/gh", "auth", "status"],
-                "Check GitHub auth status"
+                ["/usr/bin/gh", "auth", "status"], "Check GitHub auth status"
             )
             if "Logged in" not in result.stdout:
                 # Interactive command - don't capture output
                 subprocess.run(["/usr/bin/gh", "auth", "login"])
                 run_command_with_error_handling(
-                    ["gh", "auth", "refresh", "-h", "github.com", "-s", "admin:public_key"],
-                    "Refresh GitHub auth"
+                    [
+                        "gh",
+                        "auth",
+                        "refresh",
+                        "-h",
+                        "github.com",
+                        "-s",
+                        "admin:public_key",
+                    ],
+                    "Refresh GitHub auth",
                 )
         except subprocess.CalledProcessError:
             print("GitHub CLI not authenticated, running login...")
             subprocess.run(["/usr/bin/gh", "auth", "login"])
             run_command_with_error_handling(
                 ["gh", "auth", "refresh", "-h", "github.com", "-s", "admin:public_key"],
-                "Refresh GitHub auth"
+                "Refresh GitHub auth",
             )
 
         current_key = expand("~/.ssh/id_ed_" + datetime.now().strftime("%Y%m"))
@@ -341,25 +351,24 @@ class Linux:
                     f"'Patrick Gerken {socket.gethostname()} {ssh_key_email} {datetime.now().strftime('%Y%m')}'",
                     "-f",
                     current_key,
-                    "-N", ""  # No passphrase
+                    "-N",
+                    "",  # No passphrase
                 ],
-                "Generate SSH key"
+                "Generate SSH key",
             )
             run_command_with_error_handling(
-                ["ssh-add", current_key],
-                "Add SSH key to agent"
+                ["ssh-add", current_key], "Add SSH key to agent"
             )
             key_name = f'"{socket.gethostname()} {datetime.now().strftime("%Y%m")}"'
             run_command_with_error_handling(
                 ["/usr/bin/gh", "ssh-key", "add", f"{current_key}.pub", "-t", key_name],
-                "Add SSH key to GitHub"
+                "Add SSH key to GitHub",
             )
 
         if self.environment in ["private"]:
             try:
                 result = run_command_with_error_handling(
-                    ["tailscale", "status"],
-                    "Check Tailscale status"
+                    ["tailscale", "status"], "Check Tailscale status"
                 )
                 if "Logged in" not in result.stdout:
                     # Interactive command - don't capture output
@@ -431,7 +440,6 @@ class Arch(Linux):
                 "noto-fonts-emoji",  # emoji font collection
                 "otf-font-awesome",  # icon font
                 "powerline-fonts",  # fonts for powerline
-                "power-profiles-daemon",  # power management service
                 "python-gobject",  # Python GObject bindings
                 "tailscale",  # mesh VPN service
             ]
@@ -454,7 +462,7 @@ class Arch(Linux):
             return True
 
         try:
-            with open(update_marker, 'r') as f:
+            with open(update_marker, "r") as f:
                 last_update_str = f.read().strip()
 
             last_update = datetime.fromisoformat(last_update_str)
@@ -476,7 +484,7 @@ class Arch(Linux):
         os.makedirs(cache_dir, exist_ok=True)
 
         try:
-            with open(update_marker, 'w') as f:
+            with open(update_marker, "w") as f:
                 f.write(datetime.now().isoformat())
         except OSError as e:
             print(f"⚠️  WARNING: Could not write update marker: {e}")
@@ -490,9 +498,7 @@ class Arch(Linux):
         print("🔄 Updating system packages...")
         try:
             run_command_with_error_handling(
-                ["sudo", "pacman", "-Syu", "--noconfirm"],
-                "System update",
-                timeout=1800
+                ["sudo", "pacman", "-Syu", "--noconfirm"], "System update", timeout=1800
             )
             print("✅ System update completed successfully")
             self.mark_system_updated()
@@ -541,10 +547,15 @@ class Arch(Linux):
                     # Provide specific advice based on error
                     stderr_lower = e.stderr.lower() if e.stderr else ""
                     if "conflict" in stderr_lower:
-                        print("💡 Try: Resolve conflicts manually or update system first")
+                        print(
+                            "💡 Try: Resolve conflicts manually or update system first"
+                        )
                     elif "not found" in stderr_lower:
                         print("💡 Try: Update package databases with 'pacman -Sy'")
-                    elif "permission denied" in stderr_lower or "password" in stderr_lower:
+                    elif (
+                        "permission denied" in stderr_lower
+                        or "password" in stderr_lower
+                    ):
                         print("💡 Try: Configure sudo or run in interactive terminal")
                     else:
                         print("💡 Try: Check the error details above")
@@ -578,7 +589,7 @@ class Arch(Linux):
                             yay_dir,
                         ],
                         "Clone yay AUR helper",
-                        timeout=120
+                        timeout=120,
                     )
 
                     print("Building yay...")
@@ -586,7 +597,7 @@ class Arch(Linux):
                         ["makepkg", "-si", "--needed", "--noconfirm"],
                         "Build yay AUR helper",
                         timeout=600,
-                        cwd=yay_dir
+                        cwd=yay_dir,
                     )
                     print("✅ Yay AUR helper installed")
 
@@ -714,7 +725,7 @@ class Debian(Linux):
 
     def install_dependencies(self):
         """Install packages with retry logic and comprehensive error handling"""
-        
+
         def apt_get(*args, **kwargs):
             max_retries = 3
             for attempt in range(max_retries):
@@ -725,13 +736,17 @@ class Debian(Linux):
                         capture_output=True,
                         text=True,
                         timeout=1800,  # 30 minute timeout
-                        **kwargs
+                        **kwargs,
                     )
                     return result
                 except subprocess.TimeoutExpired:
-                    print(f"❌ APT operation timed out (attempt {attempt + 1}/{max_retries})")
+                    print(
+                        f"❌ APT operation timed out (attempt {attempt + 1}/{max_retries})"
+                    )
                     if attempt == max_retries - 1:
-                        print("💡 Try: Check internet connection or use different mirror")
+                        print(
+                            "💡 Try: Check internet connection or use different mirror"
+                        )
                         raise
                     print("🔄 Retrying in 10 seconds...")
                     time.sleep(10)
@@ -743,11 +758,15 @@ class Debian(Linux):
                         print("❌ ERROR: No space left on device")
                         print("💡 Try: Free up disk space and try again")
                     elif "permission denied" in e.stderr.lower():
-                        print("❌ ERROR: Permission denied - sudo may not be configured")
+                        print(
+                            "❌ ERROR: Permission denied - sudo may not be configured"
+                        )
                         print("💡 Try: Configure sudo or run as appropriate user")
                     elif "failed to fetch" in e.stderr.lower():
                         print("❌ ERROR: Failed to fetch packages")
-                        print("💡 Try: Check internet connection and repository availability")
+                        print(
+                            "💡 Try: Check internet connection and repository availability"
+                        )
                     else:
                         print(f"❌ ERROR: APT operation failed: {e.stderr}")
                     raise
@@ -785,7 +804,7 @@ class Debian(Linux):
                     check=True,
                     capture_output=True,
                     text=True,
-                    timeout=600
+                    timeout=600,
                 )
                 print("✅ Apt-file database updated")
             except subprocess.CalledProcessError as e:
@@ -804,29 +823,33 @@ class Debian(Linux):
                     try:
                         import urllib.request
                         import urllib.error
-                        
+
                         # Download with timeout
                         request = urllib.request.Request(
                             "https://github.com/neovim/neovim/releases/latest/download/nvim.appimage",
-                            headers={'User-Agent': 'dotfiles-installer/1.0'}
+                            headers={"User-Agent": "dotfiles-installer/1.0"},
                         )
-                        
+
                         with urllib.request.urlopen(request, timeout=300) as response:
-                            with open(nvim_appimage, 'wb') as f:
+                            with open(nvim_appimage, "wb") as f:
                                 # Download in chunks to handle large files
                                 while True:
                                     chunk = response.read(8192)
                                     if not chunk:
                                         break
                                     f.write(chunk)
-                        
+
                         print("✅ Neovim AppImage downloaded successfully")
                         break
-                        
+
                     except urllib.error.URLError as e:
-                        print(f"❌ ERROR: Failed to download Neovim (attempt {attempt + 1}/{max_retries}): {e}")
+                        print(
+                            f"❌ ERROR: Failed to download Neovim (attempt {attempt + 1}/{max_retries}): {e}"
+                        )
                         if attempt == max_retries - 1:
-                            print("💡 Try: Check internet connection or download manually")
+                            print(
+                                "💡 Try: Check internet connection or download manually"
+                            )
                             raise
                         print("🔄 Retrying in 5 seconds...")
                         time.sleep(5)
@@ -889,7 +912,7 @@ def detect_operating_system(environment="minimal", test_mode=False):
             return Arch(environment=environment, test_mode=test_mode)
         elif 'NAME="Garuda Linux"' in content:
             return Arch(environment=environment, test_mode=test_mode)
-        elif 'ID=debian' in content or 'ID_LIKE=debian' in content:
+        elif "ID=debian" in content or "ID_LIKE=debian" in content:
             return Debian(environment=environment, test_mode=test_mode)
         else:
             raise NotImplementedError(f"Unknown operating system, found {content}")
@@ -967,13 +990,17 @@ def main():
         if not environment:
             print("❌ ERROR: DOTFILES_ENVIRONMENT environment variable is not set")
             print("")
-            print("💡 You must set the environment variable to one of: minimal, work, private")
+            print(
+                "💡 You must set the environment variable to one of: minimal, work, private"
+            )
             print("💡 Examples:")
             print("   export DOTFILES_ENVIRONMENT=minimal && uv run init.py")
             print("   export DOTFILES_ENVIRONMENT=work && uv run init.py")
             print("   export DOTFILES_ENVIRONMENT=private && uv run init.py")
             print("")
-            print("💡 This prevents accidentally running the wrong environment configuration")
+            print(
+                "💡 This prevents accidentally running the wrong environment configuration"
+            )
             return 1
 
         # Validate environment value
@@ -1008,7 +1035,10 @@ def main():
         steps = [
             ("Installing dependencies", operating_system.install_dependencies),
             ("Linking configurations", operating_system.link_configs),
-            ("Validating git credential helper", operating_system.validate_git_credential_helper),
+            (
+                "Validating git credential helper",
+                operating_system.validate_git_credential_helper,
+            ),
             ("Setting up shell", operating_system.setup_shell),
             ("Setting up accounts", operating_system.link_accounts),
         ]
