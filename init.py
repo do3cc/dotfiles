@@ -672,41 +672,46 @@ class Arch(Linux):
                 print("💡 Try: Check home directory permissions")
                 raise
 
-            # Install yay with error handling
-            yay_dir = expand("~/projects/yay-bin")
-            if not exists(yay_dir):
-                try:
-                    print("Cloning yay AUR helper...")
-                    run_command_with_error_handling(
-                        [
-                            "git",
-                            "clone",
-                            "https://aur.archlinux.org/yay-bin.git",
-                            yay_dir,
-                        ],
-                        "Clone yay AUR helper",
-                        timeout=120,
-                    )
+            # Check if yay is already installed system-wide
+            yay_installed = False
+            try:
+                subprocess.run(["yay", "--version"], capture_output=True, check=True)
+                yay_installed = True
+                print("✅ Yay AUR helper already installed")
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                yay_installed = False
 
-                    print("Building yay...")
-                    run_command_with_error_handling(
-                        ["makepkg", "-si", "--needed", "--noconfirm"],
-                        "Build yay AUR helper",
-                        timeout=600,
-                        cwd=yay_dir,
-                    )
-                    print("✅ Yay AUR helper installed")
+            # Install yay if not available
+            if not yay_installed:
+                yay_dir = expand("~/projects/yay-bin")
+                if not exists(yay_dir):
+                    try:
+                        print("Cloning yay AUR helper...")
+                        run_command_with_error_handling(
+                            [
+                                "git",
+                                "clone",
+                                "https://aur.archlinux.org/yay-bin.git",
+                                yay_dir,
+                            ],
+                            "Clone yay AUR helper",
+                            timeout=120,
+                        )
 
-                except Exception:
-                    print("💡 Try: Check internet connection and build dependencies")
-                    raise
-                except subprocess.CalledProcessError as e:
-                    print(f"❌ ERROR: Failed to install yay: {e}")
-                    if e.stderr:
-                        print(f"💡 Error details: {e.stderr}")
-                    raise
-            else:
-                print("✅ Yay already installed")
+                        print("Building yay (this will prompt for sudo password)...")
+                        run_command_with_error_handling(
+                            ["makepkg", "-si", "--needed", "--noconfirm"],
+                            "Build yay AUR helper",
+                            timeout=600,
+                            cwd=yay_dir,
+                        )
+                        print("✅ Yay AUR helper installed")
+
+                    except Exception:
+                        print("💡 Try: Check internet connection and build dependencies")
+                        raise
+                else:
+                    print("✅ Yay source already cloned")
 
             # Check and install main packages
             all_packages = self.pacman_packages + self.environment_specific[
@@ -731,29 +736,40 @@ class Arch(Linux):
             else:
                 print("✅ All pacman packages already installed")
 
-            # Install AUR packages
+            # Check and install AUR packages
             aur_packages = self.aur_packages + self.environment_specific[
                 "aur_packages"
             ].get(self.environment, [])
-            if aur_packages:
-                print(f"Installing {len(aur_packages)} AUR packages...")
-                try:
-                    subprocess.run(
-                        ["yay", "-S", "--needed", "--noconfirm"] + aur_packages,
-                        check=True,
-                        timeout=1800,
-                        capture_output=True,
-                        text=True,
-                    )
-                    print("✅ All AUR packages installed successfully")
-                except subprocess.TimeoutExpired:
-                    print("❌ ERROR: AUR package installation timed out")
-                    raise
-                except subprocess.CalledProcessError as e:
-                    print("❌ ERROR: Some AUR packages failed to install")
-                    if e.stderr:
-                        print(f"💡 Error details: {e.stderr}")
-                    raise
+            if aur_packages and yay_installed:
+                print(f"Checking {len(aur_packages)} AUR packages...")
+                installed_aur, missing_aur = check_pacman_packages_installed(aur_packages)
+
+                if installed_aur:
+                    print(f"✅ Already installed: {len(installed_aur)} AUR packages")
+
+                if missing_aur:
+                    print(f"Installing {len(missing_aur)} missing AUR packages...")
+                    try:
+                        subprocess.run(
+                            ["yay", "-S", "--needed", "--noconfirm"] + missing_aur,
+                            check=True,
+                            timeout=1800,
+                            capture_output=True,
+                            text=True,
+                        )
+                        print("✅ All missing AUR packages installed successfully")
+                    except subprocess.TimeoutExpired:
+                        print("❌ ERROR: AUR package installation timed out")
+                        raise
+                    except subprocess.CalledProcessError as e:
+                        print("❌ ERROR: Some AUR packages failed to install")
+                        if e.stderr:
+                            print(f"💡 Error details: {e.stderr}")
+                        raise
+                else:
+                    print("✅ All AUR packages already installed")
+            elif aur_packages and not yay_installed:
+                print("⚠️  WARNING: AUR packages requested but yay not available")
 
             # Enable systemd services
             services_to_enable = (
