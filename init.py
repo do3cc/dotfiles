@@ -210,6 +210,45 @@ class Linux:
                 print(f"❌ ERROR: Unexpected error processing {config_dir_target}: {e}")
                 continue
 
+    def validate_git_credential_helper(self):
+        """Validate that git credential helper is properly configured"""
+        try:
+            # Check if libsecret binary exists
+            libsecret_path = "/usr/lib/git-core/git-credential-libsecret"
+            if not exists(libsecret_path):
+                print(f"⚠️  WARNING: git-credential-libsecret not found at {libsecret_path}")
+                print("💡 Try: Install libsecret package")
+                return False
+
+            # Check if libsecret binary is executable
+            if not os.access(libsecret_path, os.X_OK):
+                print(f"⚠️  WARNING: git-credential-libsecret is not executable")
+                print("💡 Try: chmod +x /usr/lib/git-core/git-credential-libsecret")
+                return False
+
+            # Test if credential helper responds
+            try:
+                result = subprocess.run(
+                    [libsecret_path],
+                    input="",
+                    text=True,
+                    capture_output=True,
+                    timeout=5
+                )
+                # libsecret helper should exit cleanly when given empty input
+                print("✅ Git credential helper (libsecret) is properly configured")
+                return True
+            except subprocess.TimeoutExpired:
+                print("⚠️  WARNING: Git credential helper test timed out")
+                return False
+            except Exception as e:
+                print(f"⚠️  WARNING: Error testing git credential helper: {e}")
+                return False
+
+        except Exception as e:
+            print(f"❌ ERROR: Failed to validate git credential helper: {e}")
+            return False
+
     def setup_shell(self):
         # Check current user's default shell
         try:
@@ -326,37 +365,15 @@ class Arch(Linux):
         "pacman_packages": {
             "private": [
                 "bitwarden",  # password manager
-                "brightnessctl",  # screen brightness control
-                "dolphin",  # KDE file manager
                 "firefox",  # web browser
                 "ghostscript",  # PostScript and PDF interpreter
-                "hyprland",  # Wayland compositor
-                "hyprpaper",  # wallpaper utility for Hyprland
                 "imagemagick",  # image manipulation toolkit
-                "libnotify",  # desktop notification library
-                "mako",  # lightweight notification daemon
-                "mpd",  # music player daemon
                 "noto-fonts-emoji",  # emoji font collection
                 "otf-font-awesome",  # icon font
-                "pavucontrol",  # PulseAudio volume control
-                "pipewire",  # multimedia framework
-                "pipewire-alsa",  # ALSA compatibility for PipeWire
-                "pipewire-jack",  # JACK compatibility for PipeWire
-                "pipewire-pulse",  # PulseAudio compatibility for PipeWire
-                "polkit-kde-agent",  # authentication agent for KDE
                 "powerline-fonts",  # fonts for powerline
                 "power-profiles-daemon",  # power management service
                 "python-gobject",  # Python GObject bindings
-                "qt5-wayland",  # Qt5 Wayland support
-                "qt6-wayland",  # Qt6 Wayland support
-                "rofi-wayland",  # application launcher for Wayland
-                "slurp",  # Wayland screen region selector
                 "tailscale",  # mesh VPN service
-                "waybar",  # Wayland status bar
-                "wireplumber",  # PipeWire session manager
-                "wl-clipboard",  # Wayland clipboard utilities
-                "xdg-desktop-portal-gtk",  # GTK desktop portal
-                "xdg-desktop-portal-hyprland",  # Hyprland desktop portal
             ]
         },
         "systemd_services_to_enable": {
@@ -754,6 +771,8 @@ def detect_operating_system(environment="minimal", test_mode=False):
         content = release_file.read()
         if 'NAME="Arch Linux"' in content:
             return Arch(environment=environment, test_mode=test_mode)
+        elif 'NAME="CachyOS Linux"' in content:
+            return Arch(environment=environment, test_mode=test_mode)
         elif 'NAME="Garuda Linux"' in content:
             return Arch(environment=environment, test_mode=test_mode)
         elif 'ID=debian' in content or 'ID_LIKE=debian' in content:
@@ -854,6 +873,7 @@ def main():
         steps = [
             ("Installing dependencies", operating_system.install_dependencies),
             ("Linking configurations", operating_system.link_configs),
+            ("Validating git credential helper", operating_system.validate_git_credential_helper),
             ("Setting up shell", operating_system.setup_shell),
             ("Setting up accounts", operating_system.link_accounts),
         ]
