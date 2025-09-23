@@ -8,28 +8,40 @@ This is a personal dotfiles repository for Linux systems (primarily Arch/Garuda)
 
 ## Installation and Setup
 
-The main installation script is `init.py`, which:
-- Detects the operating system (supports Arch/Garuda and Debian-based systems)
-- Installs required packages via package managers (pacman/yay for Arch, apt for Debian)
-- Creates symlinks for configuration directories to `~/.config/`
-- Sets up development tools like NVM and Pyenv
-- Configures authentication for GitHub and Tailscale
+This repository is structured as a Python package with entry points for all tools. First, install the project dependencies:
 
-To run the installation:
 ```bash
+# Install the project and its dependencies
+uv sync
+```
+
+### Main Installation Script
+
+The main installation script detects the operating system and sets up the entire environment:
+
+```bash
+# Using the entry point (recommended)
+uv run dotfiles-init
+
+# Or directly (legacy)
 uv run init.py
 ```
 
-With environment options:
+**Environment Configuration:**
+The script requires the `DOTFILES_ENVIRONMENT` environment variable to be set:
+
 ```bash
 # Minimal environment (default)
-uv run init.py
+export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init
 
 # Work environment
-uv run init.py --environment work
+export DOTFILES_ENVIRONMENT=work && uv run dotfiles-init
 
 # Private environment
-uv run init.py --environment private
+export DOTFILES_ENVIRONMENT=private && uv run dotfiles-init
+
+# Test mode (skip remote activities)
+export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init --test
 ```
 
 The script handles:
@@ -80,24 +92,47 @@ The script handles:
 - This repository uses conventional commits with cog for automatic changelog generation
 - When creating commits, use the interactive `cog commit` command to ensure proper formatting
 
-## Package Management
+## Python Tools and Entry Points
 
-The repository includes **swman.py** (Software Manager Orchestrator), a unified tool for managing updates across multiple package managers:
+The repository includes several Python tools accessible via entry points:
+
+### Software Manager Orchestrator (swman)
+Unified tool for managing updates across multiple package managers:
 
 ```bash
-# Check for updates across all systems
-./swman.py --check
+# Using entry point (recommended)
+uv run dotfiles-swman --check
 
 # Update specific categories
-./swman.py --system    # pacman, yay
-./swman.py --tools     # uv tools
-./swman.py --plugins   # neovim, fish plugins
+uv run dotfiles-swman --system    # pacman, yay
+uv run dotfiles-swman --tools     # uv tools
+uv run dotfiles-swman --plugins   # neovim, fish plugins
 
 # Update everything with preview
-./swman.py --all --dry-run
+uv run dotfiles-swman --all --dry-run
+
+# Legacy direct execution
+./swman.py --check
 ```
 
-Supported managers: pacman, yay, uv-tools, lazy.nvim, fisher
+### Package Status Checker (pkgstatus)
+System status monitoring for packages, git, and init script status:
+
+```bash
+# Using entry point (recommended)
+uv run dotfiles-pkgstatus --quiet
+
+# JSON output
+uv run dotfiles-pkgstatus --json
+
+# Force cache refresh
+uv run dotfiles-pkgstatus --refresh
+
+# Legacy direct execution
+./pkgstatus.py --quiet
+```
+
+**Supported package managers:** pacman, yay, uv-tools, lazy.nvim, fisher
 
 ## Logging Requirements for Python Tools
 
@@ -111,29 +146,57 @@ from logging_config import setup_logging, bind_context, log_unused_variables
 logger = setup_logging("script_name")  # e.g. "init", "swman", "pkgstatus"
 ```
 
+### Enhanced Logging Abstractions
+The logging system provides comprehensive abstractions for production debugging:
+
+- **`log_error()`, `log_warning()`, `log_info()`** - Simple severity-based logging
+- **`log_progress()`** - Track operation progress and status
+- **`log_subprocess_result()`** - Comprehensive command execution logging with stdout/stderr
+- **`log_exception()`** - Full exception context with traceback information
+- **`log_file_operation()`** - File system operations tracking
+- **`log_package_operation()`** - Package manager operations logging
+
 ### Logging Conventions
 - **JSON format**: All logs are structured JSON written to `~/.cache/dotfiles/logs/dotfiles.log`
 - **User interaction**: Use `print()` for user-facing messages, logs are for debugging/monitoring
 - **Context binding**: Use `bind_context()` to set operation-wide context variables
 - **Unused variables**: Use `log_unused_variables(logger, **vars)` to capture variables that would otherwise trigger linter warnings
+- **Global logger**: All abstractions automatically use the global logger set by `setup_logging()`
 
 ### Log File Management
 - **Location**: `~/.cache/dotfiles/logs/dotfiles.log`
 - **Rotation**: Automatic via Python's RotatingFileHandler (10MB, 5 backups)
 - **Format**: JSON with timestamp, log level, message, context, and metadata
 
-### Example Usage
+### Enhanced Logging Examples
 ```python
+from logging_config import (
+    setup_logging, bind_context,
+    log_progress, log_error, log_subprocess_result, log_exception
+)
+
+# Initialize logging (sets global logger)
 logger = setup_logging("mytool")
 bind_context(environment="minimal", operation="check")
-logger.info("operation_started", tool_count=5)
 
-# For subprocess results that aren't examined
-result = subprocess.run(["command"], capture_output=True)
-log_unused_variables(logger, stdout=result.stdout, stderr=result.stderr)
+# Progress tracking
+log_progress("starting package installation")
+
+# Error logging with context
+log_error("package not found", package="nonexistent", manager="pacman")
+
+# Comprehensive subprocess logging (includes stdout/stderr)
+result = subprocess.run(["pacman", "-Q", "git"], capture_output=True)
+log_subprocess_result("check git package", ["pacman", "-Q", "git"], result)
+
+# Exception logging with full context
+try:
+    risky_operation()
+except Exception as e:
+    log_exception(e, "package installation failed", package="problematic-pkg")
 ```
 
-This logging approach provides comprehensive debugging capabilities while maintaining clean separation between user interaction and system monitoring.
+This enhanced logging provides complete observability into every operation, error, and progress step for production debugging.
 
 ## Important Notes
 

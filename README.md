@@ -4,15 +4,36 @@ Personal dotfiles repository for Linux systems (primarily Arch/Garuda) containin
 
 ## Quick Start
 
+First, install the project and its dependencies:
+
 ```bash
-# Install everything
-uv run init.py
+# Install project dependencies
+uv sync
+```
+
+Then run the installation with the required environment variable:
+
+```bash
+# Minimal environment (default)
+export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init
 
 # Work environment with additional packages
-uv run init.py --environment work
+export DOTFILES_ENVIRONMENT=work && uv run dotfiles-init
 
-# Private environment with full setup
-uv run init.py --environment private
+# Private environment with full desktop setup
+export DOTFILES_ENVIRONMENT=private && uv run dotfiles-init
+
+# Test mode (skip remote activities like GitHub auth)
+export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init --test
+```
+
+**Alternative using entry points:**
+```bash
+# Using the new entry points (recommended)
+uv run dotfiles-init
+
+# Or legacy direct execution
+uv run init.py
 ```
 
 ## Package Management
@@ -20,23 +41,32 @@ uv run init.py --environment private
 This repository includes **swman** (Software Manager Orchestrator), a unified interface to manage updates across multiple package managers:
 
 ```bash
-# Check status across all package managers
+# Using entry points (recommended)
+uv run dotfiles-swman --check              # Check status across all package managers
+uv run dotfiles-swman --system             # Update system packages (pacman, yay)
+uv run dotfiles-swman --tools              # Update development tools (uv tools)
+uv run dotfiles-swman --plugins            # Update plugins (neovim, fish shell)
+uv run dotfiles-swman --all                # Update everything
+uv run dotfiles-swman --all --dry-run      # Preview changes without applying
+
+# Legacy direct execution
 ./swman.py --check
-
-# Update system packages (pacman, yay)
 ./swman.py --system
-
-# Update development tools (uv tools)
-./swman.py --tools
-
-# Update plugins (neovim, fish shell)
-./swman.py --plugins
-
-# Update everything
-./swman.py --all
-
-# Preview changes without applying
 ./swman.py --all --dry-run
+```
+
+### Package Status Monitoring
+
+The **pkgstatus** tool provides system status monitoring:
+
+```bash
+# Using entry points (recommended)
+uv run dotfiles-pkgstatus --quiet          # Show only if issues exist
+uv run dotfiles-pkgstatus --json           # JSON output format
+uv run dotfiles-pkgstatus --refresh        # Force cache refresh
+
+# Legacy direct execution
+./pkgstatus.py --quiet
 ```
 
 ### Supported Package Managers
