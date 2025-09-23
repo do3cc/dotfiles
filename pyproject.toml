@@ -1,0 +1,8 @@
+[project]
+name = "dotfiles"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12.3"
+dependencies = [
+    "structlog>=25.4.0",
+]

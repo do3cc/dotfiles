@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
+from logging_config import setup_logging, bind_context, log_unused_variables
+
 
 @dataclass
 class StatusResult:
@@ -438,6 +440,10 @@ class StatusChecker:
 
 
 def main():
+    # Initialize logging
+    logger = setup_logging("pkgstatus")
+    logger.info("pkgstatus_started")
+
     parser = argparse.ArgumentParser(
         description="Package and system status checker",
         epilog="""
@@ -457,8 +463,22 @@ For more information, see the README or run 'swman.py --help'
 
     args = parser.parse_args()
 
+    # Set up logging context
+    bind_context(quiet=args.quiet, json_output=args.json, refresh=args.refresh)
+    logger.info("pkgstatus_operation_started",
+               quiet=args.quiet,
+               json_output=args.json,
+               refresh=args.refresh)
+
     checker = StatusChecker(args.cache_dir)
     status = checker.get_status(args.refresh)
+
+    # Log status summary
+    logger.info("status_check_completed",
+               packages_status=status.packages.get('status', 'unknown'),
+               packages_count=status.packages.get('available', 0),
+               git_status=status.git.get('status', 'unknown'),
+               init_status=status.init.get('status', 'unknown'))
 
     if args.json:
         output = {

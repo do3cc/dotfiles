@@ -8,15 +8,23 @@ import sys
 import time
 import traceback
 
+from logging_config import setup_logging, bind_context, log_unused_variables
+
 
 def expand(path):
     return abspath(expanduser(path))
 
 
 def run_command_with_error_handling(
-    command, description="Command", timeout=300, **kwargs
+    command, description="Command", timeout=300, logger=None, **kwargs
 ):
     """Run a subprocess command with comprehensive error handling"""
+    if logger:
+        logger.info("command_started",
+                   command=command,
+                   description=description,
+                   timeout=timeout)
+
     try:
         result = subprocess.run(
             command,
@@ -26,13 +34,37 @@ def run_command_with_error_handling(
             timeout=timeout,
             **kwargs,
         )
+
+        if logger:
+            logger.info("command_succeeded",
+                       command=command,
+                       description=description,
+                       returncode=result.returncode)
+            log_unused_variables(logger,
+                                stdout=result.stdout,
+                                stderr=result.stderr)
+
         return result
 
     except subprocess.TimeoutExpired as _:
+        if logger:
+            logger.error("command_timeout",
+                        command=command,
+                        description=description,
+                        timeout=timeout)
         print(f"❌ ERROR: {description} timed out after {timeout} seconds")
         print(f"🔍 Command: {' '.join(command)}")
         raise
     except subprocess.CalledProcessError as e:
+        if logger:
+            logger.error("command_failed",
+                        command=command,
+                        description=description,
+                        returncode=e.returncode,
+                        error=str(e))
+            log_unused_variables(logger,
+                                stdout=e.stdout,
+                                stderr=e.stderr)
         print(f"❌ ERROR: {description} failed: {e}")
         print(f"🔍 Command: {' '.join(command)}")
         if e.stdout:
@@ -41,6 +73,12 @@ def run_command_with_error_handling(
             print(f"📄 STDERR:\n{e.stderr}")
         raise
     except Exception as e:
+        if logger:
+            logger.error("command_unexpected_error",
+                        command=command,
+                        description=description,
+                        error=str(e),
+                        error_type=type(e).__name__)
         print(f"❌ ERROR: Unexpected error running {description}: {e}")
         print(f"🔍 Command: {' '.join(command)}")
         raise
@@ -1139,6 +1177,10 @@ For more information, see the README or CLAUDE.md files.
 
 def main():
     """Main entry point with comprehensive error handling"""
+    # Initialize logging
+    logger = setup_logging("init")
+    logger.info("init_script_started")
+
     try:
         parser = argparse.ArgumentParser(
             description="Install and configure dotfiles for Linux systems",
@@ -1186,6 +1228,10 @@ def main():
             print(f"💡 Must be one of: {', '.join(valid_environments)}")
             return 1
 
+        # Set up logging context
+        bind_context(environment=environment, test_mode=args.test)
+        logger.info("environment_validated", environment=environment, test_mode=args.test)
+
         print(
             f"🚀 Installing dotfiles for {environment} environment{' (test mode)' if args.test else ''}"
         )
@@ -1224,13 +1270,20 @@ def main():
 
         for step_name, step_func in steps:
             try:
+                logger.info("step_started", step=step_name)
                 print(f"\n🔄 {step_name}...")
                 step_func()
+                logger.info("step_completed", step=step_name)
                 print(f"✅ {step_name} completed successfully")
             except KeyboardInterrupt:
+                logger.warning("step_interrupted", step=step_name)
                 print(f"\n❌ {step_name} interrupted by user")
                 return 130  # Standard exit code for SIGINT
             except Exception as e:
+                logger.error("step_failed",
+                           step=step_name,
+                           error=str(e),
+                           error_type=type(e).__name__)
                 print(f"❌ ERROR in {step_name}: {e}")
                 print("\n🔍 DETAILED ERROR INFORMATION:")
                 print("-" * 50)
@@ -1239,6 +1292,7 @@ def main():
                 print("💡 Check the error details above and retry")
                 return 1
 
+        logger.info("installation_completed", restart_required=operating_system.restart_required)
         print("\n🎉 Dotfiles installation completed successfully!")
 
         # Only show restart warning if changes were made

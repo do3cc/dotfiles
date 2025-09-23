@@ -99,6 +99,42 @@ The repository includes **swman.py** (Software Manager Orchestrator), a unified 
 
 Supported managers: pacman, yay, uv-tools, lazy.nvim, fisher
 
+## Logging Requirements for Python Tools
+
+All Python tools in this repository must use structured logging via the shared `logging_config.py` module:
+
+### Standard Setup
+```python
+from logging_config import setup_logging, bind_context, log_unused_variables
+
+# Initialize logging with script name
+logger = setup_logging("script_name")  # e.g. "init", "swman", "pkgstatus"
+```
+
+### Logging Conventions
+- **JSON format**: All logs are structured JSON written to `~/.cache/dotfiles/logs/dotfiles.log`
+- **User interaction**: Use `print()` for user-facing messages, logs are for debugging/monitoring
+- **Context binding**: Use `bind_context()` to set operation-wide context variables
+- **Unused variables**: Use `log_unused_variables(logger, **vars)` to capture variables that would otherwise trigger linter warnings
+
+### Log File Management
+- **Location**: `~/.cache/dotfiles/logs/dotfiles.log`
+- **Rotation**: Automatic via Python's RotatingFileHandler (10MB, 5 backups)
+- **Format**: JSON with timestamp, log level, message, context, and metadata
+
+### Example Usage
+```python
+logger = setup_logging("mytool")
+bind_context(environment="minimal", operation="check")
+logger.info("operation_started", tool_count=5)
+
+# For subprocess results that aren't examined
+result = subprocess.run(["command"], capture_output=True)
+log_unused_variables(logger, stdout=result.stdout, stderr=result.stderr)
+```
+
+This logging approach provides comprehensive debugging capabilities while maintaining clean separation between user interaction and system monitoring.
+
 ## Important Notes
 
 - The system assumes XDG base directory compliance

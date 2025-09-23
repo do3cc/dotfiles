@@ -16,6 +16,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from logging_config import setup_logging, bind_context, log_unused_variables
+
 
 class ManagerType(Enum):
     SYSTEM = "system"
@@ -501,6 +503,10 @@ def print_results_summary(results: List[ManagerResult]):
 
 
 def main():
+    # Initialize logging
+    logger = setup_logging("swman")
+    logger.info("swman_started")
+
     parser = argparse.ArgumentParser(
         description="Software Manager Orchestrator - Unified package manager updates"
     )
@@ -549,8 +555,15 @@ def main():
     orchestrator = SoftwareManagerOrchestrator()
 
     if args.check:
+        logger.info("check_operation_started")
         print("🔍 Checking for updates...")
         check_results = orchestrator.check_all()
+        # check_results is Dict[str, Tuple[bool, int]] where tuple is (success, updates_count)
+        total_updates = sum(r[1] for r in check_results.values() if r[0])  # r[1] is updates_count, r[0] is success
+        logger.info("check_operation_completed",
+                   total_managers=len(check_results),
+                   managers_with_updates=sum(1 for r in check_results.values() if r[0] and r[1] > 0),
+                   total_updates_available=total_updates)
 
         if args.json:
             print(json.dumps(check_results, indent=2))
@@ -560,19 +573,36 @@ def main():
 
     results = []
 
+    # Set up operation context
+    operation_types = []
     if args.system:
+        operation_types.append("system")
+    if args.tools:
+        operation_types.append("tools")
+    if args.plugins:
+        operation_types.append("plugins")
+    if args.all:
+        operation_types.append("all")
+
+    bind_context(operation_types=operation_types, dry_run=args.dry_run)
+
+    if args.system:
+        logger.info("system_update_started")
         print("🔄 Updating system packages...")
         results.extend(orchestrator.update_by_type(ManagerType.SYSTEM, args.dry_run))
 
     if args.tools:
+        logger.info("tools_update_started")
         print("🔧 Updating development tools...")
         results.extend(orchestrator.update_by_type(ManagerType.TOOL, args.dry_run))
 
     if args.plugins:
+        logger.info("plugins_update_started")
         print("🔌 Updating plugins...")
         results.extend(orchestrator.update_by_type(ManagerType.PLUGIN, args.dry_run))
 
     if args.all:
+        logger.info("all_update_started")
         print("🚀 Updating everything...")
         results.extend(orchestrator.update_all(args.dry_run))
 
@@ -588,8 +618,15 @@ def main():
     else:
         print_results_summary(results)
 
-    # Return appropriate exit code
+    # Log completion and return appropriate exit code
     failed_count = sum(1 for r in results if r.status == UpdateStatus.FAILED)
+    success_count = sum(1 for r in results if r.status == UpdateStatus.SUCCESS)
+
+    logger.info("swman_completed",
+               total_operations=len(results),
+               successful=success_count,
+               failed=failed_count)
+
     return 1 if failed_count > 0 else 0
 
 
