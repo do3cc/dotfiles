@@ -480,6 +480,7 @@ class Arch(Linux):
     aur_packages = [
         "google-java-format",  # Java formatting tool
         "nodejs-markdown-toc",  # TOC Generator in javascript
+        "tmux-plugin-manager",  # Tmux Plugin Manager (TPM)
     ]
     pacman_packages = [
         "ast-grep",  # structural code search tool
