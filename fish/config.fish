@@ -16,6 +16,9 @@ if status is-interactive
     export NODE_VERSIONS="$XDG_DATA_HOME/nvm"
     export NODE_VERSION_PREFIX=""
     nvm use lts
+
+    # Show package/system status on startup
+    pkgstatus --quiet
 end
 
 # uv
