@@ -86,15 +86,15 @@ The repository includes **swman.py** (Software Manager Orchestrator), a unified 
 
 ```bash
 # Check for updates across all systems
-python swman.py --check
+./swman.py --check
 
 # Update specific categories
-python swman.py --system    # pacman, yay
-python swman.py --tools     # uv tools
-python swman.py --plugins   # neovim, fish plugins
+./swman.py --system    # pacman, yay
+./swman.py --tools     # uv tools
+./swman.py --plugins   # neovim, fish plugins
 
 # Update everything with preview
-python swman.py --all --dry-run
+./swman.py --all --dry-run
 ```
 
 Supported managers: pacman, yay, uv-tools, lazy.nvim, fisher

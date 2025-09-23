@@ -21,22 +21,22 @@ This repository includes **swman** (Software Manager Orchestrator), a unified in
 
 ```bash
 # Check status across all package managers
-python swman.py --check
+./swman.py --check
 
 # Update system packages (pacman, yay)
-python swman.py --system
+./swman.py --system
 
 # Update development tools (uv tools)
-python swman.py --tools
+./swman.py --tools
 
 # Update plugins (neovim, fish shell)
-python swman.py --plugins
+./swman.py --plugins
 
 # Update everything
-python swman.py --all
+./swman.py --all
 
 # Preview changes without applying
-python swman.py --all --dry-run
+./swman.py --all --dry-run
 ```
 
 ### Supported Package Managers
