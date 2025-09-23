@@ -32,6 +32,7 @@ test-arch:
 	@echo "🚀 Running Arch test with improved logging..."
 	@podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
+		-e PYTHONUNBUFFERED=1 \
 		-v $(PWD):/dotfiles:Z \
 		-v ~/.cache/dotfiles-build/uv-cache:/cache/uv-cache:Z \
 		-w /dotfiles \
@@ -59,6 +60,7 @@ test-debian:
 	@echo "🚀 Running Debian test with improved logging..."
 	@podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
+		-e PYTHONUNBUFFERED=1 \
 		-v $(PWD):/dotfiles:Z \
 		-v ~/.cache/dotfiles-build/uv-cache:/cache/uv-cache:Z \
 		-w /dotfiles \
@@ -86,6 +88,7 @@ test-ubuntu:
 	@echo "🚀 Running Ubuntu test with improved logging..."
 	podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
+		-e PYTHONUNBUFFERED=1 \
 		-v $(PWD):/dotfiles:O \
 		-v ~/.cache/dotfiles-build/uv-cache:/cache/uv-cache:Z \
 		-v ~/.cache/dotfiles-build/uv-python-cache:/home/testuser/.local/share/uv/python:Z \
