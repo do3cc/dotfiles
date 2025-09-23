@@ -266,7 +266,7 @@ function _pkgstatus_output_quiet -a pkg_data git_data init_data
     # Check package updates
     set -l total_updates (echo "$pkg_data" | jq -r '.total_updates // 0')
     set -l pkg_stale (echo "$pkg_data" | jq -r '.stale // false')
-    if test "$total_updates" != "0"; and test "$total_updates" != "null"; and math "$total_updates > 0" >/dev/null 2>&1
+    if test "$total_updates" -gt 0 2>/dev/null
         set has_issues true
         if test "$pkg_stale" = "true"
             set messages $messages "⚠️  $total_updates package updates available (stale cache)"
@@ -285,13 +285,13 @@ function _pkgstatus_output_quiet -a pkg_data git_data init_data
             if test "$in_repo" = "true"
                 set -l uncommitted (echo "$git_data" | jq -r '.uncommitted // 0')
                 set -l ahead (echo "$git_data" | jq -r '.ahead // 0')
-                if math "$uncommitted > 0" >/dev/null 2>&1; or math "$ahead > 0" >/dev/null 2>&1
+                if test "$uncommitted" -gt 0; or test "$ahead" -gt 0
                     set has_issues true
                     set -l git_msg "🔄 Git:"
-                    if math "$uncommitted > 0" >/dev/null 2>&1
+                    if test "$uncommitted" -gt 0
                         set git_msg "$git_msg $uncommitted uncommitted"
                     end
-                    if math "$ahead > 0" >/dev/null 2>&1
+                    if test "$ahead" -gt 0
                         set git_msg "$git_msg $ahead unpushed"
                     end
                     set messages $messages "$git_msg"
@@ -331,7 +331,7 @@ function _pkgstatus_output_interactive -a pkg_data git_data init_data
 
     if test "$pkg_error" != "null"
         echo "   ❌ $pkg_error"
-    else if test "$total_updates" != "0"; and test "$total_updates" != "null"; and math "$total_updates > 0" >/dev/null 2>&1
+    else if test "$total_updates" -gt 0 2>/dev/null
         if test "$pkg_stale" = "true"
             echo "   ⚠️  $total_updates updates available (checking for new updates...)"
         else
