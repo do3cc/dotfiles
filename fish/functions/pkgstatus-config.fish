@@ -1,13 +1,5 @@
 function pkgstatus-config -d "Configure pkgstatus settings"
-    if test (count $argv) -eq 0
-        _pkgstatus_config_show
-        return 0
-    end
-
     switch $argv[1]
-        case show list
-            _pkgstatus_config_show
-
         case enable
             set -U pkgstatus_enabled true
             echo "✅ pkgstatus enabled"
@@ -98,76 +90,71 @@ function pkgstatus-config -d "Configure pkgstatus settings"
                 echo "ℹ️  Cache directory doesn't exist"
             end
 
+        case show list ''
+            echo "📦 pkgstatus Configuration:"
+            echo ""
+
+            # Show current settings with defaults
+            set -l enabled (set -q pkgstatus_enabled; and echo $pkgstatus_enabled; or echo "true")
+            set -l cache_hours (set -q pkgstatus_cache_hours; and echo $pkgstatus_cache_hours; or echo "6")
+            set -l startup (set -q pkgstatus_show_on_startup; and echo $pkgstatus_show_on_startup; or echo "quiet")
+            set -l git_enabled (set -q pkgstatus_git_enabled; and echo $pkgstatus_git_enabled; or echo "true")
+            set -l init_enabled (set -q pkgstatus_init_enabled; and echo $pkgstatus_init_enabled; or echo "true")
+
+            echo "  enabled:        $enabled"
+            echo "  startup mode:   $startup"
+            echo "  cache hours:    $cache_hours"
+            echo "  git monitoring: $git_enabled"
+            echo "  init monitoring: $init_enabled"
+            echo ""
+
+            # Show cache status
+            set -l cache_dir "$XDG_CACHE_HOME/dotfiles/status"
+            if test -d "$cache_dir"
+                echo "📁 Cache Status ($cache_dir):"
+                for file in packages.json git.json init.json
+                    set -l cache_file "$cache_dir/$file"
+                    if test -f "$cache_file"
+                        set -l age (math (date +%s) - (stat -c %Y "$cache_file" 2>/dev/null; or echo 0))
+                        if test $age -lt 60
+                            echo "  $file: fresh ($(math $age)s ago)"
+                        else if test $age -lt 3600
+                            echo "  $file: $(math $age / 60)m ago"
+                        else if test $age -lt 86400
+                            echo "  $file: $(math $age / 3600)h ago"
+                        else
+                            echo "  $file: $(math $age / 86400)d ago"
+                        end
+                    else
+                        echo "  $file: not cached"
+                    end
+                end
+            else
+                echo "📁 Cache: not initialized"
+            end
+
         case help --help -h
-            _pkgstatus_config_help
+            echo "pkgstatus-config - Configure pkgstatus settings"
+            echo ""
+            echo "Usage:"
+            echo "  pkgstatus-config                    Show current configuration"
+            echo "  pkgstatus-config enable|disable     Enable/disable pkgstatus"
+            echo "  pkgstatus-config startup MODE       Set startup behavior (always|quiet|never)"
+            echo "  pkgstatus-config cache-hours HOURS  Set cache duration in hours"
+            echo "  pkgstatus-config git enable|disable Enable/disable git monitoring"
+            echo "  pkgstatus-config init enable|disable Enable/disable init script monitoring"
+            echo "  pkgstatus-config reset              Reset all settings to defaults"
+            echo "  pkgstatus-config clear-cache        Clear all cached data"
+            echo "  pkgstatus-config help               Show this help"
+            echo ""
+            echo "Startup modes:"
+            echo "  always  - Always show status on startup"
+            echo "  quiet   - Only show if issues exist (default)"
+            echo "  never   - Never show on startup"
 
         case '*'
             echo "❌ Unknown command: $argv[1]"
             echo "Use 'pkgstatus-config help' for usage information"
             return 1
     end
-end
-
-function _pkgstatus_config_show
-    echo "📦 pkgstatus Configuration:"
-    echo ""
-
-    # Show current settings with defaults
-    set -l enabled (set -q pkgstatus_enabled; and echo $pkgstatus_enabled; or echo "true")
-    set -l cache_hours (set -q pkgstatus_cache_hours; and echo $pkgstatus_cache_hours; or echo "6")
-    set -l startup (set -q pkgstatus_show_on_startup; and echo $pkgstatus_show_on_startup; or echo "quiet")
-    set -l git_enabled (set -q pkgstatus_git_enabled; and echo $pkgstatus_git_enabled; or echo "true")
-    set -l init_enabled (set -q pkgstatus_init_enabled; and echo $pkgstatus_init_enabled; or echo "true")
-
-    echo "  enabled:        $enabled"
-    echo "  startup mode:   $startup"
-    echo "  cache hours:    $cache_hours"
-    echo "  git monitoring: $git_enabled"
-    echo "  init monitoring: $init_enabled"
-    echo ""
-
-    # Show cache status
-    set -l cache_dir "$XDG_CACHE_HOME/dotfiles/status"
-    if test -d "$cache_dir"
-        echo "📁 Cache Status ($cache_dir):"
-        for file in packages.json git.json init.json
-            set -l cache_file "$cache_dir/$file"
-            if test -f "$cache_file"
-                set -l age (math (date +%s) - (stat -c %Y "$cache_file" 2>/dev/null; or echo 0))
-                if test $age -lt 60
-                    echo "  $file: fresh ($(math $age)s ago)"
-                else if test $age -lt 3600
-                    echo "  $file: $(math $age / 60)m ago"
-                else if test $age -lt 86400
-                    echo "  $file: $(math $age / 3600)h ago"
-                else
-                    echo "  $file: $(math $age / 86400)d ago"
-                end
-            else
-                echo "  $file: not cached"
-            end
-        end
-    else
-        echo "📁 Cache: not initialized"
-    end
-end
-
-function _pkgstatus_config_help
-    echo "pkgstatus-config - Configure pkgstatus settings"
-    echo ""
-    echo "Usage:"
-    echo "  pkgstatus-config                    Show current configuration"
-    echo "  pkgstatus-config enable|disable     Enable/disable pkgstatus"
-    echo "  pkgstatus-config startup MODE       Set startup behavior (always|quiet|never)"
-    echo "  pkgstatus-config cache-hours HOURS  Set cache duration in hours"
-    echo "  pkgstatus-config git enable|disable Enable/disable git monitoring"
-    echo "  pkgstatus-config init enable|disable Enable/disable init script monitoring"
-    echo "  pkgstatus-config reset              Reset all settings to defaults"
-    echo "  pkgstatus-config clear-cache        Clear all cached data"
-    echo "  pkgstatus-config help               Show this help"
-    echo ""
-    echo "Startup modes:"
-    echo "  always  - Always show status on startup"
-    echo "  quiet   - Only show if issues exist (default)"
-    echo "  never   - Never show on startup"
 end

@@ -1,6 +1,12 @@
 # pkgstatus - Package & System Status Checker
 
-A Fish shell function that provides fast startup information about package updates, git repository status, and init script status using intelligent caching.
+A Python-powered tool with Fish shell integration that provides fast startup information about package updates, git repository status, and init script status using intelligent caching.
+
+## Architecture
+
+- **Python Backend** (`pkgstatus.py`): Handles all complex logic, caching, and formatting
+- **Fish Wrapper** (`pkgstatus.fish`): Thin wrapper that finds and calls the Python script
+- **Configuration** (`pkgstatus-config.fish`): Fish-based configuration management
 
 ## Features
 
