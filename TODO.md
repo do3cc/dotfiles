@@ -1,3 +1,5 @@
+# TODOS
+
 - ✅ COMPLETED: Created pkgstatus tool - Fish shell startup integration that shows package updates, git status, and init script status with intelligent caching. Implemented as Python backend with Fish wrapper for maintainability.
 - Please have a look at the init script, ruff and pyright seem to have different definitions on what unused variables get ignored. Is there a way to use a variable name that both ruff and pyright ignore? I would like to avoid to configure ruff and pyright, but if needed, this can be done too. please think hard about it and only make a plan.
 - Please make a plan for markdown MD013 warning that gets shown in lazyvim, I tried multiple fixes that seemed to work but the error is back
