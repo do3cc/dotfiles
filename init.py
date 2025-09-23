@@ -8,7 +8,11 @@ import sys
 import time
 import traceback
 
-from logging_config import setup_logging, bind_context, log_unused_variables
+from logging_config import (
+    setup_logging, bind_context, log_unused_variables,
+    log_error, log_warning, log_info, log_progress,
+    log_subprocess_result, log_exception, log_file_operation, log_package_operation
+)
 
 
 def expand(path):
@@ -16,14 +20,10 @@ def expand(path):
 
 
 def run_command_with_error_handling(
-    command, description="Command", timeout=300, logger=None, **kwargs
+    command, description="Command", timeout=300, **kwargs
 ):
-    """Run a subprocess command with comprehensive error handling"""
-    if logger:
-        logger.info("command_started",
-                   command=command,
-                   description=description,
-                   timeout=timeout)
+    """Run a subprocess command with comprehensive error handling and logging"""
+    log_info("command_starting", description=description, command=command, timeout=timeout)
 
     try:
         result = subprocess.run(
@@ -35,36 +35,25 @@ def run_command_with_error_handling(
             **kwargs,
         )
 
-        if logger:
-            logger.info("command_succeeded",
-                       command=command,
-                       description=description,
-                       returncode=result.returncode)
-            log_unused_variables(logger,
-                                stdout=result.stdout,
-                                stderr=result.stderr)
-
+        # Use the new comprehensive subprocess logging
+        log_subprocess_result(description, command, result)
         return result
 
-    except subprocess.TimeoutExpired as _:
-        if logger:
-            logger.error("command_timeout",
-                        command=command,
-                        description=description,
-                        timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+        log_error("command_timeout",
+                 description=description,
+                 command=command,
+                 timeout=timeout)
         print(f"❌ ERROR: {description} timed out after {timeout} seconds")
         print(f"🔍 Command: {' '.join(command)}")
         raise
     except subprocess.CalledProcessError as e:
-        if logger:
-            logger.error("command_failed",
-                        command=command,
-                        description=description,
-                        returncode=e.returncode,
-                        error=str(e))
-            log_unused_variables(logger,
-                                stdout=e.stdout,
-                                stderr=e.stderr)
+        log_error("command_failed",
+                 description=description,
+                 command=command,
+                 returncode=e.returncode,
+                 stdout=e.stdout,
+                 stderr=e.stderr)
         print(f"❌ ERROR: {description} failed: {e}")
         print(f"🔍 Command: {' '.join(command)}")
         if e.stdout:
@@ -73,12 +62,7 @@ def run_command_with_error_handling(
             print(f"📄 STDERR:\n{e.stderr}")
         raise
     except Exception as e:
-        if logger:
-            logger.error("command_unexpected_error",
-                        command=command,
-                        description=description,
-                        error=str(e),
-                        error_type=type(e).__name__)
+        log_exception(e, f"Unexpected error running {description}", command=command)
         print(f"❌ ERROR: Unexpected error running {description}: {e}")
         print(f"🔍 Command: {' '.join(command)}")
         raise
@@ -86,18 +70,25 @@ def run_command_with_error_handling(
 
 def check_pacman_packages_installed(packages):
     """Check which packages are already installed via pacman"""
+    log_info("checking_pacman_packages", package_count=len(packages), packages=packages[:10])
+
     if not packages:
+        log_info("no_packages_to_check")
         return [], []
 
     try:
         result = subprocess.run(
             ["pacman", "-Q"] + packages, capture_output=True, text=True
         )
+        log_subprocess_result("bulk pacman package check", ["pacman", "-Q"] + packages[:5], result)
+
         # pacman -Q returns 0 if all packages are installed
         if result.returncode == 0:
+            log_info("all_packages_installed", packages=packages)
             return packages, []
 
         # Some packages are missing, check individually
+        log_info("checking_packages_individually", package_count=len(packages))
         installed = []
         missing = []
 
@@ -110,8 +101,14 @@ def check_pacman_packages_installed(packages):
             else:
                 missing.append(package)
 
+        log_info("package_check_completed",
+                installed_count=len(installed),
+                missing_count=len(missing),
+                installed=installed[:10],
+                missing=missing[:10])
         return installed, missing
-    except Exception:
+    except Exception as e:
+        log_exception(e, "pacman package check failed", packages=packages)
         # If pacman check fails, assume all packages need installation
         return [], packages
 
@@ -197,38 +194,53 @@ class Linux:
 
     def install_dependencies(self):
         """Install NVM and Pyenv with proper error handling"""
+        log_progress("starting_dependency_installation")
+
         # Install NVM
         nvm_path = expand("~/.local/share/nvm")
+        log_info("checking_nvm_installation", nvm_path=nvm_path)
+
         if not exists(nvm_path):
             try:
+                log_progress("installing_nvm")
                 print("Installing NVM...")
                 nvm_script = expand("./install_scripts/install_nvm.sh")
+
                 if not exists(nvm_script):
+                    log_error("nvm_script_not_found", script_path=nvm_script)
                     print("❌ ERROR: NVM installation script not found")
                     print(f"💡 Expected: {nvm_script}")
                     raise FileNotFoundError(f"NVM script not found: {nvm_script}")
 
-                _ = subprocess.run(
+                log_info("executing_nvm_script", script=nvm_script)
+                result = subprocess.run(
                     ["/usr/bin/bash", nvm_script],
                     check=True,
                     capture_output=True,
                     text=True,
                     timeout=300,  # 5 minute timeout
                 )
+                log_subprocess_result("NVM installation", ["/usr/bin/bash", nvm_script], result)
+                log_progress("nvm_installed_successfully")
                 print("✅ NVM installed successfully")
-            except subprocess.TimeoutExpired:
+
+            except subprocess.TimeoutExpired as e:
+                log_error("nvm_installation_timeout", timeout=300)
                 print("❌ ERROR: NVM installation timed out (network issues?)")
                 print("💡 Try: Check internet connection and run again")
                 raise
             except subprocess.CalledProcessError as e:
-                print(
-                    f"❌ ERROR: NVM installation failed with exit code {e.returncode}"
-                )
+                log_error("nvm_installation_failed",
+                         returncode=e.returncode,
+                         stdout=e.stdout,
+                         stderr=e.stderr)
+                print(f"❌ ERROR: NVM installation failed with exit code {e.returncode}")
                 if e.stderr:
                     print(f"💡 Error output: {e.stderr}")
                 print("💡 Try: Check network connection and script permissions")
                 raise
             except FileNotFoundError as e:
+                log_exception(e, "NVM installation file not found", script_path=nvm_script)
                 if "/usr/bin/bash" in str(e):
                     print("❌ ERROR: Bash not found at /usr/bin/bash")
                     print("💡 Try: Install bash or update the script")
@@ -236,6 +248,7 @@ class Linux:
                     print(f"❌ ERROR: {e}")
                 raise
         else:
+            log_info("nvm_already_installed", nvm_path=nvm_path)
             print("✅ NVM already installed")
 
         # Install Pyenv
