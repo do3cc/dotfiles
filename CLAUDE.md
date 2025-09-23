@@ -80,6 +80,25 @@ The script handles:
 - This repository uses conventional commits with cog for automatic changelog generation
 - When creating commits, use the interactive `cog commit` command to ensure proper formatting
 
+## Package Management
+
+The repository includes **swman.py** (Software Manager Orchestrator), a unified tool for managing updates across multiple package managers:
+
+```bash
+# Check for updates across all systems
+python swman.py --check
+
+# Update specific categories
+python swman.py --system    # pacman, yay
+python swman.py --tools     # uv tools
+python swman.py --plugins   # neovim, fish plugins
+
+# Update everything with preview
+python swman.py --all --dry-run
+```
+
+Supported managers: pacman, yay, uv-tools, lazy.nvim, fisher
+
 ## Important Notes
 
 - The system assumes XDG base directory compliance
