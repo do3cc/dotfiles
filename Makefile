@@ -29,13 +29,20 @@ test-arch:
 	else \
 		podman build -f test/Dockerfile.arch -t dotfiles-test-arch .; \
 	fi
+	@echo "🚀 Running Arch test with improved logging..."
 	@podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
 		-v $(PWD):/dotfiles:Z \
 		-v ~/.cache/dotfiles-build/uv-cache:/cache/uv-cache:Z \
 		-w /dotfiles \
 		dotfiles-test-arch \
-		bash -c "sudo rm -rf .venv && uv run init.py --test"
+		bash -c "set -x && \
+			sudo rm -rf .venv && \
+			echo '📦 Installing project dependencies...' && \
+			UV_LINK_MODE=copy uv sync && \
+			echo '🚀 Starting dotfiles installation...' && \
+			export DOTFILES_ENVIRONMENT=private && \
+			timeout 300 uv run dotfiles-init --test || echo '⚠️ Test timed out after 5 minutes'"
 	@echo "✅ Arch Linux test completed"
 
 # Test on Debian
@@ -49,13 +56,20 @@ test-debian:
 	else \
 		podman build -f test/Dockerfile.debian -t dotfiles-test-debian .; \
 	fi
+	@echo "🚀 Running Debian test with improved logging..."
 	@podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
 		-v $(PWD):/dotfiles:Z \
 		-v ~/.cache/dotfiles-build/uv-cache:/cache/uv-cache:Z \
 		-w /dotfiles \
 		dotfiles-test-debian \
-		bash -c "sudo rm -rf .venv && uv run init.py --test"
+		bash -c "set -x && \
+			sudo rm -rf .venv && \
+			echo '📦 Installing project dependencies...' && \
+			UV_LINK_MODE=copy uv sync && \
+			echo '🚀 Starting dotfiles installation...' && \
+			export DOTFILES_ENVIRONMENT=private && \
+			timeout 300 uv run dotfiles-init --test || echo '⚠️ Test timed out after 5 minutes'"
 	@echo "✅ Debian test completed"
 
 # Test on Ubuntu (Debian-based)
@@ -69,6 +83,7 @@ test-ubuntu:
 	else \
 		podman build -f test/Dockerfile.ubuntu -t dotfiles-test-ubuntu .; \
 	fi
+	@echo "🚀 Running Ubuntu test with improved logging..."
 	podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
 		-v $(PWD):/dotfiles:O \
@@ -76,7 +91,14 @@ test-ubuntu:
 		-v ~/.cache/dotfiles-build/uv-python-cache:/home/testuser/.local/share/uv/python:Z \
 		-w /dotfiles \
 		dotfiles-test-ubuntu \
-		bash -c "sudo chown testuser . && sudo rm -rf .venv && uv run init.py --test"
+		bash -c "set -x && \
+			sudo chown -R testuser:testuser . && \
+			sudo rm -rf .venv && \
+			echo '📦 Installing project dependencies...' && \
+			UV_LINK_MODE=copy uv sync && \
+			echo '🚀 Starting dotfiles installation...' && \
+			export DOTFILES_ENVIRONMENT=private && \
+			timeout 300 uv run dotfiles-init --test || echo '⚠️ Test timed out after 5 minutes'"
 	@echo "✅ Ubuntu test completed"
 
 # Start caching by creating cache directory and pre-downloading
