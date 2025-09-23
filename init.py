@@ -7,7 +7,6 @@ import subprocess
 import sys
 import time
 import traceback
-import urllib.request
 
 
 def expand(path):
@@ -53,9 +52,7 @@ def check_pacman_packages_installed(packages):
 
     try:
         result = subprocess.run(
-            ["pacman", "-Q"] + packages,
-            capture_output=True,
-            text=True
+            ["pacman", "-Q"] + packages, capture_output=True, text=True
         )
         # pacman -Q returns 0 if all packages are installed
         if result.returncode == 0:
@@ -67,9 +64,7 @@ def check_pacman_packages_installed(packages):
 
         for package in packages:
             check_result = subprocess.run(
-                ["pacman", "-Q", package],
-                capture_output=True,
-                text=True
+                ["pacman", "-Q", package], capture_output=True, text=True
             )
             if check_result.returncode == 0:
                 installed.append(package)
@@ -93,9 +88,7 @@ def check_apt_packages_installed(packages):
 
         for package in packages:
             result = subprocess.run(
-                ["dpkg", "-l", package],
-                capture_output=True,
-                text=True
+                ["dpkg", "-l", package], capture_output=True, text=True
             )
             # dpkg -l returns 0 and shows 'ii' status for installed packages
             if result.returncode == 0 and f"ii  {package}" in result.stdout:
@@ -114,17 +107,15 @@ def check_systemd_service_status(service):
     try:
         # Check if service is enabled
         enabled_result = subprocess.run(
-            ["systemctl", "is-enabled", service],
-            capture_output=True,
-            text=True
+            ["systemctl", "is-enabled", service], capture_output=True, text=True
         )
-        is_enabled = enabled_result.returncode == 0 and "enabled" in enabled_result.stdout
+        is_enabled = (
+            enabled_result.returncode == 0 and "enabled" in enabled_result.stdout
+        )
 
         # Check if service is active
         active_result = subprocess.run(
-            ["systemctl", "is-active", service],
-            capture_output=True,
-            text=True
+            ["systemctl", "is-active", service], capture_output=True, text=True
         )
         is_active = active_result.returncode == 0 and "active" in active_result.stdout
 
@@ -346,7 +337,7 @@ class Linux:
 
             # Check if libsecret binary is executable
             if not os.access(libsecret_path, os.X_OK):
-                print(f"⚠️  WARNING: git-credential-libsecret is not executable")
+                print("⚠️  WARNING: git-credential-libsecret is not executable")
                 print("💡 Try: chmod +x /usr/lib/git-core/git-credential-libsecret")
                 return False
 
@@ -464,16 +455,12 @@ class Linux:
                 if "100." not in result.stdout or "Logged out" in result.stdout:
                     print("Tailscale not connected, running setup...")
                     # Use 'tailscale up' for locked tailnets instead of login
-                    subprocess.run(
-                        ["sudo", "tailscale", "up", "--operator=do3cc"]
-                    )
+                    subprocess.run(["sudo", "tailscale", "up", "--operator=do3cc"])
                 else:
                     print("✅ Tailscale is connected")
             except subprocess.CalledProcessError:
                 print("Tailscale not available, running setup...")
-                subprocess.run(
-                    ["sudo", "tailscale", "up", "--operator=do3cc"]
-                )
+                subprocess.run(["sudo", "tailscale", "up", "--operator=do3cc"])
 
 
 class Arch(Linux):
@@ -592,16 +579,15 @@ class Arch(Linux):
         # Check if updates are available (non-sudo command)
         try:
             result = subprocess.run(
-                ["checkupdates"],
-                capture_output=True,
-                text=True,
-                timeout=30
+                ["checkupdates"], capture_output=True, text=True, timeout=30
             )
             if result.returncode == 0 and result.stdout.strip():
-                updates = result.stdout.strip().split('\n')
+                updates = result.stdout.strip().split("\n")
                 print(f"🔄 Found {len(updates)} system updates available")
                 run_command_with_error_handling(
-                    ["sudo", "pacman", "-Syu", "--noconfirm"], "System update", timeout=1800
+                    ["sudo", "pacman", "-Syu", "--noconfirm"],
+                    "System update",
+                    timeout=1800,
                 )
                 print("✅ System update completed successfully")
                 self.mark_system_updated()
@@ -685,8 +671,10 @@ class Arch(Linux):
                 print(f"✅ Already installed: {', '.join(installed)}")
 
             if missing:
-                print(f"Installing {len(missing)} base development tools: {', '.join(missing)}")
-                pacman("-S", "--needed", *missing)
+                print(
+                    f"Installing {len(missing)} base development tools: {', '.join(missing)}"
+                )
+                pacman("-S", "--needed", "--noconfirm", *missing)
                 print("✅ Base development tools installed")
                 self.restart_required = True
             else:
@@ -737,7 +725,9 @@ class Arch(Linux):
                         print("✅ Yay AUR helper installed")
 
                     except Exception:
-                        print("💡 Try: Check internet connection and build dependencies")
+                        print(
+                            "💡 Try: Check internet connection and build dependencies"
+                        )
                         raise
                 else:
                     print("✅ Yay source already cloned")
@@ -772,7 +762,9 @@ class Arch(Linux):
             ].get(self.environment, [])
             if aur_packages and yay_installed:
                 print(f"Checking {len(aur_packages)} AUR packages...")
-                installed_aur, missing_aur = check_pacman_packages_installed(aur_packages)
+                installed_aur, missing_aur = check_pacman_packages_installed(
+                    aur_packages
+                )
 
                 if installed_aur:
                     print(f"✅ Already installed: {len(installed_aur)} AUR packages")
@@ -848,7 +840,9 @@ class Arch(Linux):
                             f"⚠️  WARNING: Cannot enable {service} in container environment"
                         )
                     else:
-                        print(f"❌ ERROR: Failed to enable service {service}: {e.stderr}")
+                        print(
+                            f"❌ ERROR: Failed to enable service {service}: {e.stderr}"
+                        )
                         # Don't raise here - continue with other services
 
         except KeyboardInterrupt:
@@ -970,7 +964,9 @@ class Debian(Linux):
                     print("✅ All missing APT packages installed successfully")
                 except subprocess.CalledProcessError as e:
                     print("❌ ERROR: Some APT packages failed to install")
-                    print("💡 Try: Check package names and fix any dependency conflicts")
+                    print(
+                        "💡 Try: Check package names and fix any dependency conflicts"
+                    )
                     raise
             else:
                 print("✅ All APT packages already installed")

@@ -1,4 +1,4 @@
-.PHONY: test test-arch test-debian test-ubuntu clean help
+.PHONY: test test-arch test-debian test-ubuntu clean help cache-start cache-stop cache-stats cache-images
 
 # Default target
 help:
@@ -7,6 +7,10 @@ help:
 	@echo "  test-arch   - Test on Arch Linux container"
 	@echo "  test-debian - Test on Debian container"
 	@echo "  test-ubuntu - Test on Ubuntu container"
+	@echo "  cache-start - Start HTTP caching proxy"
+	@echo "  cache-stop  - Stop HTTP caching proxy"
+	@echo "  cache-stats - Show HTTP cache statistics"
+	@echo "  cache-images- Pre-pull base images for faster builds"
 	@echo "  clean       - Remove test containers and images"
 	@echo "  help        - Show this help message"
 
@@ -17,7 +21,14 @@ test: test-arch test-debian test-ubuntu
 # Test on Arch Linux
 test-arch:
 	@echo "🧪 Testing dotfiles installation on Arch Linux..."
-	@podman build -f test/Dockerfile.arch -t dotfiles-test-arch .
+	@if [ -d ~/.cache/dotfiles-build ]; then \
+		echo "📦 Using build cache..."; \
+		podman build -f test/Dockerfile.arch -t dotfiles-test-arch \
+			-v ~/.cache/dotfiles-build:/cache:Z \
+			-v ~/.cache/dotfiles-build/pacman:/var/cache/pacman/pkg:Z .; \
+	else \
+		podman build -f test/Dockerfile.arch -t dotfiles-test-arch .; \
+	fi
 	@podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
 		-v $(PWD):/dotfiles:Z \
@@ -29,7 +40,14 @@ test-arch:
 # Test on Debian
 test-debian:
 	@echo "🧪 Testing dotfiles installation on Debian..."
-	@podman build -f test/Dockerfile.debian -t dotfiles-test-debian .
+	@if [ -d ~/.cache/dotfiles-build ]; then \
+		echo "📦 Using build cache..."; \
+		podman build -f test/Dockerfile.debian -t dotfiles-test-debian \
+			-v ~/.cache/dotfiles-build:/cache:Z \
+			-v ~/.cache/dotfiles-build/apt:/var/cache/apt/archives:Z .; \
+	else \
+		podman build -f test/Dockerfile.debian -t dotfiles-test-debian .; \
+	fi
 	@podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
 		-v $(PWD):/dotfiles:Z \
@@ -41,7 +59,14 @@ test-debian:
 # Test on Ubuntu (Debian-based)
 test-ubuntu:
 	@echo "🧪 Testing dotfiles installation on Ubuntu..."
-	@podman build -f test/Dockerfile.ubuntu -t dotfiles-test-ubuntu .
+	@if [ -d ~/.cache/dotfiles-build ]; then \
+		echo "📦 Using build cache..."; \
+		podman build -f test/Dockerfile.ubuntu -t dotfiles-test-ubuntu \
+			-v ~/.cache/dotfiles-build:/cache:Z \
+			-v ~/.cache/dotfiles-build/apt:/var/cache/apt/archives:Z .; \
+	else \
+		podman build -f test/Dockerfile.ubuntu -t dotfiles-test-ubuntu .; \
+	fi
 	@podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
 		-v $(PWD):/dotfiles:Z \
@@ -49,6 +74,53 @@ test-ubuntu:
 		dotfiles-test-ubuntu \
 		bash -c "uv run init.py --test"
 	@echo "✅ Ubuntu test completed"
+
+# Start caching by creating cache directory and pre-downloading
+cache-start:
+	@echo "🚀 Setting up build cache..."
+	@mkdir -p ~/.cache/dotfiles-build/{pacman,apt,uv}
+	@echo "📥 Pre-pulling base images..."
+	@podman pull archlinux:latest &
+	@podman pull debian:bookworm &
+	@podman pull ubuntu:22.04 &
+	@wait
+	@echo "📦 Caching uv installer..."
+	@curl -LsSf https://astral.sh/uv/install.sh -o ~/.cache/dotfiles-build/uv/install.sh
+	@chmod +x ~/.cache/dotfiles-build/uv/install.sh
+	@echo "✅ Build cache ready at ~/.cache/dotfiles-build/"
+
+# Clear build cache
+cache-stop:
+	@echo "🧹 Clearing build cache..."
+	@rm -rf ~/.cache/dotfiles-build
+	@podman rmi archlinux:latest debian:bookworm ubuntu:22.04 2>/dev/null || true
+	@echo "✅ Build cache cleared"
+
+# Show cache statistics
+cache-stats:
+	@echo "📊 Build Cache Statistics:"
+	@if [ -d ~/.cache/dotfiles-build ]; then \
+		echo "Cache Status: 🟢 Active"; \
+		echo "Cache Location: ~/.cache/dotfiles-build"; \
+		echo "Cache Size: $$(du -sh ~/.cache/dotfiles-build 2>/dev/null | cut -f1)"; \
+		echo ""; \
+		echo "📁 Cached Files:"; \
+		ls -lah ~/.cache/dotfiles-build/ 2>/dev/null || echo "No cached files"; \
+		echo ""; \
+		echo "🖼️  Cached Images:"; \
+		podman images --format "{{.Repository}}:{{.Tag}} {{.Size}}" | grep -E "(archlinux|debian|ubuntu)" || echo "No cached images"; \
+	else \
+		echo "Cache Status: 🔴 Not active"; \
+		echo "Run 'make cache-start' to set up build cache"; \
+	fi
+
+# Pre-pull base images for faster builds
+cache-images:
+	@echo "📥 Pre-pulling base images..."
+	@podman pull archlinux:latest
+	@podman pull debian:bookworm
+	@podman pull ubuntu:22.04
+	@echo "✅ Base images cached"
 
 # Clean up test containers and images
 clean:
@@ -61,6 +133,16 @@ clean:
 test-verbose:
 	@echo "🧪 Running tests with verbose output..."
 	@VERBOSE=1 make test
+
+# Run tests with build cache visibility
+test-cache-verbose:
+	@echo "🧪 Running tests with cache visibility..."
+	@if podman ps --format "{{.Names}}" | grep -q dotfiles-squid-cache; then \
+		echo "📦 Cache proxy is running - you should see cache hits in the logs"; \
+		echo "🔍 Monitor cache with: make cache-stats"; \
+	fi
+	@echo "Building with progress and layer cache visibility..."
+	@make test BUILDX_PROGRESS=plain
 
 # Test a specific OS (usage: make test-os OS=arch)
 test-os:

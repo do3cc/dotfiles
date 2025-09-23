@@ -1,24 +1,22 @@
 FROM archlinux:latest
 
-# Update system and install basic requirements
+# Accept proxy build args for caching
+ARG http_proxy
+ARG https_proxy
+ENV http_proxy=$http_proxy
+ENV https_proxy=$https_proxy
+
+# Update system and install only essential tools for testing (not the packages init.py will install)
 RUN pacman -Syu --noconfirm && \
     pacman -S --needed --noconfirm \
         sudo \
-        python \
-        python-pip \
-        curl \
-        git \
-        base-devel
-
-# Install uv (Python package manager)
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:$PATH"
+        curl
 
 # Create a non-root user for testing
 RUN useradd -m -s /bin/bash testuser && \
     echo 'testuser ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
 
-# Create /etc/os-release if it doesn't exist (should exist in archlinux image)
+# Create /etc/os-release if it doesn't exist
 RUN echo 'NAME="Arch Linux"' > /etc/os-release
 
 # Switch to test user
@@ -28,12 +26,24 @@ WORKDIR /home/testuser
 # Set environment variables
 ENV HOME=/home/testuser
 ENV USER=testuser
-ENV PATH="/home/testuser/.cargo/bin:$PATH"
+ENV PATH="/home/testuser/.local/bin:/home/testuser/.cargo/bin:$PATH"
 
-# Install uv for the test user
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+# Install uv for the test user (use cached version if available, now curl is available)
+RUN if [ -f /cache/uv/install.sh ]; then \
+        echo "Using cached uv installer"; \
+        cp /cache/uv/install.sh ~/uv-install.sh; \
+    else \
+        echo "Downloading uv installer"; \
+        curl -LsSf https://astral.sh/uv/install.sh -o ~/uv-install.sh; \
+    fi && \
+    chmod +x ~/uv-install.sh && \
+    ~/uv-install.sh
 
-# Create minimal fish config directory structure
+# Create minimal fish config directory structure (stable layer)
 RUN mkdir -p ~/.config/fish
+
+# Clear proxy env vars for runtime
+ENV http_proxy=
+ENV https_proxy=
 
 CMD ["/bin/bash"]
