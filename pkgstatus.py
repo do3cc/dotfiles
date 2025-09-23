@@ -337,7 +337,12 @@ class StatusChecker:
             age_hours = init_data.get('age_hours', 0)
             messages.append(f"⚙️  Init script not run in {int(age_hours / 24)}d")
 
-        return '\n'.join(messages)
+        # Add tool name prefix to all messages
+        if messages:
+            prefixed_messages = [f"pkgstatus: {messages[0]}"]
+            prefixed_messages.extend(f"pkgstatus: {msg}" for msg in messages[1:])
+            return '\n'.join(prefixed_messages)
+        return ''
 
     def format_interactive_output(self, status: StatusResult) -> str:
         """Format output for interactive mode"""
@@ -433,7 +438,18 @@ class StatusChecker:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Package and system status checker")
+    parser = argparse.ArgumentParser(
+        description="Package and system status checker",
+        epilog="""
+To perform updates:
+  Package updates:  Use './swman.py --system' or './swman.py --all'
+  Git operations:   Use 'git add', 'git commit', 'git push'
+  Init script:      Run 'uv run init.py' in dotfiles directory
+
+For more information, see the README or run 'swman.py --help'
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument('--quiet', action='store_true', help='Only show if issues exist')
     parser.add_argument('--json', action='store_true', help='JSON output')
     parser.add_argument('--refresh', action='store_true', help='Force cache refresh')
