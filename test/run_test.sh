@@ -3,6 +3,7 @@ set -e
 
 echo "🧪 Starting dotfiles test in $(uname -a)"
 echo "📋 Environment: DOTFILES_ENVIRONMENT=${DOTFILES_ENVIRONMENT}"
+echo "🐧 Container runtime: Podman"
 
 # Validate environment variable is set
 if [ -z "$DOTFILES_ENVIRONMENT" ]; then

@@ -17,10 +17,10 @@ test: test-arch test-debian test-ubuntu
 # Test on Arch Linux
 test-arch:
 	@echo "🧪 Testing dotfiles installation on Arch Linux..."
-	@docker build -f test/Dockerfile.arch -t dotfiles-test-arch .
-	@docker run --rm \
+	@podman build -f test/Dockerfile.arch -t dotfiles-test-arch .
+	@podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
-		-v $(PWD):/dotfiles \
+		-v $(PWD):/dotfiles:Z \
 		-w /dotfiles \
 		dotfiles-test-arch \
 		bash -c "uv run init.py --test"
@@ -29,10 +29,10 @@ test-arch:
 # Test on Debian
 test-debian:
 	@echo "🧪 Testing dotfiles installation on Debian..."
-	@docker build -f test/Dockerfile.debian -t dotfiles-test-debian .
-	@docker run --rm \
+	@podman build -f test/Dockerfile.debian -t dotfiles-test-debian .
+	@podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
-		-v $(PWD):/dotfiles \
+		-v $(PWD):/dotfiles:Z \
 		-w /dotfiles \
 		dotfiles-test-debian \
 		bash -c "uv run init.py --test"
@@ -41,10 +41,10 @@ test-debian:
 # Test on Ubuntu (Debian-based)
 test-ubuntu:
 	@echo "🧪 Testing dotfiles installation on Ubuntu..."
-	@docker build -f test/Dockerfile.ubuntu -t dotfiles-test-ubuntu .
-	@docker run --rm \
+	@podman build -f test/Dockerfile.ubuntu -t dotfiles-test-ubuntu .
+	@podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
-		-v $(PWD):/dotfiles \
+		-v $(PWD):/dotfiles:Z \
 		-w /dotfiles \
 		dotfiles-test-ubuntu \
 		bash -c "uv run init.py --test"
@@ -53,8 +53,8 @@ test-ubuntu:
 # Clean up test containers and images
 clean:
 	@echo "🧹 Cleaning up test containers and images..."
-	@docker rmi -f dotfiles-test-arch dotfiles-test-debian dotfiles-test-ubuntu 2>/dev/null || true
-	@docker system prune -f
+	@podman rmi -f dotfiles-test-arch dotfiles-test-debian dotfiles-test-ubuntu 2>/dev/null || true
+	@podman system prune -f
 	@echo "✅ Cleanup completed"
 
 # Run tests with verbose output
