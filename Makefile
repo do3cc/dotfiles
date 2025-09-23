@@ -32,9 +32,10 @@ test-arch:
 	@podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
 		-v $(PWD):/dotfiles:Z \
+		-v ~/.cache/dotfiles-build/uv-cache:/cache/uv-cache:Z \
 		-w /dotfiles \
 		dotfiles-test-arch \
-		bash -c "uv run init.py --test"
+		bash -c "sudo rm -rf .venv && uv run init.py --test"
 	@echo "✅ Arch Linux test completed"
 
 # Test on Debian
@@ -51,9 +52,10 @@ test-debian:
 	@podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
 		-v $(PWD):/dotfiles:Z \
+		-v ~/.cache/dotfiles-build/uv-cache:/cache/uv-cache:Z \
 		-w /dotfiles \
 		dotfiles-test-debian \
-		bash -c "uv run init.py --test"
+		bash -c "sudo rm -rf .venv && uv run init.py --test"
 	@echo "✅ Debian test completed"
 
 # Test on Ubuntu (Debian-based)
@@ -67,18 +69,22 @@ test-ubuntu:
 	else \
 		podman build -f test/Dockerfile.ubuntu -t dotfiles-test-ubuntu .; \
 	fi
-	@podman run --rm \
+	podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
-		-v $(PWD):/dotfiles:Z \
+		-v $(PWD):/dotfiles:O \
+		-v ~/.cache/dotfiles-build/uv-cache:/cache/uv-cache:Z \
+		-v ~/.cache/dotfiles-build/uv-python-cache:/home/testuser/.local/share/uv/python:Z \
 		-w /dotfiles \
 		dotfiles-test-ubuntu \
-		bash -c "uv run init.py --test"
+		bash -c "sudo chown testuser . && sudo rm -rf .venv && uv run init.py --test"
 	@echo "✅ Ubuntu test completed"
 
 # Start caching by creating cache directory and pre-downloading
 cache-start:
 	@echo "🚀 Setting up build cache..."
-	@mkdir -p ~/.cache/dotfiles-build/{pacman,apt,uv}
+	@echo "📦 Setting up cache directories..."
+	@mkdir -p ~/.cache/dotfiles-build/{pacman,apt,uv,uv-cache,uv-python-cache}
+	@chmod 777 ~/.cache/dotfiles-build/{uv-python-cache,uv-cache}
 	@echo "📥 Pre-pulling base images..."
 	@podman pull archlinux:latest &
 	@podman pull debian:bookworm &

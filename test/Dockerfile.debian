@@ -44,6 +44,9 @@ RUN if [ -f /cache/uv/install.sh ]; then \
     chmod +x ~/uv-install.sh && \
     ~/uv-install.sh
 
+# Set UV cache directory to use mounted cache
+ENV UV_CACHE_DIR=/cache/uv-cache
+
 # Create minimal fish config directory structure (stable layer)
 RUN mkdir -p ~/.config/fish
 
