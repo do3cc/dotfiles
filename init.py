@@ -27,7 +27,8 @@ def run_command_with_error_handling(
             **kwargs,
         )
         return result
-    except subprocess.TimeoutExpired as e:
+
+    except subprocess.TimeoutExpired as _:
         print(f"❌ ERROR: {description} timed out after {timeout} seconds")
         print(f"🔍 Command: {' '.join(command)}")
         raise
@@ -169,7 +170,7 @@ class Linux:
                     print(f"💡 Expected: {nvm_script}")
                     raise FileNotFoundError(f"NVM script not found: {nvm_script}")
 
-                result = subprocess.run(
+                _ = subprocess.run(
                     ["/usr/bin/bash", nvm_script],
                     check=True,
                     capture_output=True,
@@ -343,7 +344,7 @@ class Linux:
 
             # Test if credential helper responds
             try:
-                result = subprocess.run(
+                _ = subprocess.run(
                     [libsecret_path],
                     input="",
                     text=True,
@@ -946,7 +947,7 @@ class Debian(Linux):
             try:
                 apt_get("upgrade", "--assume-yes")
                 print("✅ System packages upgraded")
-            except subprocess.CalledProcessError as e:
+            except subprocess.CalledProcessError as _:
                 print("⚠️  WARNING: Some packages failed to upgrade")
                 print("💡 This is often non-critical, continuing with installation...")
 
@@ -962,7 +963,7 @@ class Debian(Linux):
                 try:
                     apt_get("install", "--assume-yes", *missing)
                     print("✅ All missing APT packages installed successfully")
-                except subprocess.CalledProcessError as e:
+                except subprocess.CalledProcessError as _:
                     print("❌ ERROR: Some APT packages failed to install")
                     print(
                         "💡 Try: Check package names and fix any dependency conflicts"
@@ -982,7 +983,7 @@ class Debian(Linux):
                     timeout=600,
                 )
                 print("✅ Apt-file database updated")
-            except subprocess.CalledProcessError as e:
+            except subprocess.CalledProcessError as _:
                 print("⚠️  WARNING: apt-file update failed")
                 print("💡 This is non-critical, continuing...")
             except subprocess.TimeoutExpired:
