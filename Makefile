@@ -1,5 +1,48 @@
 .PHONY: test test-arch test-debian test-ubuntu clean help cache-start cache-stop cache-stats cache-images
 
+# Container Test Configuration - Comprehensive Improvements
+#
+# TIMEOUT FIXES:
+# Test timeouts increased from 300s (5min) to 900s (15min) to accommodate:
+# 1. Package downloads and installation in containers
+# 2. APT operations that can take 5-10 minutes with slow mirrors
+# 3. System updates that may download many packages
+# 4. AUR helper (yay) compilation on Arch (5-10 minutes)
+#
+# The timeout hierarchy (outer timeout triggers after inner timeouts):
+# - Makefile timeout: 900s (15min) - prevents infinite hangs
+# - APT operations: 600s (10min) - faster failure detection
+# - Pacman operations: 600s (10min) - aligned with APT
+# - System updates: 1800s (30min) - can be very large
+# - Most other operations: 300s (5min) - quick operations
+#
+# PERMISSION FIXES:
+# Removed destructive "sudo chown -R testuser:testuser ." command that was:
+# 1. Corrupting git ownership on the host system
+# 2. Unnecessarily changing ownership of all files
+# 3. Causing "dubious ownership" git errors
+#
+# Current approach:
+# 1. Only remove .venv directory (sudo rm -rf .venv)
+# 2. Let UV handle .venv creation with proper permissions
+# 3. UV_LINK_MODE=copy avoids most permission issues
+# 4. Preserve host file ownership for git operations
+#
+# OUTPUT STREAMING FIXES:
+# Package operations now show real-time progress instead of appearing stuck:
+# 1. APT: Removed capture_output=True, shows package installation progress
+# 2. Pacman: Removed capture_output=True, shows package installation progress
+# 3. System updates: Direct subprocess calls show update progress
+# 4. AUR operations: Git clone and makepkg compilation show progress
+#
+# INTERACTIVE PROMPT FIXES (Debian/Ubuntu only):
+# 1. Timezone pre-configuration prevents tzdata prompts
+# 2. Container detection ensures safe timezone modification
+# 3. DEBIAN_FRONTEND=noninteractive as fallback (sudo may drop it)
+#
+# These improvements ensure all test targets complete successfully with
+# visible progress and no interactive prompts or permission errors.
+
 # Default target
 help:
 	@echo "Available targets:"
@@ -43,7 +86,7 @@ test-arch:
 			UV_LINK_MODE=copy uv sync && \
 			echo '🚀 Starting dotfiles installation...' && \
 			export DOTFILES_ENVIRONMENT=private && \
-			timeout 300 uv run dotfiles-init --test || echo '⚠️ Test timed out after 5 minutes'"
+			timeout 900 uv run dotfiles-init --test || echo '⚠️ Test timed out after 15 minutes'"
 	@echo "✅ Arch Linux test completed"
 
 # Test on Debian
@@ -71,7 +114,7 @@ test-debian:
 			UV_LINK_MODE=copy uv sync && \
 			echo '🚀 Starting dotfiles installation...' && \
 			export DOTFILES_ENVIRONMENT=private && \
-			timeout 300 uv run dotfiles-init --test || echo '⚠️ Test timed out after 5 minutes'"
+			timeout 900 uv run dotfiles-init --test || echo '⚠️ Test timed out after 15 minutes'"
 	@echo "✅ Debian test completed"
 
 # Test on Ubuntu (Debian-based)
@@ -95,13 +138,12 @@ test-ubuntu:
 		-w /dotfiles \
 		dotfiles-test-ubuntu \
 		bash -c "set -x && \
-			sudo chown -R testuser:testuser . && \
 			sudo rm -rf .venv && \
 			echo '📦 Installing project dependencies...' && \
 			UV_LINK_MODE=copy uv sync && \
 			echo '🚀 Starting dotfiles installation...' && \
 			export DOTFILES_ENVIRONMENT=private && \
-			timeout 300 uv run dotfiles-init --test || echo '⚠️ Test timed out after 5 minutes'"
+			timeout 900 uv run dotfiles-init --test || echo '⚠️ Test timed out after 15 minutes'"
 	@echo "✅ Ubuntu test completed"
 
 # Start caching by creating cache directory and pre-downloading

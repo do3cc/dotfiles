@@ -636,11 +636,16 @@ class Arch(Linux):
             if result.returncode == 0 and result.stdout.strip():
                 updates = result.stdout.strip().split("\n")
                 print(f"🔄 Found {len(updates)} system updates available")
-                run_command_with_error_handling(
+                # Use streaming subprocess for system update to show progress
+                # System updates can take 10-15 minutes and users need to see progress
+                result = subprocess.run(
                     ["sudo", "pacman", "-Syu", "--noconfirm"],
-                    "System update",
-                    timeout=1800,
+                    check=True,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=1800,  # 30 minutes for system updates (can be large)
                 )
+                log_subprocess_result("System update", ["sudo", "pacman", "-Syu", "--noconfirm"], result)
                 print("✅ System update completed successfully")
                 self.mark_system_updated()
             else:
@@ -649,9 +654,15 @@ class Arch(Linux):
         except FileNotFoundError:
             # checkupdates not available, fallback to regular update
             print("🔄 Updating system packages...")
-            run_command_with_error_handling(
-                ["sudo", "pacman", "-Syu", "--noconfirm"], "System update", timeout=1800
+            # Use streaming subprocess for fallback system update to show progress
+            result = subprocess.run(
+                ["sudo", "pacman", "-Syu", "--noconfirm"],
+                check=True,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=1800,  # 30 minutes for system updates (can be large)
             )
+            log_subprocess_result("System update", ["sudo", "pacman", "-Syu", "--noconfirm"], result)
             print("✅ System update completed successfully")
             self.mark_system_updated()
         except Exception:
@@ -665,17 +676,43 @@ class Arch(Linux):
         self.update_system()
 
         def pacman(*args, **kwargs):
+            """
+            Execute pacman commands with real-time output, error handling, and retry logic.
+
+            Key improvements implemented here:
+            1. Real-time output streaming (removed capture_output=True)
+            2. Reduced timeout for faster failure detection
+            3. Comprehensive error handling with retries
+            4. Consistent timeout with APT operations (600s)
+
+            Arch Linux advantages:
+            - Uses --noconfirm to prevent interactive prompts (no timezone issues)
+            - No environment variable complications like APT
+            - Generally faster package operations than APT
+            """
             max_retries = 3
             for attempt in range(max_retries):
                 try:
+                    # Real-time output streaming configuration
+                    #
+                    # Previous problem: capture_output=True hid all pacman progress from users.
+                    # Users only saw "Installing X packages..." with no visible progress.
+                    #
+                    # Solution: Remove capture_output=True to show real-time package installation.
+                    # Still capture stderr for error handling while stdout flows to terminal.
+                    #
+                    # Timeout reduced from 1800s (30min) to 600s (10min) for consistency with APT
+                    # and faster failure detection in CI environments.
                     result = subprocess.run(
                         ["sudo", "pacman"] + list(args),
                         check=True,
-                        capture_output=True,
+                        stderr=subprocess.PIPE,  # Capture stderr for error analysis
                         text=True,
-                        timeout=1800,  # 30 minute timeout
+                        timeout=600,  # 10 minute timeout (was 30 min - align with APT)
                         **kwargs,
                     )
+                    # Log successful command for debugging (matching APT implementation)
+                    log_subprocess_result(f"Pacman command", ["sudo", "pacman"] + list(args), result)
                     return result
                 except subprocess.TimeoutExpired:
                     print(
@@ -756,24 +793,34 @@ class Arch(Linux):
                 if not exists(yay_dir):
                     try:
                         print("Cloning yay AUR helper...")
-                        run_command_with_error_handling(
+                        # Use streaming subprocess for git clone to show progress
+                        # Git clone can take time depending on network speed
+                        result = subprocess.run(
                             [
                                 "git",
                                 "clone",
                                 "https://aur.archlinux.org/yay-bin.git",
                                 yay_dir,
                             ],
-                            "Clone yay AUR helper",
-                            timeout=120,
+                            check=True,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                            timeout=120,  # 2 minutes should be enough for small repo
                         )
+                        log_subprocess_result("Clone yay AUR helper", ["git", "clone", "https://aur.archlinux.org/yay-bin.git", yay_dir], result)
 
                         print("Building yay (this will prompt for sudo password)...")
-                        run_command_with_error_handling(
+                        # Use streaming subprocess for makepkg to show build progress
+                        # Compilation can take 5-10 minutes and users need to see progress
+                        result = subprocess.run(
                             ["makepkg", "-si", "--needed", "--noconfirm"],
-                            "Build yay AUR helper",
-                            timeout=600,
+                            check=True,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                            timeout=600,  # 10 minutes for compilation
                             cwd=yay_dir,
                         )
+                        log_subprocess_result("Build yay AUR helper", ["makepkg", "-si", "--needed", "--noconfirm"], result)
                         print("✅ Yay AUR helper installed")
 
                     except Exception:
@@ -910,6 +957,57 @@ class Arch(Linux):
 
 
 class Debian(Linux):
+    def _is_running_in_container(self):
+        """
+        Detect if we're running inside a container (Docker, Podman, etc.)
+
+        This is used to determine if it's safe to modify system settings like timezone.
+        Containers often need timezone pre-configuration to prevent interactive prompts
+        during package installation, while real systems should preserve user settings.
+
+        Detection methods:
+        1. Container-specific files: /.dockerenv (Docker), /run/.containerenv (Podman)
+        2. Process tree analysis: Check /proc/1/cgroup for container runtime signatures
+        3. Virtualization indicators: /proc/vz (OpenVZ/Virtuozzo)
+
+        Returns:
+            bool: True if running in a container/virtualized environment, False otherwise
+
+        Safety note: Defaults to False if detection fails (safer for real systems)
+        """
+        try:
+            # Check for container-specific files/indicators
+            # These files are created by container runtimes and are reliable indicators
+            container_indicators = [
+                "/.dockerenv",  # Docker creates this file in all containers
+                "/run/.containerenv",  # Podman creates this file in all containers
+            ]
+
+            for indicator in container_indicators:
+                if exists(indicator):
+                    return True
+
+            # Check /proc/1/cgroup for container runtime signatures
+            # Container runtimes modify the cgroup hierarchy for process 1 (init)
+            if exists("/proc/1/cgroup"):
+                with open("/proc/1/cgroup", "r") as f:
+                    content = f.read()
+                    # Look for container runtime signatures in the cgroup path
+                    if "docker" in content or "containerd" in content or "podman" in content:
+                        return True
+
+            # Check if running in virtualized environment that might need timezone setup
+            # Some virtualization systems also benefit from timezone pre-configuration
+            if exists("/proc/vz"):  # OpenVZ/Virtuozzo container system
+                return True
+
+            return False
+        except Exception:
+            # If we can't determine container status (permissions, missing files, etc.),
+            # assume we're NOT in a container. This is safer for real user systems
+            # where we don't want to accidentally modify timezone settings.
+            return False
+
     apt_packages = [
         "ack",  # text search tool
         "apt-file",  # search files in packages
@@ -942,18 +1040,94 @@ class Debian(Linux):
     def install_dependencies(self):
         """Install packages with retry logic and comprehensive error handling"""
 
+        # Pre-configure timezone to prevent tzdata interactive prompts
+        #
+        # Problem: The tzdata package (timezone data) can prompt users to select their
+        # geographic region and timezone during installation, even with --assume-yes.
+        # This happens because tzdata uses debconf for configuration, which bypasses
+        # the APT --assume-yes flag.
+        #
+        # Solution: Pre-configure the timezone before package installation so tzdata
+        # finds the timezone already set and skips the interactive configuration.
+        #
+        # Why UTC: It's the safest default for containers and automated environments.
+        # Real systems preserve their existing timezone settings.
+        #
+        # Safety: Only runs in test mode (--test flag) or detected containers,
+        # never on real user systems where timezone might be intentionally set.
+        if self.test_mode or self._is_running_in_container():
+            try:
+                print("Pre-configuring timezone to UTC to prevent interactive prompts...")
+
+                # Step 1: Create symlink from /etc/localtime to UTC timezone data
+                # This is the primary way Linux systems determine the current timezone
+                run_command_with_error_handling(
+                    ["sudo", "ln", "-fs", "/usr/share/zoneinfo/UTC", "/etc/localtime"],
+                    "Set timezone symlink to UTC",
+                    timeout=30
+                )
+
+                # Step 2: Set the timezone name in /etc/timezone for consistency
+                # Some tools and packages read this file to determine the timezone name
+                run_command_with_error_handling(
+                    ["sudo", "sh", "-c", "echo 'UTC' > /etc/timezone"],
+                    "Set timezone name to UTC",
+                    timeout=30
+                )
+
+                print("✅ Timezone pre-configured to UTC")
+            except Exception as e:
+                print(f"⚠️  WARNING: Could not pre-configure timezone: {e}")
+                print("💡 This may cause interactive prompts during package installation")
+        else:
+            print("✅ Skipping timezone pre-configuration (running on real system)")
+
         def apt_get(*args, **kwargs):
+            """
+            Execute APT commands with real-time output, error handling, and retry logic.
+
+            Key improvements implemented here:
+            1. Real-time output streaming (removed capture_output=True)
+            2. Non-interactive environment setup (DEBIAN_FRONTEND=noninteractive)
+            3. Reduced timeout for faster failure detection
+            4. Comprehensive error handling with retries
+
+            Note: DEBIAN_FRONTEND=noninteractive may not work with sudo due to
+            environment variable filtering, but we set it anyway as a fallback.
+            The primary solution is timezone pre-configuration above.
+            """
             max_retries = 3
             for attempt in range(max_retries):
                 try:
+                    # Set up non-interactive environment to prevent prompts
+                    #
+                    # Problem: sudo often drops environment variables for security.
+                    # Even with env parameter, DEBIAN_FRONTEND may not reach apt-get.
+                    # This is why we pre-configure timezone as the primary solution.
+                    env = os.environ.copy()
+                    env["DEBIAN_FRONTEND"] = "noninteractive"
+
+                    # Real-time output streaming configuration
+                    #
+                    # Previous problem: capture_output=True hid all APT progress from users.
+                    # Users only saw "Installing X packages..." with no visible progress.
+                    #
+                    # Solution: Remove capture_output=True to show real-time package installation.
+                    # Still capture stderr for error handling while stdout flows to terminal.
+                    #
+                    # Timeout reduced from 1800s (30min) to 600s (10min) for faster failure detection
+                    # while still allowing time for large package downloads.
                     result = subprocess.run(
                         ["sudo", "apt-get"] + list(args),
                         check=True,
-                        capture_output=True,
+                        stderr=subprocess.PIPE,  # Capture stderr for error analysis
                         text=True,
-                        timeout=1800,  # 30 minute timeout
+                        timeout=600,  # 10 minute timeout (was 30 min - too long for CI)
+                        env=env,  # Pass environment with DEBIAN_FRONTEND
                         **kwargs,
                     )
+                    # Log successful command for debugging
+                    log_subprocess_result(f"APT command", ["sudo", "apt-get"] + list(args), result)
                     return result
                 except subprocess.TimeoutExpired:
                     print(
