@@ -204,4 +204,4 @@ This enhanced logging provides complete observability into every operation, erro
 - Configuration files are designed for Wayland environments (Hyprland)
 - Git configuration includes global gitignore patterns
 - Shell integration includes direnv for project-specific environments
-- SSH key rotation is automated (monthly keys based on hostname)
+- SSH key generation uses permanent keys per hostname and environment (e.g., `id_ed25519_hostname_private`)

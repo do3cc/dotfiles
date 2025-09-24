@@ -470,7 +470,10 @@ class Linux:
                 "Refresh GitHub auth",
             )
 
-        current_key = expand("~/.ssh/id_ed_" + datetime.now().strftime("%Y%m"))
+        # Use permanent SSH key based on hostname and environment
+        key_suffix = f"{socket.gethostname()}_{self.environment}"
+        current_key = expand(f"~/.ssh/id_ed25519_{key_suffix}")
+
         if not exists(current_key):
             ssh_key_email = self.environment_specific["ssh_key_email"].get(
                 self.environment, self.ssh_key_email
@@ -481,7 +484,7 @@ class Linux:
                     "-t",
                     "ed25519",
                     "-C",
-                    f"'Patrick Gerken {socket.gethostname()} {ssh_key_email} {datetime.now().strftime('%Y%m')}'",
+                    f"'Patrick Gerken {socket.gethostname()} {ssh_key_email} {self.environment}'",
                     "-f",
                     current_key,
                     "-N",
@@ -492,7 +495,7 @@ class Linux:
             run_command_with_error_handling(
                 ["ssh-add", current_key], "Add SSH key to agent"
             )
-            key_name = f'"{socket.gethostname()} {datetime.now().strftime("%Y%m")}"'
+            key_name = f'"{socket.gethostname()} {self.environment}"'
             run_command_with_error_handling(
                 ["/usr/bin/gh", "ssh-key", "add", f"{current_key}.pub", "-t", key_name],
                 "Add SSH key to GitHub",
