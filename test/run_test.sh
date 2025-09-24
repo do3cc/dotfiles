@@ -15,8 +15,16 @@ fi
 echo "🚀 Running dotfiles installation..."
 cd /dotfiles
 
+# Two-step approach: first test --help, then run actual init
+echo "🔍 Testing help functionality..."
+uv run init.py --help >/dev/null || {
+	echo "❌ ERROR: Help functionality test failed"
+	exit 1
+}
+
+echo "🚀 Running actual dotfiles installation..."
 # Run with timeout to prevent hanging
-timeout 300 uv run init.py --test || {
+timeout 300 uv run init.py --environment "$DOTFILES_ENVIRONMENT" || {
 	echo "❌ ERROR: Dotfiles installation failed or timed out"
 	exit 1
 }
