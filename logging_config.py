@@ -166,7 +166,7 @@ def log_subprocess_result(description: str, command: list, result, **context) ->
         "description": description,
         "command": command,
         "returncode": result.returncode,
-        **context
+        **context,
     }
 
     if result.returncode == 0:
@@ -176,14 +176,14 @@ def log_subprocess_result(description: str, command: list, result, **context) ->
 
     # Always log stdout/stderr for debugging regardless of success
     if result.stdout:
-        _global_logger.debug("subprocess_stdout",
-                           description=description,
-                           stdout=result.stdout.strip())
+        _global_logger.debug(
+            "subprocess_stdout", description=description, stdout=result.stdout.strip()
+        )
 
     if result.stderr:
-        _global_logger.debug("subprocess_stderr",
-                           description=description,
-                           stderr=result.stderr.strip())
+        _global_logger.debug(
+            "subprocess_stderr", description=description, stderr=result.stderr.strip()
+        )
 
 
 def log_exception(exception: Exception, context_msg: str, **context) -> None:
@@ -196,11 +196,13 @@ def log_exception(exception: Exception, context_msg: str, **context) -> None:
         **context: Additional context
     """
     if _global_logger:
-        _global_logger.error("exception_occurred",
-                           context=context_msg,
-                           exception_type=type(exception).__name__,
-                           exception_message=str(exception),
-                           **context)
+        _global_logger.error(
+            "exception_occurred",
+            context=context_msg,
+            exception_type=type(exception).__name__,
+            exception_message=str(exception),
+            **context,
+        )
 
 
 def log_file_operation(operation: str, path: str, success: bool, **context) -> None:
@@ -215,14 +217,14 @@ def log_file_operation(operation: str, path: str, success: bool, **context) -> N
     """
     if _global_logger:
         level = "info" if success else "error"
-        getattr(_global_logger, level)("file_operation",
-                                      operation=operation,
-                                      path=path,
-                                      success=success,
-                                      **context)
+        getattr(_global_logger, level)(
+            "file_operation", operation=operation, path=path, success=success, **context
+        )
 
 
-def log_package_operation(manager: str, operation: str, packages: list, success: bool, **context) -> None:
+def log_package_operation(
+    manager: str, operation: str, packages: list, success: bool, **context
+) -> None:
     """
     Log package manager operations.
 
@@ -235,10 +237,12 @@ def log_package_operation(manager: str, operation: str, packages: list, success:
     """
     if _global_logger:
         level = "info" if success else "error"
-        getattr(_global_logger, level)("package_operation",
-                                      manager=manager,
-                                      operation=operation,
-                                      package_count=len(packages),
-                                      packages=packages[:10],  # Limit to first 10 for readability
-                                      success=success,
-                                      **context)
+        getattr(_global_logger, level)(
+            "package_operation",
+            manager=manager,
+            operation=operation,
+            package_count=len(packages),
+            packages=packages[:10],  # Limit to first 10 for readability
+            success=success,
+            **context,
+        )

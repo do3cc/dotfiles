@@ -70,12 +70,14 @@ Automatically integrated into `fish/config.fish` to show status on shell startup
 ## Example Output
 
 **Quiet Mode** (only if issues):
+
 ```
 ⚠️  51 package updates available (2h ago)
 🔄 Git: 3 uncommitted 1 unpushed
 ```
 
 **Interactive Mode**:
+
 ```
 📦 Package Status:
    ⚠️  51 updates available (checked 2h ago)

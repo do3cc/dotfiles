@@ -28,6 +28,7 @@ export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init --test
 ```
 
 **Alternative using entry points:**
+
 ```bash
 # Using the new entry points (recommended)
 uv run dotfiles-init
@@ -78,6 +79,7 @@ uv run dotfiles-pkgstatus --refresh        # Force cache refresh
 ## Key Components
 
 ### Development Environment
+
 - **Shell**: Fish with Starship prompt
 - **Editor**: Neovim with LazyVim configuration
 - **Terminal**: Alacritty with comprehensive themes
@@ -85,6 +87,7 @@ uv run dotfiles-pkgstatus --refresh        # Force cache refresh
 - **Version Managers**: NVM (Node.js), Pyenv (Python)
 
 ### Configuration Structure
+
 - Each tool has its own directory (e.g., `alacritty/`, `fish/`, `tmux/`)
 - Configurations symlinked to `~/.config/`
 - XDG Base Directory compliant
@@ -96,6 +99,7 @@ uv run dotfiles-pkgstatus --refresh        # Force cache refresh
 ## Architecture
 
 The installation system (`init.py`) detects the operating system and:
+
 - Installs packages via system package managers
 - Creates configuration symlinks
 - Sets up development environments
