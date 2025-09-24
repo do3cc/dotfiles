@@ -646,6 +646,10 @@ class Arch(Linux):
 
     def update_system(self, logger: LoggingHelpers):
         """Perform system update if needed"""
+        if self.no_remote_mode:
+            print("No-remote mode: Skipping system updates")
+            return
+
         if not self.should_update_system():
             print("✅ System updated within last 24 hours, skipping update")
             return
@@ -1110,6 +1114,10 @@ class Debian(Linux):
 
     def install_dependencies(self, logger: LoggingHelpers):
         """Install packages with retry logic and comprehensive error handling"""
+
+        if self.no_remote_mode:
+            print("No-remote mode: Skipping package installation and system updates")
+            return
 
         # Pre-configure timezone to prevent tzdata interactive prompts
         #
