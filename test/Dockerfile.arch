@@ -16,8 +16,6 @@ RUN pacman -Syu --noconfirm && \
 RUN useradd -m -s /bin/bash testuser && \
     echo 'testuser ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
 
-# Create /etc/os-release if it doesn't exist
-RUN echo 'NAME="Arch Linux"' > /etc/os-release
 
 # Switch to test user
 USER testuser
