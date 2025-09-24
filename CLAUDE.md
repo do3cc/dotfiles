@@ -275,3 +275,4 @@ The compilation test is fast (~10 seconds) and catches import errors, syntax iss
 - Git configuration includes global gitignore patterns
 - Shell integration includes direnv for project-specific environments
 - SSH key generation uses permanent keys per hostname and environment (e.g., `id_ed25519_hostname_private`)
+- Always use branches for implementation so that I can review them in isolation in github
