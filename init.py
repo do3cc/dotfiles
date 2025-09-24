@@ -1,4 +1,3 @@
-import argparse
 from datetime import datetime
 import os
 from os.path import abspath, exists, expanduser
@@ -10,169 +9,17 @@ import traceback
 import urllib.request
 import urllib.error
 
+import click
 from logging_config import (
     setup_logging,
     bind_context,
     LoggingHelpers,
+    ConsoleOutput,
 )
 
 
 def expand(path):
     return abspath(expanduser(path))
-
-
-def run_command_with_error_handling(
-    command, description="Command", timeout=300, logger_helpers=None, **kwargs
-):
-    """Run a subprocess command with comprehensive error handling and logging"""
-    if logger_helpers:
-        logger_helpers.log_info(
-            "command_starting",
-            description=description,
-            command=command,
-            timeout=timeout,
-        )
-
-    try:
-        result = subprocess.run(
-            command,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            **kwargs,
-        )
-
-        # Use the new comprehensive subprocess logging
-        if logger_helpers:
-            logger_helpers.log_subprocess_result(description, command, result)
-        return result
-
-    except subprocess.TimeoutExpired:
-        if logger_helpers:
-            logger_helpers.log_error(
-                "command_timeout",
-                description=description,
-                command=command,
-                timeout=timeout,
-            )
-        print(f"❌ ERROR: {description} timed out after {timeout} seconds")
-        print(f"🔍 Command: {' '.join(command)}")
-        raise
-    except subprocess.CalledProcessError as e:
-        if logger_helpers:
-            logger_helpers.log_error(
-                "command_failed",
-                description=description,
-                command=command,
-                returncode=e.returncode,
-                stdout=e.stdout,
-                stderr=e.stderr,
-            )
-        print(f"❌ ERROR: {description} failed: {e}")
-        print(f"🔍 Command: {' '.join(command)}")
-        if e.stdout:
-            print(f"📄 STDOUT:\n{e.stdout}")
-        if e.stderr:
-            print(f"📄 STDERR:\n{e.stderr}")
-        raise
-    except Exception as e:
-        if logger_helpers:
-            logger_helpers.log_exception(
-                e, f"Unexpected error running {description}", command=command
-            )
-        print(f"❌ ERROR: Unexpected error running {description}: {e}")
-        print(f"🔍 Command: {' '.join(command)}")
-        raise
-
-
-def check_pacman_packages_installed(packages, logger_helpers=None):
-    """Check which packages are already installed via pacman"""
-    if logger_helpers:
-        logger_helpers.log_info(
-            "checking_pacman_packages",
-            package_count=len(packages),
-            packages=packages[:10],
-        )
-
-    if not packages:
-        if logger_helpers:
-            logger_helpers.log_info("no_packages_to_check")
-        return [], []
-
-    try:
-        result = subprocess.run(
-            ["pacman", "-Q"] + packages, capture_output=True, text=True
-        )
-        if logger_helpers:
-            logger_helpers.log_subprocess_result(
-                "bulk pacman package check", ["pacman", "-Q"] + packages[:5], result
-            )
-
-        # pacman -Q returns 0 if all packages are installed
-        if result.returncode == 0:
-            if logger_helpers:
-                logger_helpers.log_info("all_packages_installed", packages=packages)
-            return packages, []
-
-        # Some packages are missing, check individually
-        if logger_helpers:
-            logger_helpers.log_info(
-                "checking_packages_individually", package_count=len(packages)
-            )
-        installed = []
-        missing = []
-
-        for package in packages:
-            check_result = subprocess.run(
-                ["pacman", "-Q", package], capture_output=True, text=True
-            )
-            if check_result.returncode == 0:
-                installed.append(package)
-            else:
-                missing.append(package)
-
-        if logger_helpers:
-            logger_helpers.log_info(
-                "package_check_completed",
-                installed_count=len(installed),
-                missing_count=len(missing),
-                installed=installed[:10],
-                missing=missing[:10],
-            )
-        return installed, missing
-    except Exception as e:
-        if logger_helpers:
-            logger_helpers.log_exception(
-                e, "pacman package check failed", packages=packages
-            )
-        # If pacman check fails, assume all packages need installation
-        return [], packages
-
-
-def check_apt_packages_installed(packages, logger_helpers=None):
-    """Check which packages are already installed via apt"""
-    if not packages:
-        return [], []
-
-    try:
-        installed = []
-        missing = []
-
-        for package in packages:
-            result = subprocess.run(
-                ["dpkg", "-l", package], capture_output=True, text=True
-            )
-            # dpkg -l returns 0 and shows 'ii' status for installed packages
-            if result.returncode == 0 and f"ii  {package}" in result.stdout:
-                installed.append(package)
-            else:
-                missing.append(package)
-
-        return installed, missing
-    except Exception:
-        # If dpkg check fails, assume all packages need installation
-        return [], packages
 
 
 def check_systemd_service_status(service):
@@ -225,39 +72,96 @@ class Linux:
         "ssh_key_email": {"work": "patrick.gerken@zumtobelgroup.com"},
     }
 
-    def __init__(self, environment="minimal", test_mode=False):
+    def __init__(self, environment="minimal", no_remote_mode=False):
         self.environment = environment
-        self.test_mode = test_mode
+        self.no_remote_mode = no_remote_mode
 
-    def install_dependencies(self, logger_helpers=None):
+    def run_command_with_error_handling(
+        self,
+        command,
+        logger: LoggingHelpers,
+        description="Command",
+        timeout=300,
+        **kwargs,
+    ):
+        """Run a subprocess command with comprehensive error handling and logging"""
+        logger.log_info(
+            "command_starting",
+            description=description,
+            command=command,
+            timeout=timeout,
+        )
+
+        try:
+            result = subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                **kwargs,
+            )
+
+            # Use the new comprehensive subprocess logging
+            logger.log_subprocess_result(description, command, result)
+            return result
+
+        except subprocess.TimeoutExpired:
+            logger.log_exception(
+                "command_timeout",
+                description=description,
+                command=command,
+                timeout=timeout,
+            )
+            print(f"❌ ERROR: {description} timed out after {timeout} seconds")
+            print(f"🔍 Command: {' '.join(command)}")
+            raise
+        except subprocess.CalledProcessError as e:
+            logger.log_exception(
+                "command_failed",
+                description=description,
+                command=command,
+                returncode=e.returncode,
+                stdout=e.stdout,
+                stderr=e.stderr,
+            )
+            print(f"❌ ERROR: {description} failed: {e}")
+            print(f"🔍 Command: {' '.join(command)}")
+            if e.stdout:
+                print(f"📄 STDOUT:\n{e.stdout}")
+            if e.stderr:
+                print(f"📄 STDERR:\n{e.stderr}")
+            raise
+        except Exception as e:
+            logger.log_exception(
+                e, f"Unexpected error running {description}", command=command
+            )
+            print(f"❌ ERROR: Unexpected error running {description}: {e}")
+            print(f"🔍 Command: {' '.join(command)}")
+            raise
+
+    def install_dependencies(self, logger: LoggingHelpers):
         """Install NVM and Pyenv with proper error handling"""
-        if logger_helpers:
-            logger_helpers.log_progress("starting_dependency_installation")
+        logger.log_progress("starting_dependency_installation")
 
         # Install NVM
         nvm_path = expand("~/.local/share/nvm")
-        if logger_helpers:
-            logger_helpers.log_info("checking_nvm_installation", nvm_path=nvm_path)
+        logger.log_info("checking_nvm_installation", nvm_path=nvm_path)
 
         if not exists(nvm_path):
             nvm_script = "doesnotexist"
             try:
-                if logger_helpers:
-                    logger_helpers.log_progress("installing_nvm")
+                logger.log_progress("installing_nvm")
                 print("Installing NVM...")
                 nvm_script = expand("./install_scripts/install_nvm.sh")
 
                 if not exists(nvm_script):
-                    if logger_helpers:
-                        logger_helpers.log_error(
-                            "nvm_script_not_found", script_path=nvm_script
-                        )
+                    logger.log_error("nvm_script_not_found", script_path=nvm_script)
                     print("❌ ERROR: NVM installation script not found")
                     print(f"💡 Expected: {nvm_script}")
                     raise FileNotFoundError(f"NVM script not found: {nvm_script}")
 
-                if logger_helpers:
-                    logger_helpers.log_info("executing_nvm_script", script=nvm_script)
+                logger.log_info("executing_nvm_script", script=nvm_script)
                 result = subprocess.run(
                     ["/usr/bin/bash", nvm_script],
                     check=True,
@@ -265,27 +169,25 @@ class Linux:
                     text=True,
                     timeout=300,  # 5 minute timeout
                 )
-                if logger_helpers:
-                    logger_helpers.log_subprocess_result(
-                        "NVM installation", ["/usr/bin/bash", nvm_script], result
-                    )
-                    logger_helpers.log_progress("nvm_installed_successfully")
+                logger.log_subprocess_result(
+                    "NVM installation", ["/usr/bin/bash", nvm_script], result
+                )
+                logger.log_progress("nvm_installed_successfully")
                 print("✅ NVM installed successfully")
 
-            except subprocess.TimeoutExpired:
-                if logger_helpers:
-                    logger_helpers.log_error("nvm_installation_timeout", timeout=300)
+            except subprocess.TimeoutExpired as e:
+                logger.log_exception(e, "nvm_installation_timeout", timeout=300)
                 print("❌ ERROR: NVM installation timed out (network issues?)")
                 print("💡 Try: Check internet connection and run again")
                 raise
             except subprocess.CalledProcessError as e:
-                if logger_helpers:
-                    logger_helpers.log_error(
-                        "nvm_installation_failed",
-                        returncode=e.returncode,
-                        stdout=e.stdout,
-                        stderr=e.stderr,
-                    )
+                logger.log_exception(
+                    e,
+                    "nvm_installation_failed",
+                    returncode=e.returncode,
+                    stdout=e.stdout,
+                    stderr=e.stderr,
+                )
                 print(
                     f"❌ ERROR: NVM installation failed with exit code {e.returncode}"
                 )
@@ -294,10 +196,9 @@ class Linux:
                 print("💡 Try: Check network connection and script permissions")
                 raise
             except FileNotFoundError as e:
-                if logger_helpers:
-                    logger_helpers.log_exception(
-                        e, "NVM installation file not found", script_path=nvm_script
-                    )
+                logger.log_exception(
+                    e, "NVM installation file not found", script_path=nvm_script
+                )
                 if "/usr/bin/bash" in str(e):
                     print("❌ ERROR: Bash not found at /usr/bin/bash")
                     print("💡 Try: Install bash or update the script")
@@ -305,8 +206,7 @@ class Linux:
                     print(f"❌ ERROR: {e}")
                 raise
         else:
-            if logger_helpers:
-                logger_helpers.log_info("nvm_already_installed", nvm_path=nvm_path)
+            logger.log_info("nvm_already_installed", nvm_path=nvm_path)
             print("✅ NVM already installed")
 
         # Install Pyenv
@@ -345,7 +245,7 @@ class Linux:
         else:
             print("✅ Pyenv already installed")
 
-    def link_configs(self):
+    def link_configs(self, logger: LoggingHelpers):
         """Create symlinks with comprehensive error handling"""
         # Ensure ~/.config exists
         config_base_dir = expand("~/.config")
@@ -433,7 +333,7 @@ class Linux:
                 print(f"❌ ERROR: Unexpected error processing {config_dir_target}: {e}")
                 continue
 
-    def validate_git_credential_helper(self):
+    def validate_git_credential_helper(self, logger: LoggingHelpers):
         """Validate that git credential helper is properly configured"""
         try:
             # Check if libsecret binary exists
@@ -474,7 +374,7 @@ class Linux:
             print(f"❌ ERROR: Failed to validate git credential helper: {e}")
             return False
 
-    def setup_shell(self):
+    def setup_shell(self, logger: LoggingHelpers):
         # Check current user's default shell
         try:
             current_shell = os.environ.get("SHELL", "")
@@ -485,8 +385,8 @@ class Linux:
                 user_entry = pwd.getpwuid(os.getuid())
                 if not user_entry.pw_shell.endswith("/fish"):
                     print(f"Changing shell from {user_entry.pw_shell} to fish")
-                    run_command_with_error_handling(
-                        ["chsh", "-s", "/usr/bin/fish"], "Change shell to fish"
+                    self.self.run_command_with_error_handling(
+                        ["chsh", "-s", "/usr/bin/fish"], logger, "Change shell to fish"
                     )
                     self.restart_required = True
                 else:
@@ -496,19 +396,19 @@ class Linux:
         except Exception as e:
             print(f"Warning: Could not check/change shell: {e}")
 
-    def link_accounts(self):
-        if self.test_mode:
-            print("Test mode: Skipping GitHub and SSH key setup")
+    def link_accounts(self, logger: LoggingHelpers):
+        if self.no_remote_mode:
+            print("No-remote mode: Skipping GitHub and SSH key setup")
             return
 
         try:
-            result = run_command_with_error_handling(
-                ["/usr/bin/gh", "auth", "status"], "Check GitHub auth status"
+            result = self.run_command_with_error_handling(
+                ["/usr/bin/gh", "auth", "status"], logger, "Check GitHub auth status"
             )
             if "Logged in" not in result.stdout:
                 # Interactive command - don't capture output
                 subprocess.run(["/usr/bin/gh", "auth", "login"])
-                run_command_with_error_handling(
+                self.run_command_with_error_handling(
                     [
                         "gh",
                         "auth",
@@ -518,13 +418,15 @@ class Linux:
                         "-s",
                         "admin:public_key",
                     ],
+                    logger,
                     "Refresh GitHub auth",
                 )
         except subprocess.CalledProcessError:
             print("GitHub CLI not authenticated, running login...")
             subprocess.run(["/usr/bin/gh", "auth", "login"])
-            run_command_with_error_handling(
+            self.run_command_with_error_handling(
                 ["gh", "auth", "refresh", "-h", "github.com", "-s", "admin:public_key"],
+                logger,
                 "Refresh GitHub auth",
             )
 
@@ -536,7 +438,7 @@ class Linux:
             ssh_key_email = self.environment_specific["ssh_key_email"].get(
                 self.environment, self.ssh_key_email
             )
-            run_command_with_error_handling(
+            self.run_command_with_error_handling(
                 [
                     "ssh-keygen",
                     "-t",
@@ -548,21 +450,23 @@ class Linux:
                     "-N",
                     "",  # No passphrase
                 ],
+                logger,
                 "Generate SSH key",
             )
-            run_command_with_error_handling(
-                ["ssh-add", current_key], "Add SSH key to agent"
+            self.run_command_with_error_handling(
+                ["ssh-add", current_key], logger, "Add SSH key to agent"
             )
             key_name = f'"{socket.gethostname()} {self.environment}"'
-            run_command_with_error_handling(
+            self.run_command_with_error_handling(
                 ["/usr/bin/gh", "ssh-key", "add", f"{current_key}.pub", "-t", key_name],
+                logger,
                 "Add SSH key to GitHub",
             )
 
         if self.environment in ["private"]:
             try:
-                result = run_command_with_error_handling(
-                    ["tailscale", "status"], "Check Tailscale status"
+                result = self.run_command_with_error_handling(
+                    ["tailscale", "status"], logger, "Check Tailscale status"
                 )
                 # Check if we have an IP address (connected) or if we're logged out
                 if "100." not in result.stdout or "Logged out" in result.stdout:
@@ -651,6 +555,60 @@ class Arch(Linux):
     }
     systemd_services_to_enable = []
 
+    def check_packages_installed(self, packages, logger: LoggingHelpers):
+        """Check which packages are already installed via pacman"""
+        logger.log_info(
+            "checking_pacman_packages",
+            package_count=len(packages),
+            packages=packages[:10],
+        )
+
+        if not packages:
+            logger.log_info("no_packages_to_check")
+            return [], []
+
+        try:
+            result = subprocess.run(
+                ["pacman", "-Q"] + packages, capture_output=True, text=True
+            )
+            logger.log_subprocess_result(
+                "bulk pacman package check", ["pacman", "-Q"] + packages[:5], result
+            )
+
+            # pacman -Q returns 0 if all packages are installed
+            if result.returncode == 0:
+                logger.log_info("all_packages_installed", packages=packages)
+                return packages, []
+
+            # Some packages are missing, check individually
+            logger.log_info(
+                "checking_packages_individually", package_count=len(packages)
+            )
+            installed = []
+            missing = []
+
+            for package in packages:
+                check_result = subprocess.run(
+                    ["pacman", "-Q", package], capture_output=True, text=True
+                )
+                if check_result.returncode == 0:
+                    installed.append(package)
+                else:
+                    missing.append(package)
+
+            logger.log_info(
+                "package_check_completed",
+                installed_count=len(installed),
+                missing_count=len(missing),
+                installed=installed[:10],
+                missing=missing[:10],
+            )
+            return installed, missing
+        except Exception as e:
+            logger.log_exception(e, "pacman package check failed", packages=packages)
+            # If pacman check fails, assume all packages need installation
+            return [], packages
+
     def should_update_system(self):
         """Check if system update should be performed (not done in last 24 hours)"""
         update_marker = expand("~/.cache/dotfiles_last_update")
@@ -686,7 +644,7 @@ class Arch(Linux):
         except OSError as e:
             print(f"⚠️  WARNING: Could not write update marker: {e}")
 
-    def update_system(self, logger_helpers=None):
+    def update_system(self, logger: LoggingHelpers):
         """Perform system update if needed"""
         if not self.should_update_system():
             print("✅ System updated within last 24 hours, skipping update")
@@ -709,12 +667,11 @@ class Arch(Linux):
                     text=True,
                     timeout=1800,  # 30 minutes for system updates (can be large)
                 )
-                if logger_helpers:
-                    logger_helpers.log_subprocess_result(
-                        "System update",
-                        ["sudo", "pacman", "-Syu", "--noconfirm"],
-                        result,
-                    )
+                logger.log_subprocess_result(
+                    "System update",
+                    ["sudo", "pacman", "-Syu", "--noconfirm"],
+                    result,
+                )
                 print("✅ System update completed successfully")
                 self.mark_system_updated()
             else:
@@ -731,21 +688,20 @@ class Arch(Linux):
                 text=True,
                 timeout=1800,  # 30 minutes for system updates (can be large)
             )
-            if logger_helpers:
-                logger_helpers.log_subprocess_result(
-                    "System update", ["sudo", "pacman", "-Syu", "--noconfirm"], result
-                )
+            logger.log_subprocess_result(
+                "System update", ["sudo", "pacman", "-Syu", "--noconfirm"], result
+            )
             print("✅ System update completed successfully")
             self.mark_system_updated()
         except Exception:
             print("💡 Try: Run 'sudo pacman -Syu' manually to check for issues")
             raise
 
-    def install_dependencies(self, logger_helpers=None):
+    def install_dependencies(self, logger: LoggingHelpers):
         """Install packages with retry logic and comprehensive error handling"""
 
         # Perform system update if needed
-        self.update_system(logger_helpers)
+        self.update_system(logger)
 
         def pacman(*args, **kwargs):
             """
@@ -784,10 +740,9 @@ class Arch(Linux):
                         **kwargs,
                     )
                     # Log successful command for debugging (matching APT implementation)
-                    if logger_helpers:
-                        logger_helpers.log_subprocess_result(
-                            "Pacman command", ["sudo", "pacman"] + list(args), result
-                        )
+                    logger.log_subprocess_result(
+                        "Pacman command", ["sudo", "pacman"] + list(args), result
+                    )
                     return result
                 except subprocess.TimeoutExpired:
                     print(
@@ -829,9 +784,7 @@ class Arch(Linux):
             # Check and install base packages
             base_packages = ["git", "base-devel"]
             print("Checking base development tools...")
-            installed, missing = check_pacman_packages_installed(
-                base_packages, logger_helpers
-            )
+            installed, missing = self.check_packages_installed(base_packages, logger)
 
             if installed:
                 print(f"✅ Already installed: {', '.join(installed)}")
@@ -884,17 +837,16 @@ class Arch(Linux):
                             text=True,
                             timeout=120,  # 2 minutes should be enough for small repo
                         )
-                        if logger_helpers:
-                            logger_helpers.log_subprocess_result(
-                                "Clone yay AUR helper",
-                                [
-                                    "git",
-                                    "clone",
-                                    "https://aur.archlinux.org/yay-bin.git",
-                                    yay_dir,
-                                ],
-                                result,
-                            )
+                        logger.log_subprocess_result(
+                            "Clone yay AUR helper",
+                            [
+                                "git",
+                                "clone",
+                                "https://aur.archlinux.org/yay-bin.git",
+                                yay_dir,
+                            ],
+                            result,
+                        )
 
                         print("Building yay (this will prompt for sudo password)...")
                         # Use streaming subprocess for makepkg to show build progress
@@ -907,12 +859,11 @@ class Arch(Linux):
                             timeout=600,  # 10 minutes for compilation
                             cwd=yay_dir,
                         )
-                        if logger_helpers:
-                            logger_helpers.log_subprocess_result(
-                                "Build yay AUR helper",
-                                ["makepkg", "-si", "--needed", "--noconfirm"],
-                                result,
-                            )
+                        logger.log_subprocess_result(
+                            "Build yay AUR helper",
+                            ["makepkg", "-si", "--needed", "--noconfirm"],
+                            result,
+                        )
                         print("✅ Yay AUR helper installed")
 
                     except Exception:
@@ -929,9 +880,7 @@ class Arch(Linux):
             ].get(self.environment, [])
             print(f"Checking {len(all_packages)} pacman packages...")
 
-            installed, missing = check_pacman_packages_installed(
-                all_packages, logger_helpers
-            )
+            installed, missing = self.check_packages_installed(all_packages, logger)
 
             if installed:
                 print(f"✅ Already installed: {len(installed)} packages")
@@ -955,8 +904,8 @@ class Arch(Linux):
             ].get(self.environment, [])
             if aur_packages and yay_installed:
                 print(f"Checking {len(aur_packages)} AUR packages...")
-                installed_aur, missing_aur = check_pacman_packages_installed(
-                    aur_packages, logger_helpers
+                installed_aur, missing_aur = self.check_packages_installed(
+                    aur_packages, logger
                 )
 
                 if installed_aur:
@@ -1047,10 +996,34 @@ class Arch(Linux):
             raise
 
         # Call parent class
-        super().install_dependencies(logger_helpers)
+        super().install_dependencies(logger)
 
 
 class Debian(Linux):
+    def check_packages_installed(self, packages, logger: LoggingHelpers):
+        """Check which packages are already installed via apt"""
+        if not packages:
+            return [], []
+
+        try:
+            installed = []
+            missing = []
+
+            for package in packages:
+                result = subprocess.run(
+                    ["dpkg", "-l", package], capture_output=True, text=True
+                )
+                # dpkg -l returns 0 and shows 'ii' status for installed packages
+                if result.returncode == 0 and f"ii  {package}" in result.stdout:
+                    installed.append(package)
+                else:
+                    missing.append(package)
+
+            return installed, missing
+        except Exception:
+            # If dpkg check fails, assume all packages need installation
+            return [], packages
+
     def _is_running_in_container(self):
         """
         Detect if we're running inside a container (Docker, Podman, etc.)
@@ -1135,7 +1108,7 @@ class Debian(Linux):
         "zlib1g-dev",  # compression library
     ]
 
-    def install_dependencies(self, logger_helpers=None):
+    def install_dependencies(self, logger: LoggingHelpers):
         """Install packages with retry logic and comprehensive error handling"""
 
         # Pre-configure timezone to prevent tzdata interactive prompts
@@ -1151,9 +1124,9 @@ class Debian(Linux):
         # Why UTC: It's the safest default for containers and automated environments.
         # Real systems preserve their existing timezone settings.
         #
-        # Safety: Only runs in test mode (--test flag) or detected containers,
+        # Safety: Only runs in no-remote mode (--no-remote flag) or detected containers,
         # never on real user systems where timezone might be intentionally set.
-        if self.test_mode or self._is_running_in_container():
+        if self.no_remote_mode or self._is_running_in_container():
             try:
                 print(
                     "Pre-configuring timezone to UTC to prevent interactive prompts..."
@@ -1161,20 +1134,20 @@ class Debian(Linux):
 
                 # Step 1: Create symlink from /etc/localtime to UTC timezone data
                 # This is the primary way Linux systems determine the current timezone
-                run_command_with_error_handling(
+                self.run_command_with_error_handling(
                     ["sudo", "ln", "-fs", "/usr/share/zoneinfo/UTC", "/etc/localtime"],
+                    logger,
                     "Set timezone symlink to UTC",
                     timeout=30,
-                    logger_helpers=logger_helpers,
                 )
 
                 # Step 2: Set the timezone name in /etc/timezone for consistency
                 # Some tools and packages read this file to determine the timezone name
-                run_command_with_error_handling(
+                self.run_command_with_error_handling(
                     ["sudo", "sh", "-c", "echo 'UTC' > /etc/timezone"],
+                    logger,
                     "Set timezone name to UTC",
                     timeout=30,
-                    logger_helpers=logger_helpers,
                 )
 
                 print("✅ Timezone pre-configured to UTC")
@@ -1231,10 +1204,9 @@ class Debian(Linux):
                         **kwargs,
                     )
                     # Log successful command for debugging
-                    if logger_helpers:
-                        logger_helpers.log_subprocess_result(
-                            "APT command", ["sudo", "apt-get"] + list(args), result
-                        )
+                    logger.log_subprocess_result(
+                        "APT command", ["sudo", "apt-get"] + list(args), result
+                    )
                     return result
                 except subprocess.TimeoutExpired:
                     print(
@@ -1285,8 +1257,8 @@ class Debian(Linux):
 
             # Check and install main packages
             print(f"Checking {len(self.apt_packages)} APT packages...")
-            installed, missing = check_apt_packages_installed(
-                self.apt_packages, logger_helpers
+            installed, missing = self.check_packages_installed(
+                self.apt_packages, logger
             )
 
             if installed:
@@ -1406,21 +1378,21 @@ class Debian(Linux):
             raise
 
         # Call parent class
-        super().install_dependencies(logger_helpers)
+        super().install_dependencies(logger)
 
 
-def detect_operating_system(environment="minimal", test_mode=False):
+def detect_operating_system(environment="minimal", no_remote_mode=False):
     """Detect and return the appropriate operating system class"""
     with open("/etc/os-release") as release_file:
         content = release_file.read()
         if 'NAME="Arch Linux"' in content:
-            return Arch(environment=environment, test_mode=test_mode)
+            return Arch(environment=environment, no_remote_mode=no_remote_mode)
         elif 'NAME="CachyOS Linux"' in content:
-            return Arch(environment=environment, test_mode=test_mode)
+            return Arch(environment=environment, no_remote_mode=no_remote_mode)
         elif 'NAME="Garuda Linux"' in content:
-            return Arch(environment=environment, test_mode=test_mode)
+            return Arch(environment=environment, no_remote_mode=no_remote_mode)
         elif "ID=debian" in content or "ID_LIKE=debian" in content:
-            return Debian(environment=environment, test_mode=test_mode)
+            return Debian(environment=environment, no_remote_mode=no_remote_mode)
         else:
             raise NotImplementedError(f"Unknown operating system, found {content}")
 
@@ -1436,7 +1408,7 @@ USAGE:
 OPTIONS:
     --environment {minimal,work,private}
                         Environment configuration to install (default: minimal)
-    --test             Skip remote activities (GitHub, SSH keys, Tailscale) for testing
+    --no-remote        Skip remote activities (GitHub, SSH keys, Tailscale)
     --help             Show this help message and exit
 
 ENVIRONMENTS:
@@ -1457,7 +1429,7 @@ EXAMPLES:
     export DOTFILES_ENVIRONMENT=minimal && uv run init.py   # Install minimal environment
     export DOTFILES_ENVIRONMENT=work && uv run init.py      # Install work environment
     export DOTFILES_ENVIRONMENT=private && uv run init.py   # Install full desktop environment
-    DOTFILES_ENVIRONMENT=minimal uv run init.py --test      # Test installation without remote activities
+    DOTFILES_ENVIRONMENT=minimal uv run init.py --no-remote # Install without remote activities
 
 ENVIRONMENT VARIABLE:
     DOTFILES_ENVIRONMENT    Required. Must be set to: minimal, work, or private
@@ -1468,86 +1440,84 @@ For more information, see the README or CLAUDE.md files.
     print(help_text)
 
 
-def main():
-    """Main entry point with comprehensive error handling"""
-    # Initialize logging
+@click.command()
+@click.option(
+    "--no-remote",
+    is_flag=True,
+    help="Skip remote activities (GitHub, SSH keys, Tailscale)",
+)
+@click.option("--quiet", is_flag=True, help="Suppress non-essential output")
+@click.option("--verbose", is_flag=True, help="Show detailed output")
+def main(no_remote, quiet, verbose):
+    """Install and configure dotfiles for Linux systems
+
+    \\b
+    Environment must be set via DOTFILES_ENVIRONMENT environment variable.
+
+    \\b
+    Examples:
+      export DOTFILES_ENVIRONMENT=minimal && dotfiles-init
+      export DOTFILES_ENVIRONMENT=work && dotfiles-init --no-remote
+      export DOTFILES_ENVIRONMENT=private && dotfiles-init --verbose
+
+    \\b
+    Valid environments: minimal, work, private
+    """
+    # Initialize logging and console output
     logger = setup_logging("init")
     logger.info("init_script_started")
+    output = ConsoleOutput(verbose=verbose, quiet=quiet)
 
     try:
-        parser = argparse.ArgumentParser(
-            description="Install and configure dotfiles for Linux systems",
-            add_help=False,  # Disable default help to use custom help
-        )
-        # Environment must be set via DOTFILES_ENVIRONMENT environment variable
-        # No longer accepting --environment argument to prevent accidental runs
-        parser.add_argument(
-            "--test",
-            action="store_true",
-            help="Skip remote activities (GitHub, SSH keys, Tailscale) for testing",
-        )
-        parser.add_argument(
-            "--help", action="store_true", help="Show detailed help information"
-        )
-
-        args = parser.parse_args()
-
-        if args.help:
-            show_help()
-            return 0
-
         # Get environment from environment variable
         environment = os.environ.get("DOTFILES_ENVIRONMENT")
         if not environment:
-            print("❌ ERROR: DOTFILES_ENVIRONMENT environment variable is not set")
-            print("")
-            print(
-                "💡 You must set the environment variable to one of: minimal, work, private"
+            output.error("DOTFILES_ENVIRONMENT environment variable is not set")
+            output.info(
+                "You must set the environment variable to one of: minimal, work, private"
             )
-            print("💡 Examples:")
-            print("   export DOTFILES_ENVIRONMENT=minimal && uv run init.py")
-            print("   export DOTFILES_ENVIRONMENT=work && uv run init.py")
-            print("   export DOTFILES_ENVIRONMENT=private && uv run init.py")
-            print("")
-            print(
-                "💡 This prevents accidentally running the wrong environment configuration"
+            output.info("Examples:")
+            output.info("   export DOTFILES_ENVIRONMENT=minimal && dotfiles-init")
+            output.info("   export DOTFILES_ENVIRONMENT=work && dotfiles-init")
+            output.info("   export DOTFILES_ENVIRONMENT=private && dotfiles-init")
+            output.info(
+                "This prevents accidentally running the wrong environment configuration"
             )
             return 1
 
         # Validate environment value
         valid_environments = ["minimal", "work", "private"]
         if environment not in valid_environments:
-            print(f"❌ ERROR: Invalid DOTFILES_ENVIRONMENT '{environment}'")
-            print(f"💡 Must be one of: {', '.join(valid_environments)}")
+            output.error(f"Invalid DOTFILES_ENVIRONMENT '{environment}'")
+            output.info(f"Must be one of: {', '.join(valid_environments)}")
             return 1
 
         # Set up logging context
-        bind_context(environment=environment, test_mode=args.test)
+        bind_context(environment=environment, no_remote_mode=no_remote)
         logger.info(
-            "environment_validated", environment=environment, test_mode=args.test
+            "environment_validated", environment=environment, no_remote_mode=no_remote
         )
 
         # Create logging helpers for use throughout the script
-        logger_helpers = LoggingHelpers()
+        logger = LoggingHelpers(logger)
 
-        print(
-            f"🚀 Installing dotfiles for {environment} environment{' (test mode)' if args.test else ''}"
+        output.status(
+            f"Installing dotfiles for {environment} environment{' (no-remote mode)' if no_remote else ''}",
+            "🚀",
         )
 
         try:
             operating_system = detect_operating_system(
-                environment=environment, test_mode=args.test
+                environment=environment, no_remote_mode=no_remote
             )
         except FileNotFoundError:
-            print(
-                "❌ ERROR: Cannot detect operating system (/etc/os-release not found)"
-            )
-            print("💡 This script only supports Linux distributions")
+            output.error("Cannot detect operating system (/etc/os-release not found)")
+            output.info("This script only supports Linux distributions")
             return 1
         except NotImplementedError as e:
-            print(f"❌ ERROR: {e}")
-            print(
-                "💡 This script currently supports Arch Linux, Garuda Linux, and Debian-based systems"
+            output.error(str(e))
+            output.info(
+                "This script currently supports Arch Linux, Garuda Linux, and Debian-based systems"
             )
             return 1
 
@@ -1558,62 +1528,63 @@ def main():
         steps = [
             (
                 "Installing dependencies",
-                lambda: operating_system.install_dependencies(logger_helpers),
+                lambda: operating_system.install_dependencies(logger),
             ),
-            ("Linking configurations", operating_system.link_configs),
+            ("Linking configurations", lambda: operating_system.link_configs(logger)),
             (
                 "Validating git credential helper",
-                operating_system.validate_git_credential_helper,
+                lambda: operating_system.validate_git_credential_helper(logger),
             ),
-            ("Setting up shell", operating_system.setup_shell),
-            ("Setting up accounts", operating_system.link_accounts),
+            ("Setting up shell", lambda: operating_system.setup_shell(logger)),
+            ("Setting up accounts", lambda: operating_system.link_accounts(logger)),
         ]
 
-        for step_name, step_func in steps:
-            try:
-                logger.info("step_started", step=step_name)
-                print(f"\n🔄 {step_name}...")
-                step_func()
-                logger.info("step_completed", step=step_name)
-                print(f"✅ {step_name} completed successfully")
-            except KeyboardInterrupt:
-                logger.warning("step_interrupted", step=step_name)
-                print(f"\n❌ {step_name} interrupted by user")
-                return 130  # Standard exit code for SIGINT
-            except Exception as e:
-                logger.error(
-                    "step_failed",
-                    step=step_name,
-                    error=str(e),
-                    error_type=type(e).__name__,
-                )
-                print(f"❌ ERROR in {step_name}: {e}")
-                print("\n🔍 DETAILED ERROR INFORMATION:")
-                print("-" * 50)
-                traceback.print_exc()
-                print("-" * 50)
-                print("💡 Check the error details above and retry")
-                return 1
+        # Use Rich progress bar for the installation steps
+        with output.progress_context() as progress:
+            task = progress.add_task("Installing dotfiles...", total=len(steps))
 
-        logger.info(
+            for i, (step_name, step_func) in enumerate(steps):
+                try:
+                    logger.log_info("step_started", step=step_name)
+                    progress.update(task, description=f"🔄 {step_name}...")
+                    step_func()
+                    logger.log_info("step_completed", step=step_name)
+                    output.success(f"{step_name} completed successfully")
+                    progress.advance(task)
+                except KeyboardInterrupt:
+                    logger.log_warning("step_interrupted", step=step_name)
+                    output.error(f"{step_name} interrupted by user")
+                    return 130  # Standard exit code for SIGINT
+                except Exception as e:
+                    logger.log_exception(
+                        e,
+                        "step_failed",
+                    )
+                    output.error(f"ERROR in {step_name}: {e}")
+                    if verbose:
+                        output.info("DETAILED ERROR INFORMATION:")
+                        traceback.print_exc()
+                        output.info("Check the error details above and retry")
+                    return 1
+
+        logger.log_info(
             "installation_completed", restart_required=operating_system.restart_required
         )
-        print("\n🎉 Dotfiles installation completed successfully!")
+        output.success("Dotfiles installation completed successfully!", "🎉")
 
         # Only show restart warning if changes were made
         if operating_system.restart_required:
-            print(
-                "💡 You may need to restart your terminal or run 'source ~/.config/fish/config.fish' for changes to take effect"
+            output.info(
+                "You may need to restart your terminal or run 'source ~/.config/fish/config.fish' for changes to take effect"
             )
         return 0
 
     except Exception as e:
-        print(f"❌ UNEXPECTED ERROR: {e}")
-        print("\n🔍 DETAILED ERROR INFORMATION:")
-        print("-" * 50)
-        traceback.print_exc()
-        print("-" * 50)
-        print("💡 Please report this issue with the full error message")
+        output.error(f"UNEXPECTED ERROR: {e}")
+        if verbose:
+            output.info("DETAILED ERROR INFORMATION:")
+            traceback.print_exc()
+        output.info("Please report this issue with the full error message")
         return 1
 
 

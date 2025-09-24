@@ -9,6 +9,8 @@ description = "Personal dotfiles and system management tools"
 requires-python = ">=3.12.3"
 dependencies = [
     "structlog>=25.4.0",
+    "rich>=13.0.0",
+    "click>=8.0.0",
 ]
 
 [project.scripts]

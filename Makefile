@@ -1,4 +1,4 @@
-.PHONY: test test-arch test-debian test-ubuntu clean help cache-start cache-stop cache-stats cache-images
+.PHONY: test test-arch test-debian test-ubuntu test-compile clean help cache-start cache-stop cache-stats cache-images
 
 # Container Test Configuration - Comprehensive Improvements
 #
@@ -47,6 +47,7 @@
 help:
 	@echo "Available targets:"
 	@echo "  test        - Run tests on all supported OS containers"
+	@echo "  test-compile- Quick compilation test (check help methods work)"
 	@echo "  test-arch   - Test on Arch Linux container"
 	@echo "  test-debian - Test on Debian container"
 	@echo "  test-ubuntu - Test on Ubuntu container"
@@ -60,6 +61,20 @@ help:
 # Run all tests
 test: test-arch test-debian test-ubuntu
 	@echo "✅ All tests completed"
+
+# Quick compilation test - verify all tools can import and show help
+test-compile:
+	@echo "🔍 Running quick compilation test..."
+	@echo "📦 Installing dependencies..."
+	@uv sync --quiet
+	@echo "✅ Testing dotfiles-init help method..."
+	@uv run dotfiles-init --help > /dev/null
+	@echo "✅ Testing dotfiles-swman help method..."
+	@uv run dotfiles-swman --help > /dev/null
+	@echo "✅ Testing dotfiles-pkgstatus help method..."
+	@uv run dotfiles-pkgstatus --help > /dev/null
+	@echo "🎉 All tools can import and show help successfully!"
+	@echo "✅ Compilation test passed"
 
 # Test on Arch Linux
 test-arch:
@@ -86,7 +101,7 @@ test-arch:
 			UV_LINK_MODE=copy uv sync && \
 			echo '🚀 Starting dotfiles installation...' && \
 			export DOTFILES_ENVIRONMENT=private && \
-			timeout 900 uv run dotfiles-init --test || echo '⚠️ Test timed out after 15 minutes'"
+			timeout 900 uv run dotfiles-init --no-remote || echo '⚠️ Test timed out after 15 minutes'"
 	@echo "✅ Arch Linux test completed"
 
 # Test on Debian
@@ -114,7 +129,7 @@ test-debian:
 			UV_LINK_MODE=copy uv sync && \
 			echo '🚀 Starting dotfiles installation...' && \
 			export DOTFILES_ENVIRONMENT=private && \
-			timeout 900 uv run dotfiles-init --test || echo '⚠️ Test timed out after 15 minutes'"
+			timeout 900 uv run dotfiles-init --no-remote || echo '⚠️ Test timed out after 15 minutes'"
 	@echo "✅ Debian test completed"
 
 # Test on Ubuntu (Debian-based)
@@ -143,7 +158,7 @@ test-ubuntu:
 			UV_LINK_MODE=copy uv sync && \
 			echo '🚀 Starting dotfiles installation...' && \
 			export DOTFILES_ENVIRONMENT=private && \
-			timeout 900 uv run dotfiles-init --test || echo '⚠️ Test timed out after 15 minutes'"
+			timeout 900 uv run dotfiles-init --no-remote || echo '⚠️ Test timed out after 15 minutes'"
 	@echo "✅ Ubuntu test completed"
 
 # Start caching by creating cache directory and pre-downloading

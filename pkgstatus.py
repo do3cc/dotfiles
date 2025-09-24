@@ -6,7 +6,6 @@ Python backend for the Fish shell pkgstatus function.
 Handles all complex logic for package, git, and init status checking.
 """
 
-import argparse
 import json
 import os
 import subprocess
@@ -15,7 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
 
-from logging_config import setup_logging, bind_context, LoggingHelpers
+import click
+from logging_config import setup_logging, bind_context, LoggingHelpers, ConsoleOutput
 
 
 @dataclass
@@ -490,47 +490,43 @@ class StatusChecker:
             return f"{age // 86400}d ago"
 
 
-def main():
-    # Initialize logging
+@click.command()
+@click.option("--quiet", is_flag=True, help="Only show if issues exist")
+@click.option("--json", "json_output", is_flag=True, help="JSON output")
+@click.option("--refresh", is_flag=True, help="Force cache refresh")
+@click.option("--cache-dir", help="Override cache directory")
+@click.option("--verbose", is_flag=True, help="Show detailed output")
+def main(quiet, json_output, refresh, cache_dir, verbose):
+    """Package and system status checker
+
+    \b
+    To perform updates:
+      Package updates:  Use 'dotfiles-swman --system' or 'dotfiles-swman --all'
+      Git operations:   Use 'git add', 'git commit', 'git push'
+      Init script:      Run 'dotfiles-init' in dotfiles directory
+
+    For more information, see the README or run 'dotfiles-swman --help'
+    """
+    # Initialize logging and console output
     logger = setup_logging("pkgstatus")
-    logger_helpers = LoggingHelpers(logger)
-    logger_helpers.log_info("pkgstatus_started")
-
-    parser = argparse.ArgumentParser(
-        description="Package and system status checker",
-        epilog="""
-To perform updates:
-  Package updates:  Use './swman.py --system' or './swman.py --all'
-  Git operations:   Use 'git add', 'git commit', 'git push'
-  Init script:      Run 'uv run init.py' in dotfiles directory
-
-For more information, see the README or run 'swman.py --help'
-        """,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "--quiet", action="store_true", help="Only show if issues exist"
-    )
-    parser.add_argument("--json", action="store_true", help="JSON output")
-    parser.add_argument("--refresh", action="store_true", help="Force cache refresh")
-    parser.add_argument("--cache-dir", help="Override cache directory")
-
-    args = parser.parse_args()
+    logger = LoggingHelpers(logger)
+    output = ConsoleOutput(verbose=verbose, quiet=quiet)
+    logger.log_info("pkgstatus_started")
 
     # Set up logging context
-    bind_context(quiet=args.quiet, json_output=args.json, refresh=args.refresh)
-    logger_helpers.log_info(
+    bind_context(quiet=quiet, json_output=json_output, refresh=refresh)
+    logger.log_info(
         "pkgstatus_operation_started",
-        quiet=args.quiet,
-        json_output=args.json,
-        refresh=args.refresh,
+        quiet=quiet,
+        json_output=json_output,
+        refresh=refresh,
     )
 
-    checker = StatusChecker(args.cache_dir)
-    status = checker.get_status(args.refresh)
+    checker = StatusChecker(cache_dir)
+    status = checker.get_status(refresh)
 
     # Log status summary
-    logger_helpers.log_info(
+    logger.log_info(
         "status_check_completed",
         packages_status=status.packages.get("status", "unknown"),
         packages_count=status.packages.get("available", 0),
@@ -538,15 +534,21 @@ For more information, see the README or run 'swman.py --help'
         init_status=status.init.get("status", "unknown"),
     )
 
-    if args.json:
-        output = {"packages": status.packages, "git": status.git, "init": status.init}
-        print(json.dumps(output, indent=2))
-    elif args.quiet:
-        output = checker.format_quiet_output(status)
-        if output:  # Only print if there are issues
-            print(output)
+    if json_output:
+        status_output = {
+            "packages": status.packages,
+            "git": status.git,
+            "init": status.init,
+        }
+        output.json(status_output)
+    elif quiet:
+        quiet_output = checker.format_quiet_output(status)
+        if quiet_output:  # Only print if there are issues
+            click.echo(quiet_output)
     else:
-        print(checker.format_interactive_output(status))
+        # Display interactive output with Rich formatting
+        interactive_output = checker.format_interactive_output(status)
+        click.echo(interactive_output)
 
 
 if __name__ == "__main__":

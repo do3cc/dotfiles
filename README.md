@@ -24,7 +24,7 @@ export DOTFILES_ENVIRONMENT=work && uv run dotfiles-init
 export DOTFILES_ENVIRONMENT=private && uv run dotfiles-init
 
 # Test mode (skip remote activities like GitHub auth)
-export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init --test
+export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init --no-remote
 ```
 
 **Alternative using entry points:**

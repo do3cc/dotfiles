@@ -46,8 +46,8 @@ export DOTFILES_ENVIRONMENT=work && uv run dotfiles-init
 # Private environment
 export DOTFILES_ENVIRONMENT=private && uv run dotfiles-init
 
-# Test mode (skip remote activities)
-export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init --test
+# No-remote mode (skip remote activities)
+export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init --no-remote
 ```
 
 The script handles:
@@ -217,6 +217,56 @@ except Exception as e:
 ```
 
 This enhanced logging provides complete observability into every operation, error, and progress step for production debugging.
+
+## Testing
+
+### Compilation Testing
+
+Before making any changes, always run the compilation test to ensure all tools can import and show help correctly:
+
+```bash
+# Quick compilation test - verifies all tools work
+make test-compile
+```
+
+This test:
+
+- ✅ Installs dependencies with `uv sync`
+- ✅ Tests `dotfiles-init --help`
+- ✅ Tests `dotfiles-swman --help`
+- ✅ Tests `dotfiles-pkgstatus --help`
+- ✅ Ensures all imports and CLI interfaces work
+
+### Full Integration Testing
+
+The repository includes comprehensive integration tests using containers:
+
+```bash
+# Test on all supported OS containers
+make test
+
+# Test individual distributions
+make test-arch     # Arch Linux
+make test-debian   # Debian
+make test-ubuntu   # Ubuntu
+
+# Test with build cache for faster runs
+make cache-start   # Setup cache
+make test          # Run tests with cache
+make cache-stop    # Clean up cache
+```
+
+### Test Development Workflow
+
+When developing new features:
+
+1. **Always run compilation test first**: `make test-compile`
+2. **Make your changes**
+3. **Run compilation test again**: `make test-compile`
+4. **Run pre-commit checks**: `pre-commit run --files <changed-files>`
+5. **Optional: Run full integration tests**: `make test`
+
+The compilation test is fast (~10 seconds) and catches import errors, syntax issues, and CLI interface problems immediately.
 
 ## Important Notes
 

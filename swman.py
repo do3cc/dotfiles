@@ -10,8 +10,6 @@ All package update operations (pacman, yay, uv tools, lazy.nvim, fisher)
 display real-time progress so users can see what packages are being updated.
 """
 
-import argparse
-import json
 import subprocess
 import sys
 import time
@@ -20,7 +18,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from logging_config import setup_logging, bind_context, LoggingHelpers
+import click
+from logging_config import setup_logging, bind_context, LoggingHelpers, ConsoleOutput
 
 
 def run_with_streaming_output(
@@ -437,7 +436,11 @@ class SoftwareManagerOrchestrator:
             try:
                 results[manager.name] = manager.check_updates()
             except Exception as e:
-                print(f"Error checking {manager.name}: {e}")
+                # Log error instead of print - this gets logged to structured logs
+                logger = LoggingHelpers(setup_logging("swman"))
+                logger.log_error(
+                    f"Error checking {manager.name}", error=str(e), manager=manager.name
+                )
                 results[manager.name] = (False, 0)
         return results
 
@@ -481,24 +484,22 @@ class SoftwareManagerOrchestrator:
         return results
 
 
-def print_status_table(check_results: Dict[str, Tuple[bool, int]]):
-    """Print a nice status table."""
-    print("\n📊 Software Manager Status")
-    print("=" * 50)
-    print(f"{'Manager':<15} {'Status':<15} {'Updates':<10}")
-    print("-" * 50)
-
+def print_status_table(
+    check_results: Dict[str, Tuple[bool, int]], output: ConsoleOutput
+):
+    """Print a nice status table using Rich."""
+    rows = []
     for name, (has_updates, count) in check_results.items():
         status = "Updates Available" if has_updates else "Up to Date"
         updates_str = str(count) if count > 0 else "-"
-        print(f"{name:<15} {status:<15} {updates_str:<10}")
+        rows.append([name, status, updates_str])
+
+    output.table("Software Manager Status", ["Manager", "Status", "Updates"], rows)
 
 
-def print_results_summary(results: List[ManagerResult]):
-    """Print update results summary."""
-    print("\n🔄 Update Results")
-    print("=" * 60)
-
+def print_results_summary(results: List[ManagerResult], output: ConsoleOutput):
+    """Print update results summary using Rich."""
+    rows = []
     for result in results:
         status_icon = {
             UpdateStatus.SUCCESS: "✅",
@@ -507,61 +508,60 @@ def print_results_summary(results: List[ManagerResult]):
             UpdateStatus.NOT_AVAILABLE: "⚠️",
         }.get(result.status, "❓")
 
-        print(f"{status_icon} {result.name:<15} {result.message}")
-        if result.duration > 0:
-            print(f"   Duration: {result.duration:.1f}s")
+        duration_str = f"{result.duration:.1f}s" if result.duration > 0 else "-"
+        rows.append([status_icon, result.name, result.message, duration_str])
+
+    output.table(
+        "Update Results", ["Status", "Manager", "Message", "Duration"], rows, emoji="🔄"
+    )
 
 
-def main():
-    # Initialize logging
+@click.command()
+@click.option("--check", is_flag=True, help="Check for updates across all managers")
+@click.option(
+    "--system", is_flag=True, help="Update system packages only (pacman, yay, apt)"
+)
+@click.option("--tools", is_flag=True, help="Update development tools (uv, etc.)")
+@click.option("--plugins", is_flag=True, help="Update plugins (nvim, fish, tmux)")
+@click.option("--all", "update_all", is_flag=True, help="Update everything")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Show what would be updated without actually updating",
+)
+@click.option(
+    "--json", "json_output", is_flag=True, help="Output results in JSON format"
+)
+@click.option("--quiet", is_flag=True, help="Suppress non-essential output")
+@click.option("--verbose", is_flag=True, help="Show detailed output")
+def main(
+    check, system, tools, plugins, update_all, dry_run, json_output, quiet, verbose
+):
+    """Software Manager Orchestrator - Unified package manager updates"""
+
+    # Initialize logging and console output
     logger = setup_logging("swman")
-    logger_helpers = LoggingHelpers(logger)
-    logger_helpers.log_info("swman_started")
+    logger = LoggingHelpers(logger)
+    output = ConsoleOutput(verbose=verbose, quiet=quiet)
+    logger.log_info("swman_started")
 
-    parser = argparse.ArgumentParser(
-        description="Software Manager Orchestrator - Unified package manager updates"
-    )
-    parser.add_argument(
-        "--check", action="store_true", help="Check for updates across all managers"
-    )
-    parser.add_argument(
-        "--system",
-        action="store_true",
-        help="Update system packages only (pacman, yay, apt)",
-    )
-    parser.add_argument(
-        "--tools", action="store_true", help="Update development tools (uv, etc.)"
-    )
-    parser.add_argument(
-        "--plugins", action="store_true", help="Update plugins (nvim, fish, tmux)"
-    )
-    parser.add_argument("--all", action="store_true", help="Update everything")
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be updated without actually updating",
-    )
-    parser.add_argument(
-        "--json", action="store_true", help="Output results in JSON format"
-    )
-
-    args = parser.parse_args()
-
-    if not any([args.check, args.system, args.tools, args.plugins, args.all]):
-        parser.print_help()
+    if not any([check, system, tools, plugins, update_all]):
+        click.echo("Error: Must specify at least one operation")
+        ctx = click.get_current_context()
+        click.echo(ctx.get_help())
         return 1
 
     orchestrator = SoftwareManagerOrchestrator()
 
-    if args.check:
-        logger_helpers.log_info("check_operation_started")
-        print("🔍 Checking for updates...")
+    if check:
+        logger.log_info("check_operation_started")
+        output.status("Checking for updates...")
         check_results = orchestrator.check_all()
         # check_results is Dict[str, Tuple[bool, int]] where tuple is (success, updates_count)
         total_updates = sum(
             r[1] for r in check_results.values() if r[0]
         )  # r[1] is updates_count, r[0] is success
-        logger_helpers.log_info(
+        logger.log_info(
             "check_operation_completed",
             total_managers=len(check_results),
             managers_with_updates=sum(
@@ -570,72 +570,69 @@ def main():
             total_updates_available=total_updates,
         )
 
-        if args.json:
-            print(json.dumps(check_results, indent=2))
+        if json_output:
+            output.json(check_results)
         else:
-            print_status_table(check_results)
+            print_status_table(check_results, output)
         return 0
 
     results = []
 
     # Set up operation context
     operation_types = []
-    if args.system:
+    if system:
         operation_types.append("system")
-    if args.tools:
+    if tools:
         operation_types.append("tools")
-    if args.plugins:
+    if plugins:
         operation_types.append("plugins")
-    if args.all:
+    if update_all:
         operation_types.append("all")
 
-    bind_context(operation_types=operation_types, dry_run=args.dry_run)
+    bind_context(operation_types=operation_types, dry_run=dry_run)
 
-    if args.system:
-        logger_helpers.log_info("system_update_started")
-        print("🔄 Updating system packages...")
-        results.extend(orchestrator.update_by_type(ManagerType.SYSTEM, args.dry_run))
+    if system:
+        logger.log_info("system_update_started")
+        output.status("Updating system packages...", "🔄")
+        results.extend(orchestrator.update_by_type(ManagerType.SYSTEM, dry_run))
 
-    if args.tools:
-        logger_helpers.log_info("tools_update_started")
-        print("🔧 Updating development tools...")
-        results.extend(orchestrator.update_by_type(ManagerType.TOOL, args.dry_run))
+    if tools:
+        logger.log_info("tools_update_started")
+        output.status("Updating development tools...", "🔧")
+        results.extend(orchestrator.update_by_type(ManagerType.TOOL, dry_run))
 
-    if args.plugins:
-        logger_helpers.log_info("plugins_update_started")
-        print("🔌 Updating plugins...")
-        results.extend(orchestrator.update_by_type(ManagerType.PLUGIN, args.dry_run))
+    if plugins:
+        logger.log_info("plugins_update_started")
+        output.status("Updating plugins...", "🔌")
+        results.extend(orchestrator.update_by_type(ManagerType.PLUGIN, dry_run))
 
-    if args.all:
-        logger_helpers.log_info("all_update_started")
-        print("🚀 Updating everything...")
-        results.extend(orchestrator.update_all(args.dry_run))
+    if update_all:
+        logger.log_info("all_update_started")
+        output.status("Updating everything...", "🚀")
+        results.extend(orchestrator.update_all(dry_run))
 
-    if args.json:
-        print(
-            json.dumps(
-                [
-                    {
-                        "name": r.name,
-                        "status": r.status.value,
-                        "message": r.message,
-                        "duration": r.duration,
-                        "updates_available": r.updates_available,
-                        "updates_applied": r.updates_applied,
-                    }
-                    for r in results
-                ],
-                indent=2,
-            )
+    if json_output:
+        output.json(
+            [
+                {
+                    "name": r.name,
+                    "status": r.status.value,
+                    "message": r.message,
+                    "duration": r.duration,
+                    "updates_available": r.updates_available,
+                    "updates_applied": r.updates_applied,
+                }
+                for r in results
+            ]
         )
     else:
-        print_results_summary(results)
+        print_results_summary(results, output)
 
     # Log completion and return appropriate exit code
     failed_count = sum(1 for r in results if r.status == UpdateStatus.FAILED)
     success_count = sum(1 for r in results if r.status == UpdateStatus.SUCCESS)
 
-    logger_helpers.log_info(
+    logger.log_info(
         "swman_completed",
         total_operations=len(results),
         successful=success_count,
