@@ -7,17 +7,18 @@ function pkgstatus -d "Show package and system status"
         return 0
     end
 
-    # Find the Python script
-    set -l script_path
-    if test -x "./pkgstatus.py"
-        set script_path "./pkgstatus.py"
-    else if test -x (dirname (status -f))"/../../pkgstatus.py"
-        set script_path (dirname (status -f))"/../../pkgstatus.py"
-    else
-        echo "❌ pkgstatus.py not found" >&2
-        return 1
-    end
+    # Check if we're in the dotfiles repo directory
+    set -l dotfiles_dir (dirname (dirname (status -f)))
 
-    # Pass all arguments directly to Python script
-    $script_path $argv
+    # Use the proper entry point if available, otherwise try uv run
+    if command -v dotfiles-pkgstatus >/dev/null 2>&1
+        # Use the installed entry point
+        dotfiles-pkgstatus $argv
+    else if test -f "$dotfiles_dir/pyproject.toml"
+        # We're in the dotfiles repo, use uv run
+        cd "$dotfiles_dir" && uv run dotfiles-pkgstatus $argv
+    else
+        # Try direct uv run as fallback
+        uv run dotfiles-pkgstatus $argv
+    end
 end
