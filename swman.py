@@ -4,6 +4,10 @@ swman - Software Manager Orchestrator
 
 A unified interface to manage updates across multiple package managers
 and tools. Designed to work with any system, not just dotfiles.
+
+KEY IMPROVEMENT: Now shows full package manager output instead of hiding it.
+All package update operations (pacman, yay, uv tools, lazy.nvim, fisher)
+display real-time progress so users can see what packages are being updated.
 """
 
 import argparse
@@ -17,6 +21,31 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from logging_config import setup_logging, bind_context, log_unused_variables
+
+
+def run_with_streaming_output(command: List[str], timeout: int = 600) -> subprocess.CompletedProcess:
+    """
+    Execute command with real-time output streaming for package managers.
+
+    This function shows full package manager output to users instead of hiding it,
+    while still capturing stderr for error handling and maintaining return codes.
+
+    Args:
+        command: Command to execute as list of strings
+        timeout: Timeout in seconds (default 600 = 10 minutes)
+
+    Returns:
+        CompletedProcess with returncode and stderr (stdout flows to terminal)
+
+    Note: This follows the same pattern used in init.py for APT/pacman streaming.
+    """
+    return subprocess.run(
+        command,
+        check=False,  # Don't raise exception, let caller handle return codes
+        stderr=subprocess.PIPE,  # Capture stderr for error analysis
+        text=True,
+        timeout=timeout
+    )
 
 
 class ManagerType(Enum):
@@ -97,10 +126,9 @@ class PacmanManager(PackageManager):
             )
 
         try:
-            result = subprocess.run(
+            # Use streaming output to show real-time pacman progress
+            result = run_with_streaming_output(
                 ["sudo", "pacman", "-Syu", "--noconfirm"],
-                capture_output=True,
-                text=True,
                 timeout=600
             )
 
@@ -183,10 +211,9 @@ class YayManager(PackageManager):
             )
 
         try:
-            result = subprocess.run(
+            # Use streaming output to show real-time yay/AUR progress
+            result = run_with_streaming_output(
                 ["yay", "-Syu", "--noconfirm"],
-                capture_output=True,
-                text=True,
                 timeout=1800  # 30 minutes for AUR builds
             )
 
@@ -256,10 +283,9 @@ class UvToolsManager(PackageManager):
             )
 
         try:
-            result = subprocess.run(
+            # Use streaming output to show real-time UV tool upgrade progress
+            result = run_with_streaming_output(
                 ["uv", "tool", "upgrade", "--all"],
-                capture_output=True,
-                text=True,
                 timeout=300
             )
 
@@ -322,10 +348,9 @@ class LazyNvimManager(PackageManager):
             )
 
         try:
-            result = subprocess.run(
+            # Use streaming output to show real-time Neovim plugin updates
+            result = run_with_streaming_output(
                 ["nvim", "--headless", "+Lazy! sync", "+qa"],
-                capture_output=True,
-                text=True,
                 timeout=300
             )
 
@@ -379,10 +404,9 @@ class FisherManager(PackageManager):
             )
 
         try:
-            result = subprocess.run(
+            # Use streaming output to show real-time Fish plugin updates
+            result = run_with_streaming_output(
                 ["fish", "-c", "fisher update"],
-                capture_output=True,
-                text=True,
                 timeout=120
             )
 
