@@ -1,14 +1,9 @@
----
-name: PR Validation
+name: PR Workflow
 
-"on":
-  pull_request:
-    branches: [master, main]
-    types: [opened, synchronize, reopened]
+on: [pull_request]
 
 jobs:
-  validate:
-    name: Validate PR
+  build:
     runs-on: ubuntu-latest
 
     steps:
