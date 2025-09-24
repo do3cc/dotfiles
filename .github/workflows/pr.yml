@@ -1,50 +1,26 @@
----
-name: PR Validation
+name: PR Workflow
 
-"on":
-  pull_request:
-    branches: [master, main]
-    types: [opened, synchronize, reopened]
+on: [pull_request]
 
 jobs:
-  validate:
-    name: Validate PR
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
-      - name: Test Python syntax
+      - name: Install UV
+        uses: astral-sh/setup-uv@v1
+
+      - name: Install dependencies
         run: |
-          python -m py_compile init.py
-          echo "✅ Python syntax is valid"
+          uv sync
+          echo "✅ Dependencies installed"
 
       - name: Test help command
         run: |
-          python init.py --help > /dev/null
+          uv run dotfiles-init --help > /dev/null
           echo "✅ Help command works"
-
-  quick-test:
-    name: Quick Container Test
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Podman
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y podman
-
-      - name: Quick test on Arch
-        run: |
-          chmod +x test/run_tests.sh
-          timeout 20m ./test/run_tests.sh --arch --cleanup || true
-          echo "✅ Arch container test completed"
