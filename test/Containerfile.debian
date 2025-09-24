@@ -40,12 +40,6 @@ ENV USER=testuser
 # Create necessary directories
 RUN mkdir -p ~/.config ~/.local/share
 
-# Create fake /etc/os-release for Debian detection
-USER root
-RUN echo 'NAME="Debian GNU/Linux"' > /etc/os-release && \
-    echo 'ID=debian' >> /etc/os-release && \
-    echo 'PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"' >> /etc/os-release
-USER testuser
 
-# Default command runs the init script in test mode
-CMD ["sh", "-c", "uv run init.py --test --environment minimal"]
+# Default command runs two-step approach: help then actual init
+CMD ["sh", "-c", "uv run init.py --help > /dev/null && uv run init.py --environment minimal"]

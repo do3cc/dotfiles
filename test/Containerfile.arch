@@ -39,12 +39,6 @@ ENV USER=testuser
 # Create necessary directories
 RUN mkdir -p ~/.config ~/.local/share
 
-# Create fake /etc/os-release for Arch detection
-USER root
-RUN echo 'NAME="Arch Linux"' > /etc/os-release && \
-    echo 'ID=arch' >> /etc/os-release && \
-    echo 'PRETTY_NAME="Arch Linux"' >> /etc/os-release
-USER testuser
 
-# Default command runs the init script in test mode
-CMD ["sh", "-c", "uv run init.py --test --environment minimal"]
+# Default command runs two-step approach: help then actual init
+CMD ["sh", "-c", "uv run init.py --help > /dev/null && uv run init.py --environment minimal"]

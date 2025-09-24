@@ -30,7 +30,8 @@ run_test() {
 
 	# Run the test
 	echo "🚀 Running test for $distro..."
-	if podman run --rm --name "$container_name" "$image_name" sh -c "uv run init.py --test --environment $environment"; then
+	# Two-step approach: first test --help, then run actual init
+	if podman run --rm --name "$container_name" "$image_name" sh -c "uv run init.py --help > /dev/null && uv run init.py --environment $environment"; then
 		echo "✅ $distro test passed!"
 		return 0
 	else
