@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Code Quality Enforcement
+
+- **ALWAYS run `pre-commit run --files <changed-files>` after editing any code files**
+- **ALWAYS run the pre-commit or prek check when you are done editing files**
+- When editing markdown files, follow the markdownlint rules
+
 ## Overview
 
 This is a personal dotfiles repository for Linux systems (primarily Arch/Garuda) containing configuration files for development tools and shell environments. The repository is structured to support multiple Linux distributions through a Python-based installation system.
@@ -45,6 +51,7 @@ export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init --test
 ```
 
 The script handles:
+
 - Package installation (see `pacman_packages` and `apt_packages` lists in init.py)
 - Configuration linking for: alacritty, direnv, fish, irssi, nvim, tmux, byobu, git
 - Shell setup (defaults to fish shell)
@@ -54,6 +61,7 @@ The script handles:
 ## Architecture
 
 ### Configuration Structure
+
 - Each major tool has its own directory (e.g., `alacritty/`, `fish/`, `tmux/`)
 - Configurations are symlinked to appropriate locations in `~/.config/`
 - The `lazy_nvim/` directory contains a LazyVim-based Neovim configuration
@@ -61,24 +69,29 @@ The script handles:
 ### Key Components
 
 **Fish Shell (`fish/`)**:
+
 - Main config in `config.fish` with starship prompt, direnv integration
 - Custom functions for Git shortcuts and tool integration
 - NVM integration for Node.js version management
 
 **Neovim (`lazy_nvim/`)**:
+
 - LazyVim-based configuration with plugin management
 - Configuration split into `config/` (core settings) and `plugins/` (plugin configurations)
 
 **Tmux (`tmux/`)**:
+
 - Extensive key bindings for pane/window management
 - Vim-tmux integration for seamless navigation
 - Plugin system with resurrect/continuum for session persistence
 
 **Terminal (`alacritty/`)**:
+
 - Comprehensive theme collection in `themes/` directory
 - Main configuration in `alacritty.toml`
 
 ### Development Environment
+
 - Primary shell: Fish with starship prompt
 - Editor: Neovim with LazyVim
 - Terminal multiplexer: Tmux with custom key bindings
@@ -97,6 +110,7 @@ The script handles:
 The repository includes several Python tools accessible via entry points:
 
 ### Software Manager Orchestrator (swman)
+
 Unified tool for managing updates across multiple package managers:
 
 ```bash
@@ -116,6 +130,7 @@ uv run dotfiles-swman --all --dry-run
 ```
 
 ### Package Status Checker (pkgstatus)
+
 System status monitoring for packages, git, and init script status:
 
 ```bash
@@ -139,6 +154,7 @@ uv run dotfiles-pkgstatus --refresh
 All Python tools in this repository must use structured logging via the shared `logging_config.py` module:
 
 ### Standard Setup
+
 ```python
 from logging_config import setup_logging, bind_context, log_unused_variables
 
@@ -147,6 +163,7 @@ logger = setup_logging("script_name")  # e.g. "init", "swman", "pkgstatus"
 ```
 
 ### Enhanced Logging Abstractions
+
 The logging system provides comprehensive abstractions for production debugging:
 
 - **`log_error()`, `log_warning()`, `log_info()`** - Simple severity-based logging
@@ -157,6 +174,7 @@ The logging system provides comprehensive abstractions for production debugging:
 - **`log_package_operation()`** - Package manager operations logging
 
 ### Logging Conventions
+
 - **JSON format**: All logs are structured JSON written to `~/.cache/dotfiles/logs/dotfiles.log`
 - **User interaction**: Use `print()` for user-facing messages, logs are for debugging/monitoring
 - **Context binding**: Use `bind_context()` to set operation-wide context variables
@@ -164,11 +182,13 @@ The logging system provides comprehensive abstractions for production debugging:
 - **Global logger**: All abstractions automatically use the global logger set by `setup_logging()`
 
 ### Log File Management
+
 - **Location**: `~/.cache/dotfiles/logs/dotfiles.log`
 - **Rotation**: Automatic via Python's RotatingFileHandler (10MB, 5 backups)
 - **Format**: JSON with timestamp, log level, message, context, and metadata
 
 ### Enhanced Logging Examples
+
 ```python
 from logging_config import (
     setup_logging, bind_context,

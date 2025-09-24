@@ -9,9 +9,13 @@ import time
 import traceback
 
 from logging_config import (
-    setup_logging, bind_context, log_unused_variables,
-    log_error, log_warning, log_info, log_progress,
-    log_subprocess_result, log_exception, log_file_operation, log_package_operation
+    setup_logging,
+    bind_context,
+    log_error,
+    log_info,
+    log_progress,
+    log_subprocess_result,
+    log_exception,
 )
 
 
@@ -23,7 +27,9 @@ def run_command_with_error_handling(
     command, description="Command", timeout=300, **kwargs
 ):
     """Run a subprocess command with comprehensive error handling and logging"""
-    log_info("command_starting", description=description, command=command, timeout=timeout)
+    log_info(
+        "command_starting", description=description, command=command, timeout=timeout
+    )
 
     try:
         result = subprocess.run(
@@ -39,21 +45,22 @@ def run_command_with_error_handling(
         log_subprocess_result(description, command, result)
         return result
 
-    except subprocess.TimeoutExpired as e:
-        log_error("command_timeout",
-                 description=description,
-                 command=command,
-                 timeout=timeout)
+    except subprocess.TimeoutExpired:
+        log_error(
+            "command_timeout", description=description, command=command, timeout=timeout
+        )
         print(f"❌ ERROR: {description} timed out after {timeout} seconds")
         print(f"🔍 Command: {' '.join(command)}")
         raise
     except subprocess.CalledProcessError as e:
-        log_error("command_failed",
-                 description=description,
-                 command=command,
-                 returncode=e.returncode,
-                 stdout=e.stdout,
-                 stderr=e.stderr)
+        log_error(
+            "command_failed",
+            description=description,
+            command=command,
+            returncode=e.returncode,
+            stdout=e.stdout,
+            stderr=e.stderr,
+        )
         print(f"❌ ERROR: {description} failed: {e}")
         print(f"🔍 Command: {' '.join(command)}")
         if e.stdout:
@@ -70,7 +77,9 @@ def run_command_with_error_handling(
 
 def check_pacman_packages_installed(packages):
     """Check which packages are already installed via pacman"""
-    log_info("checking_pacman_packages", package_count=len(packages), packages=packages[:10])
+    log_info(
+        "checking_pacman_packages", package_count=len(packages), packages=packages[:10]
+    )
 
     if not packages:
         log_info("no_packages_to_check")
@@ -80,7 +89,9 @@ def check_pacman_packages_installed(packages):
         result = subprocess.run(
             ["pacman", "-Q"] + packages, capture_output=True, text=True
         )
-        log_subprocess_result("bulk pacman package check", ["pacman", "-Q"] + packages[:5], result)
+        log_subprocess_result(
+            "bulk pacman package check", ["pacman", "-Q"] + packages[:5], result
+        )
 
         # pacman -Q returns 0 if all packages are installed
         if result.returncode == 0:
@@ -101,11 +112,13 @@ def check_pacman_packages_installed(packages):
             else:
                 missing.append(package)
 
-        log_info("package_check_completed",
-                installed_count=len(installed),
-                missing_count=len(missing),
-                installed=installed[:10],
-                missing=missing[:10])
+        log_info(
+            "package_check_completed",
+            installed_count=len(installed),
+            missing_count=len(missing),
+            installed=installed[:10],
+            missing=missing[:10],
+        )
         return installed, missing
     except Exception as e:
         log_exception(e, "pacman package check failed", packages=packages)
@@ -220,27 +233,35 @@ class Linux:
                     text=True,
                     timeout=300,  # 5 minute timeout
                 )
-                log_subprocess_result("NVM installation", ["/usr/bin/bash", nvm_script], result)
+                log_subprocess_result(
+                    "NVM installation", ["/usr/bin/bash", nvm_script], result
+                )
                 log_progress("nvm_installed_successfully")
                 print("✅ NVM installed successfully")
 
-            except subprocess.TimeoutExpired as e:
+            except subprocess.TimeoutExpired:
                 log_error("nvm_installation_timeout", timeout=300)
                 print("❌ ERROR: NVM installation timed out (network issues?)")
                 print("💡 Try: Check internet connection and run again")
                 raise
             except subprocess.CalledProcessError as e:
-                log_error("nvm_installation_failed",
-                         returncode=e.returncode,
-                         stdout=e.stdout,
-                         stderr=e.stderr)
-                print(f"❌ ERROR: NVM installation failed with exit code {e.returncode}")
+                log_error(
+                    "nvm_installation_failed",
+                    returncode=e.returncode,
+                    stdout=e.stdout,
+                    stderr=e.stderr,
+                )
+                print(
+                    f"❌ ERROR: NVM installation failed with exit code {e.returncode}"
+                )
                 if e.stderr:
                     print(f"💡 Error output: {e.stderr}")
                 print("💡 Try: Check network connection and script permissions")
                 raise
             except FileNotFoundError as e:
-                log_exception(e, "NVM installation file not found", script_path=nvm_script)
+                log_exception(
+                    e, "NVM installation file not found", script_path=nvm_script
+                )
                 if "/usr/bin/bash" in str(e):
                     print("❌ ERROR: Bash not found at /usr/bin/bash")
                     print("💡 Try: Install bash or update the script")
@@ -549,9 +570,12 @@ class Arch(Linux):
         "neovim",  # modern Vim text editor
         "nmap",  # network discovery and scanning
         "npm",  # Node.js package manager
+        "prettier",  # code formatter for JS/TS/JSON/YAML/MD
         "python-pip",  # Global pip
         "rsync",  # file synchronization tool
+        "shfmt",  # shell script formatter
         "starship",  # cross-shell prompt
+        "stylua",  # Lua code formatter
         "tectonic",  # LaTeX engine
         "the_silver_searcher",  # fast text search tool
         "tig",  # text-mode Git interface
@@ -648,7 +672,9 @@ class Arch(Linux):
                     text=True,
                     timeout=1800,  # 30 minutes for system updates (can be large)
                 )
-                log_subprocess_result("System update", ["sudo", "pacman", "-Syu", "--noconfirm"], result)
+                log_subprocess_result(
+                    "System update", ["sudo", "pacman", "-Syu", "--noconfirm"], result
+                )
                 print("✅ System update completed successfully")
                 self.mark_system_updated()
             else:
@@ -665,7 +691,9 @@ class Arch(Linux):
                 text=True,
                 timeout=1800,  # 30 minutes for system updates (can be large)
             )
-            log_subprocess_result("System update", ["sudo", "pacman", "-Syu", "--noconfirm"], result)
+            log_subprocess_result(
+                "System update", ["sudo", "pacman", "-Syu", "--noconfirm"], result
+            )
             print("✅ System update completed successfully")
             self.mark_system_updated()
         except Exception:
@@ -715,7 +743,9 @@ class Arch(Linux):
                         **kwargs,
                     )
                     # Log successful command for debugging (matching APT implementation)
-                    log_subprocess_result(f"Pacman command", ["sudo", "pacman"] + list(args), result)
+                    log_subprocess_result(
+                        "Pacman command", ["sudo", "pacman"] + list(args), result
+                    )
                     return result
                 except subprocess.TimeoutExpired:
                     print(
@@ -810,7 +840,16 @@ class Arch(Linux):
                             text=True,
                             timeout=120,  # 2 minutes should be enough for small repo
                         )
-                        log_subprocess_result("Clone yay AUR helper", ["git", "clone", "https://aur.archlinux.org/yay-bin.git", yay_dir], result)
+                        log_subprocess_result(
+                            "Clone yay AUR helper",
+                            [
+                                "git",
+                                "clone",
+                                "https://aur.archlinux.org/yay-bin.git",
+                                yay_dir,
+                            ],
+                            result,
+                        )
 
                         print("Building yay (this will prompt for sudo password)...")
                         # Use streaming subprocess for makepkg to show build progress
@@ -823,7 +862,11 @@ class Arch(Linux):
                             timeout=600,  # 10 minutes for compilation
                             cwd=yay_dir,
                         )
-                        log_subprocess_result("Build yay AUR helper", ["makepkg", "-si", "--needed", "--noconfirm"], result)
+                        log_subprocess_result(
+                            "Build yay AUR helper",
+                            ["makepkg", "-si", "--needed", "--noconfirm"],
+                            result,
+                        )
                         print("✅ Yay AUR helper installed")
 
                     except Exception:
@@ -996,7 +1039,11 @@ class Debian(Linux):
                 with open("/proc/1/cgroup", "r") as f:
                     content = f.read()
                     # Look for container runtime signatures in the cgroup path
-                    if "docker" in content or "containerd" in content or "podman" in content:
+                    if (
+                        "docker" in content
+                        or "containerd" in content
+                        or "podman" in content
+                    ):
                         return True
 
             # Check if running in virtualized environment that might need timezone setup
@@ -1060,14 +1107,16 @@ class Debian(Linux):
         # never on real user systems where timezone might be intentionally set.
         if self.test_mode or self._is_running_in_container():
             try:
-                print("Pre-configuring timezone to UTC to prevent interactive prompts...")
+                print(
+                    "Pre-configuring timezone to UTC to prevent interactive prompts..."
+                )
 
                 # Step 1: Create symlink from /etc/localtime to UTC timezone data
                 # This is the primary way Linux systems determine the current timezone
                 run_command_with_error_handling(
                     ["sudo", "ln", "-fs", "/usr/share/zoneinfo/UTC", "/etc/localtime"],
                     "Set timezone symlink to UTC",
-                    timeout=30
+                    timeout=30,
                 )
 
                 # Step 2: Set the timezone name in /etc/timezone for consistency
@@ -1075,13 +1124,15 @@ class Debian(Linux):
                 run_command_with_error_handling(
                     ["sudo", "sh", "-c", "echo 'UTC' > /etc/timezone"],
                     "Set timezone name to UTC",
-                    timeout=30
+                    timeout=30,
                 )
 
                 print("✅ Timezone pre-configured to UTC")
             except Exception as e:
                 print(f"⚠️  WARNING: Could not pre-configure timezone: {e}")
-                print("💡 This may cause interactive prompts during package installation")
+                print(
+                    "💡 This may cause interactive prompts during package installation"
+                )
         else:
             print("✅ Skipping timezone pre-configuration (running on real system)")
 
@@ -1130,7 +1181,9 @@ class Debian(Linux):
                         **kwargs,
                     )
                     # Log successful command for debugging
-                    log_subprocess_result(f"APT command", ["sudo", "apt-get"] + list(args), result)
+                    log_subprocess_result(
+                        "APT command", ["sudo", "apt-get"] + list(args), result
+                    )
                     return result
                 except subprocess.TimeoutExpired:
                     print(
@@ -1420,7 +1473,9 @@ def main():
 
         # Set up logging context
         bind_context(environment=environment, test_mode=args.test)
-        logger.info("environment_validated", environment=environment, test_mode=args.test)
+        logger.info(
+            "environment_validated", environment=environment, test_mode=args.test
+        )
 
         print(
             f"🚀 Installing dotfiles for {environment} environment{' (test mode)' if args.test else ''}"
@@ -1470,10 +1525,12 @@ def main():
                 print(f"\n❌ {step_name} interrupted by user")
                 return 130  # Standard exit code for SIGINT
             except Exception as e:
-                logger.error("step_failed",
-                           step=step_name,
-                           error=str(e),
-                           error_type=type(e).__name__)
+                logger.error(
+                    "step_failed",
+                    step=step_name,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
                 print(f"❌ ERROR in {step_name}: {e}")
                 print("\n🔍 DETAILED ERROR INFORMATION:")
                 print("-" * 50)
@@ -1482,7 +1539,9 @@ def main():
                 print("💡 Check the error details above and retry")
                 return 1
 
-        logger.info("installation_completed", restart_required=operating_system.restart_required)
+        logger.info(
+            "installation_completed", restart_required=operating_system.restart_required
+        )
         print("\n🎉 Dotfiles installation completed successfully!")
 
         # Only show restart warning if changes were made
