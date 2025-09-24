@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import click
-from logging_config import setup_logging, bind_context, LoggingHelpers, ConsoleOutput
+from logging_config import setup_logging, bind_context, ConsoleOutput
 
 
 @dataclass
@@ -509,7 +509,7 @@ def main(quiet, json_output, refresh, cache_dir, verbose):
     """
     # Initialize logging and console output
     logger = setup_logging("pkgstatus")
-    logger = LoggingHelpers(logger)
+    # Logger is already a LoggingHelpers instance from setup_logging
     output = ConsoleOutput(verbose=verbose, quiet=quiet)
     logger.log_info("pkgstatus_started")
 

@@ -23,7 +23,7 @@ from rich.table import Table
 from rich import print as rich_print
 
 
-def setup_logging(script_name: str) -> structlog.BoundLogger:
+def setup_logging(script_name: str) -> "LoggingHelpers":
     """
     Configure structured logging for a dotfiles Python tool.
 
@@ -31,7 +31,7 @@ def setup_logging(script_name: str) -> structlog.BoundLogger:
         script_name: Name of the script (e.g., "init", "swman", "pkgstatus")
 
     Returns:
-        Configured structlog logger
+        LoggingHelpers instance with configured logger
     """
     # Ensure log directory exists
     log_dir = Path.home() / ".cache" / "dotfiles" / "logs"
@@ -76,7 +76,8 @@ def setup_logging(script_name: str) -> structlog.BoundLogger:
     logger = structlog.get_logger()
     logger = logger.bind(script=script_name, pid=os.getpid())
 
-    return logger
+    # Return LoggingHelpers instance directly
+    return LoggingHelpers(logger)
 
 
 def bind_context(**kwargs) -> None:

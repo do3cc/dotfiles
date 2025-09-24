@@ -1506,8 +1506,7 @@ def main(no_remote, quiet, verbose):
             "environment_validated", environment=environment, no_remote_mode=no_remote
         )
 
-        # Create logging helpers for use throughout the script
-        logger = LoggingHelpers(logger)
+        # Logger is already a LoggingHelpers instance from setup_logging
 
         output.status(
             f"Installing dotfiles for {environment} environment{' (no-remote mode)' if no_remote else ''}",
