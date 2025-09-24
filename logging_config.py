@@ -66,9 +66,6 @@ def setup_logging(script_name: str) -> structlog.BoundLogger:
     logger = structlog.get_logger()
     logger = logger.bind(script=script_name, pid=os.getpid())
 
-    # Set as global logger for convenience functions
-    set_global_logger(logger)
-
     return logger
 
 
@@ -108,95 +105,82 @@ def log_unused_variables(logger: structlog.BoundLogger, **variables) -> None:
     logger.debug("unused_variables_context", **variables)
 
 
-# Global logger instance for convenience
-_global_logger = None
-
-
-def get_logger() -> structlog.BoundLogger:
-    """Get the current global logger instance."""
-    return _global_logger
-
-
-def set_global_logger(logger: structlog.BoundLogger) -> None:
-    """Set the global logger instance."""
-    global _global_logger
-    _global_logger = logger
-
-
-# Logging helpers that automatically use global logger
-def log_error(message: str, **context) -> None:
-    """Log error with context."""
-    if _global_logger:
-        _global_logger.error(message, **context)
-
-
-def log_warning(message: str, **context) -> None:
-    """Log warning with context."""
-    if _global_logger:
-        _global_logger.warning(message, **context)
-
-
-def log_info(message: str, **context) -> None:
-    """Log info with context."""
-    if _global_logger:
-        _global_logger.info(message, **context)
-
-
-def log_progress(message: str, **context) -> None:
-    """Log progress/status information."""
-    if _global_logger:
-        _global_logger.info("progress", message=message, **context)
-
-
-def log_subprocess_result(description: str, command: list, result, **context) -> None:
+class LoggingHelpers:
     """
-    Log comprehensive subprocess execution details.
+    Helper class for common logging operations that takes a logger instance.
 
-    Args:
-        description: Human readable description of the command
-        command: The command that was executed
-        result: subprocess.CompletedProcess result
-        **context: Additional context
+    Follows Hynek's principle of explicit dependency injection instead of global state.
     """
-    if not _global_logger:
-        return
 
-    base_data = {
-        "operation": "subprocess",
-        "description": description,
-        "command": command,
-        "returncode": result.returncode,
-        **context,
-    }
+    def __init__(self, logger: structlog.BoundLogger):
+        self.logger = logger
 
-    if result.returncode == 0:
-        _global_logger.info("subprocess_success", **base_data)
-    else:
-        _global_logger.error("subprocess_failed", **base_data)
+    def log_error(self, message: str, **context) -> None:
+        """Log error with context."""
+        self.logger.error(message, **context)
 
-    # Always log stdout/stderr for debugging regardless of success
-    if result.stdout:
-        _global_logger.debug(
-            "subprocess_stdout", description=description, stdout=result.stdout.strip()
-        )
+    def log_warning(self, message: str, **context) -> None:
+        """Log warning with context."""
+        self.logger.warning(message, **context)
 
-    if result.stderr:
-        _global_logger.debug(
-            "subprocess_stderr", description=description, stderr=result.stderr.strip()
-        )
+    def log_info(self, message: str, **context) -> None:
+        """Log info with context."""
+        self.logger.info(message, **context)
 
+    def log_progress(self, message: str, **context) -> None:
+        """Log progress/status information."""
+        self.logger.info("progress", message=message, **context)
 
-def log_exception(exception: Exception, context_msg: str, **context) -> None:
-    """
-    Log exception with full context and traceback.
+    def log_subprocess_result(
+        self, description: str, command: list, result, **context
+    ) -> None:
+        """
+        Log comprehensive subprocess execution details.
 
-    Args:
-        exception: The exception that occurred
-        context_msg: Human readable context about what was happening
-        **context: Additional context
-    """
-    if _global_logger:
-        _global_logger.error(
+        Args:
+            description: Human readable description of the command
+            command: The command that was executed
+            result: subprocess.CompletedProcess result
+            **context: Additional context
+        """
+        base_data = {
+            "operation": "subprocess",
+            "description": description,
+            "command": command,
+            "returncode": result.returncode,
+            **context,
+        }
+
+        if result.returncode == 0:
+            self.logger.info("subprocess_success", **base_data)
+        else:
+            self.logger.error("subprocess_failed", **base_data)
+
+        # Always log stdout/stderr for debugging regardless of success
+        if result.stdout:
+            self.logger.debug(
+                "subprocess_stdout",
+                description=description,
+                stdout=result.stdout.strip(),
+            )
+
+        if result.stderr:
+            self.logger.debug(
+                "subprocess_stderr",
+                description=description,
+                stderr=result.stderr.strip(),
+            )
+
+    def log_exception(self, exception: Exception, context_msg: str, **context) -> None:
+        """
+        Log exception with full context and traceback.
+
+        Args:
+            exception: The exception that occurred
+            context_msg: Human readable context about what was happening
+            **context: Additional context
+        """
+        self.logger.error(
             "exception_occurred",
             context=context_msg,
             exception_type=type(exception).__name__,
@@ -204,40 +188,38 @@ def log_exception(exception: Exception, context_msg: str, **context) -> None:
             **context,
         )
 
+    def log_file_operation(
+        self, operation: str, path: str, success: bool, **context
+    ) -> None:
+        """
+        Log file system operations.
 
-def log_file_operation(operation: str, path: str, success: bool, **context) -> None:
-    """
-    Log file system operations.
-
-    Args:
-        operation: Type of operation (create, link, delete, etc.)
-        path: File path involved
-        success: Whether operation succeeded
-        **context: Additional context
-    """
-    if _global_logger:
+        Args:
+            operation: Type of operation (create, link, delete, etc.)
+            path: File path involved
+            success: Whether operation succeeded
+            **context: Additional context
+        """
         level = "info" if success else "error"
-        getattr(_global_logger, level)(
+        getattr(self.logger, level)(
             "file_operation", operation=operation, path=path, success=success, **context
         )
 
+    def log_package_operation(
+        self, manager: str, operation: str, packages: list, success: bool, **context
+    ) -> None:
+        """
+        Log package manager operations.
 
-def log_package_operation(
-    manager: str, operation: str, packages: list, success: bool, **context
-) -> None:
-    """
-    Log package manager operations.
-
-    Args:
-        manager: Package manager name (pacman, yay, apt, etc.)
-        operation: Operation type (install, update, check, etc.)
-        packages: List of packages involved
-        success: Whether operation succeeded
-        **context: Additional context
-    """
-    if _global_logger:
+        Args:
+            manager: Package manager name (pacman, yay, apt, etc.)
+            operation: Operation type (install, update, check, etc.)
+            packages: List of packages involved
+            success: Whether operation succeeded
+            **context: Additional context
+        """
         level = "info" if success else "error"
-        getattr(_global_logger, level)(
+        getattr(self.logger, level)(
             "package_operation",
             manager=manager,
             operation=operation,

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
 
-from logging_config import setup_logging, bind_context
+from logging_config import setup_logging, bind_context, LoggingHelpers
 
 
 @dataclass
@@ -493,7 +493,8 @@ class StatusChecker:
 def main():
     # Initialize logging
     logger = setup_logging("pkgstatus")
-    logger.info("pkgstatus_started")
+    logger_helpers = LoggingHelpers(logger)
+    logger_helpers.log_info("pkgstatus_started")
 
     parser = argparse.ArgumentParser(
         description="Package and system status checker",
@@ -518,7 +519,7 @@ For more information, see the README or run 'swman.py --help'
 
     # Set up logging context
     bind_context(quiet=args.quiet, json_output=args.json, refresh=args.refresh)
-    logger.info(
+    logger_helpers.log_info(
         "pkgstatus_operation_started",
         quiet=args.quiet,
         json_output=args.json,
@@ -529,7 +530,7 @@ For more information, see the README or run 'swman.py --help'
     status = checker.get_status(args.refresh)
 
     # Log status summary
-    logger.info(
+    logger_helpers.log_info(
         "status_check_completed",
         packages_status=status.packages.get("status", "unknown"),
         packages_count=status.packages.get("available", 0),
