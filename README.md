@@ -106,3 +106,5 @@ The installation system (`init.py`) detects the operating system and:
 - Configures authentication for services
 
 Supports Arch/Garuda (pacman/yay) and Debian-based systems (apt).
+
+# Trigger PR update
