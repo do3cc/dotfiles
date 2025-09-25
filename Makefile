@@ -120,8 +120,9 @@ test-debian:
 	@podman run --rm \
 		-e DOTFILES_ENVIRONMENT=private \
 		-e PYTHONUNBUFFERED=1 \
-		-v $(PWD):/dotfiles:Z \
+		-v $(PWD):/dotfiles:O \
 		-v ~/.cache/dotfiles-build/uv-cache:/cache/uv-cache:Z \
+		-v ~/.cache/dotfiles-build/uv-python-cache:/home/testuser/.local/share/uv/python:Z \
 		-w /dotfiles \
 		dotfiles-test-debian \
 		bash -c "set -x && \
