@@ -27,16 +27,3 @@ jobs:
         run: |
           uv run dotfiles-init --help > /dev/null
           echo "✅ Help command works"
-
-      - name: Install UV
-        uses: astral-sh/setup-uv@v1
-
-      - name: Install dependencies
-        run: |
-          uv sync
-          echo "✅ Dependencies installed"
-
-      - name: Test help command
-        run: |
-          uv run dotfiles-init --help > /dev/null
-          echo "✅ Help command works"
