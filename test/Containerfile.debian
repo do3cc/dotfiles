@@ -1,4 +1,4 @@
-FROM debian:bookworm
+FROM public.ecr.aws/docker/library/debian:bookworm
 
 # Update system and install basic dependencies
 RUN apt-get update && apt-get install -y \
