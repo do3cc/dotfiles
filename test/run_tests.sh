@@ -30,7 +30,7 @@ run_test() {
 
 	# Run the test
 	echo "🚀 Running test for $distro..."
-	if podman run --rm --name "$container_name" "$image_name" sh -c "uv run init.py --test --environment $environment"; then
+	if podman run --rm --name "$container_name" "$image_name" sh -c "DOTFILES_ENVIRONMENT=$environment uv run dotfiles-init --no-remote"; then
 		echo "✅ $distro test passed!"
 		return 0
 	else
