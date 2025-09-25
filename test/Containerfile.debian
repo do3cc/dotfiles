@@ -44,5 +44,5 @@ RUN mkdir -p ~/.config ~/.local/share && \
     git config --global init.defaultBranch main
 
 
-# Default command runs the init script in no-remote mode
-CMD ["sh", "-c", "DOTFILES_ENVIRONMENT=minimal uv run dotfiles-init --no-remote"]
+# Default command runs two-step approach: help then actual init
+CMD ["sh", "-c", "DOTFILES_ENVIRONMENT=minimal uv run dotfiles-init --help > /dev/null && uv run dotfiles-init --no-remote"]
