@@ -1,4 +1,4 @@
-FROM archlinux:latest
+FROM ghcr.io/archlinux/archlinux:latest
 
 # Update system and install basic dependencies
 RUN pacman -Syu --noconfirm && \
