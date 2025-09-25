@@ -1,0 +1,30 @@
+FROM ubuntu:22.04
+
+# Set environment to avoid interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Update system and install essential tools
+RUN apt-get update && \
+    apt-get install -y \
+        sudo \
+        curl
+
+# Create a non-root user for testing
+RUN useradd -m -s /bin/bash testuser && \
+    echo 'testuser ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+
+# Switch to test user
+USER testuser
+WORKDIR /home/testuser
+
+# Set environment variables
+ENV HOME=/home/testuser
+ENV USER=testuser
+ENV PATH="/home/testuser/.local/bin:$PATH"
+
+# Install uv for the test user
+RUN curl -LsSf https://astral.sh/uv/install.sh -o ~/uv-install.sh && \
+    chmod +x ~/uv-install.sh && \
+    ~/uv-install.sh
+
+CMD ["/bin/bash"]
