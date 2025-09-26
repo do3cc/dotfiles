@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dotfiles"
+version = "0.1.0"
+description = "Personal dotfiles and system management tools"
+requires-python = ">=3.12.3"
+dependencies = [
+    "structlog>=25.4.0",
+    "rich>=13.0.0",
+    "click>=8.0.0",
+]
+
+[project.scripts]
+dotfiles-init = "init:main"
+dotfiles-swman = "swman:main"
+dotfiles-pkgstatus = "pkgstatus:main"
+
+[tool.hatch.build.targets.wheel]
+include = [
+    "init.py",
+    "swman.py",
+    "pkgstatus.py",
+    "logging_config.py"
+]
