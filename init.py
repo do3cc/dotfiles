@@ -23,7 +23,6 @@ class Linux:
         ("fish", "fish"),
         ("lazy_nvim", "nvim"),
         ("tmux", "tmux"),
-        ("byobu", "byobu"),
         ("git", "git"),
     ]
 
@@ -154,7 +153,6 @@ class Arch(Linux):
     pacman_packages = [
         "ast-grep",  # structural code search tool
         "bat",  # syntax highlighted cat alternative
-        "byobu",  # terminal multiplexer frontend
         "direnv",  # environment variable manager
         "eza",  # modern ls replacement
         "fd",  # fast find replacement
@@ -289,7 +287,6 @@ class Debian(Linux):
         "ack",  # text search tool
         "apt-file",  # search files in packages
         "build-essential",  # compilation tools and libraries
-        "byobu",  # terminal multiplexer frontend
         "curl",  # command line URL tool
         "direnv",  # environment variable manager
         "fish",  # friendly interactive shell

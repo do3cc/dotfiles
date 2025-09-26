@@ -63,8 +63,6 @@ Desktop.ini
 # VS Code
 .vscode
 
-.byobu/.ssh-agent
-.byobu/.metadata_available
 .direnv
 
 **/.claude/settings.local.json
