@@ -136,11 +136,31 @@ class StatusChecker:
 
         if swman_cmd:
             try:
+                # CRITICAL SAFETY: Log the exact command being executed to ensure it's read-only
+                from logging_config import setup_logging, LoggingHelpers
+
+                logger = LoggingHelpers(setup_logging("pkgstatus"))
+                logger.log_info(
+                    "swman_invocation_for_check",
+                    command=[swman_cmd, "--check", "--json"],
+                    mode="READ_ONLY",
+                    purpose="package_status_check",
+                    context="shell_startup",
+                )
+
                 result = subprocess.run(
                     [swman_cmd, "--check", "--json"],
                     capture_output=True,
                     text=True,
                     timeout=30,
+                )
+
+                logger.log_info(
+                    "swman_invocation_completed",
+                    returncode=result.returncode,
+                    mode="READ_ONLY",
+                    purpose="package_status_check",
+                    context="shell_startup",
                 )
 
                 if result.returncode == 0:

@@ -261,9 +261,15 @@ class UvToolsManager(PackageManager):
         return self._command_exists("uv")
 
     def check_updates(self) -> Tuple[bool, int]:
-        # UV doesn't have a direct "check updates" command
-        # We'd need to parse `uv tool list` and check each tool
-        return True, 0  # Assume updates available for now
+        """Check for UV tool updates.
+
+        UV doesn't provide a simple way to check for tool updates without actually
+        updating them. To avoid false positives during shell startup checks,
+        we return False to indicate no updates are available for checking.
+
+        Users should manually run 'uv tool upgrade --all' or use swman --tools.
+        """
+        return False, 0  # Cannot check UV tool updates without updating
 
     def update(self, dry_run: bool = False) -> ManagerResult:
         start_time = time.time()
@@ -322,8 +328,15 @@ class LazyNvimManager(PackageManager):
         return lazy_path.exists() and self._command_exists("nvim")
 
     def check_updates(self) -> Tuple[bool, int]:
-        # Lazy.nvim has automatic checking enabled in your config
-        return True, 0  # Assume updates available
+        """Check for Neovim plugin updates.
+
+        Lazy.nvim doesn't provide a command-line way to check for updates without
+        opening Neovim. To avoid false positives during shell startup checks,
+        we return False to indicate no updates are available for checking.
+
+        Users should manually run ':Lazy sync' in Neovim or use swman --plugins.
+        """
+        return False, 0  # Cannot check lazy.nvim updates from command line
 
     def update(self, dry_run: bool = False) -> ManagerResult:
         start_time = time.time()
@@ -376,7 +389,15 @@ class FisherManager(PackageManager):
         )
 
     def check_updates(self) -> Tuple[bool, int]:
-        return True, 0  # Assume updates available
+        """Check for Fish plugin updates.
+
+        Fisher doesn't provide a command to check for updates without updating.
+        To avoid false positives during shell startup checks, we return False
+        to indicate no updates are available for checking.
+
+        Users should manually run 'fisher update' or use swman --plugins.
+        """
+        return False, 0  # Cannot check fisher updates without updating
 
     def update(self, dry_run: bool = False) -> ManagerResult:
         start_time = time.time()
@@ -430,18 +451,41 @@ class SoftwareManagerOrchestrator:
         return [mgr for mgr in self.managers if mgr.is_available()]
 
     def check_all(self) -> Dict[str, Tuple[bool, int]]:
-        """Check all managers for updates."""
+        """Check all managers for updates. This method is READ-ONLY and never performs installations."""
+        logger = LoggingHelpers(setup_logging("swman"))
+        logger.log_info("check_all_started", operation="READ_ONLY_CHECK")
         results = {}
         for manager in self.get_available_managers():
             try:
-                results[manager.name] = manager.check_updates()
+                logger.log_info(
+                    "checking_manager_updates",
+                    manager=manager.name,
+                    manager_type=manager.type.value,
+                    operation="READ_ONLY_CHECK",
+                )
+                # CRITICAL: Only call check_updates(), never update()
+                has_updates, count = manager.check_updates()
+                results[manager.name] = (has_updates, count)
+                logger.log_info(
+                    "manager_check_completed",
+                    manager=manager.name,
+                    has_updates=has_updates,
+                    count=count,
+                    operation="READ_ONLY_CHECK",
+                )
             except Exception as e:
-                # Log error instead of print - this gets logged to structured logs
-                logger = LoggingHelpers(setup_logging("swman"))
                 logger.log_error(
-                    f"Error checking {manager.name}", error=str(e), manager=manager.name
+                    "manager_check_failed",
+                    error=str(e),
+                    manager=manager.name,
+                    operation="READ_ONLY_CHECK",
                 )
                 results[manager.name] = (False, 0)
+        logger.log_info(
+            "check_all_completed",
+            operation="READ_ONLY_CHECK",
+            managers_checked=len(results),
+        )
         return results
 
     def update_by_type(
@@ -554,8 +598,35 @@ def main(
     orchestrator = SoftwareManagerOrchestrator()
 
     if check:
-        logger.log_info("check_operation_started")
+        logger.log_info("check_operation_started", mode="READ_ONLY")
         output.status("Checking for updates...")
+
+        # CRITICAL SAFETY: Explicitly ensure we're in check-only mode
+        # This prevents any accidental installations during shell startup
+        if system or tools or plugins or update_all:
+            logger.log_error(
+                "invalid_flag_combination",
+                check=True,
+                system=system,
+                tools=tools,
+                plugins=plugins,
+                update_all=update_all,
+                security_violation="Check mode called with update flags",
+            )
+            click.echo("❌ ERROR: --check flag cannot be combined with update flags")
+            click.echo("💡 This prevents accidental installations during status checks")
+            return 1
+
+        logger.log_info(
+            "check_mode_safety_guard",
+            mode="READ_ONLY",
+            system=system,
+            tools=tools,
+            plugins=plugins,
+            update_all=update_all,
+            safety_message="Confirmed no update flags are set during check operation",
+        )
+
         check_results = orchestrator.check_all()
         # check_results is Dict[str, Tuple[bool, int]] where tuple is (success, updates_count)
         total_updates = sum(
@@ -563,6 +634,7 @@ def main(
         )  # r[1] is updates_count, r[0] is success
         logger.log_info(
             "check_operation_completed",
+            mode="READ_ONLY",
             total_managers=len(check_results),
             managers_with_updates=sum(
                 1 for r in check_results.values() if r[0] and r[1] > 0
@@ -571,9 +643,21 @@ def main(
         )
 
         if json_output:
-            output.json(check_results)
+            # Convert tuples to JSON-serializable format for pkgstatus compatibility
+            json_results = {
+                name: {"has_updates": has_updates, "count": count}
+                for name, (has_updates, count) in check_results.items()
+            }
+            output.json(json_results)
         else:
             print_status_table(check_results, output)
+
+        # CRITICAL SAFETY: Log that we're exiting check mode without any installations
+        logger.log_info(
+            "check_operation_exit",
+            mode="READ_ONLY",
+            exit_message="Exiting check mode without performing any installations",
+        )
         return 0
 
     results = []
