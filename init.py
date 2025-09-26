@@ -385,7 +385,7 @@ class Linux:
                 user_entry = pwd.getpwuid(os.getuid())
                 if not user_entry.pw_shell.endswith("/fish"):
                     print(f"Changing shell from {user_entry.pw_shell} to fish")
-                    self.self.run_command_with_error_handling(
+                    self.run_command_with_error_handling(
                         ["chsh", "-s", "/usr/bin/fish"], logger, "Change shell to fish"
                     )
                     self.restart_required = True
