@@ -12,6 +12,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a personal dotfiles repository for Linux systems (primarily Arch/Garuda) containing configuration files for development tools and shell environments. The repository is structured to support multiple Linux distributions through a Python-based installation system.
 
+## Repository Information
+
+- **Main branch**: `main` (not `master`)
+- **Default remote**: `origin`
+- **Protected branches**: `main` requires PR reviews and status checks
+
+## AI Assistant Workflow Rules
+
+### Branch Management
+
+- **ALWAYS fetch before branching**: `git fetch origin main`
+- **ALWAYS branch from latest main**: `git checkout -b new-branch origin/main`
+- **NEVER work directly on main branch**
+- **ALWAYS use worktrees for significant changes**: `git worktree add ../feature-branch new-branch`
+- **ALWAYS rebase/merge against current main before PR**
+
+### Safe Development Practices
+
+- **Verify branch is up-to-date**: Check that your branch base matches `origin/main`
+- **Small, incremental commits**: Avoid large commits with many file changes
+- **Test before committing**: Run `make test-compile` to verify all tools work
+- **Use conventional commits**: Follow the conventional commit format with `cog commit`
+
+### Worktree Isolation
+
+- Create isolated worktrees for each feature: `git worktree add ../issue-X-impl issue-X-branch`
+- Work in the worktree directory, not the main repository
+- This prevents accidental changes to the main working directory
+- Allows parallel development without context switching
+
 ## Installation and Setup
 
 This repository is structured as a Python package with entry points for all tools. First, install the project dependencies:

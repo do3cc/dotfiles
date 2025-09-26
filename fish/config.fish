@@ -1,5 +1,7 @@
 if status is-interactive
     # Commands to run in interactive sessions can go here
+    # Set default value for fish_prompt_pwd_dir_length to avoid errors
+    set -q fish_prompt_pwd_dir_length; or set -g fish_prompt_pwd_dir_length 1
     starship init fish | source
     direnv hook fish | source
     uv generate-shell-completion fish | source
