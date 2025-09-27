@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import click
-from logging_config import setup_logging, bind_context, LoggingHelpers, ConsoleOutput
+from .logging_config import setup_logging, bind_context, LoggingHelpers, ConsoleOutput
 
 
 @dataclass
