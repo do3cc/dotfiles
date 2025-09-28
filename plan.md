@@ -244,51 +244,154 @@ dotfiles-pkgstatus --refresh
 
 **Question:** Can UV tools provide meaningful update checking without triggering installations?
 
-**Investigation needed:**
+**Research Results:**
 
-- Research `uv tool list` output format
-- Determine if tools can be checked for updates without modifying them
-- Consider implementing proper checking vs marking as indeterminate
+✅ **Current Capabilities (2024-2025):**
+
+- `uv tool list` shows installed tools with their versions in format: `black v24.2.0`
+- Command executes without triggering installations
+- Output is safe for parsing and version comparison
+
+❌ **Current Limitations:**
+
+- No `--outdated` flag available yet (users get error: "unexpected argument '--outdated' found")
+- No built-in way to check for available updates without upgrading
+- Feature actively requested in GitHub issue #9309
+
+**Recommendation:**
+
+- **Implement proper checking**: Parse `uv tool list` output to extract current versions
+- **Mark as indeterminate for now**: Since we can't detect available updates, return `CANNOT_DETERMINE` status
+- **Future enhancement**: When `uv tool list --outdated` becomes available, implement full checking
 
 ### 2. Neovim Plugin Update Detection
 
 **Question:** Can Lazy.nvim check for updates without auto-updating?
 
-**Investigation needed:**
+**Research Results:**
 
-- Review Lazy.nvim API for read-only update checking
-- Test if `--headless` commands trigger installations
-- Determine appropriate read-only checking approach
+✅ **Available Commands:**
+
+- `nvim --headless "+Lazy! sync" +qa` - Primary headless command (but performs updates)
+- `:Lazy update [plugins]` - Update plugins (action-oriented)
+- Background checker with `config.checker.enabled = true`
+
+❌ **Missing Check-Only Functionality:**
+
+- No dedicated `:Lazy check` command for listing outdated plugins without updating
+- No headless command for read-only update checking
+- All documented commands are action-oriented (sync, update, install)
+
+🔄 **Workarounds Available:**
+
+- Enable background checker with notifications disabled: `checker = { enabled = true, notify = false }`
+- Use lockfile comparison: `lazy-lock.json` tracks installed revisions
+- Check statusline component for pending updates (requires interactive mode)
+
+**Recommendation:**
+
+- **Mark as indeterminate**: No reliable headless read-only checking available
+- **Return `CANNOT_DETERMINE`**: Lazy.nvim doesn't support the required functionality
+- **Future enhancement**: Monitor for new API features that enable check-only operations
 
 ### 3. Fish Plugin Update Checking
 
 **Question:** Does Fisher have read-only update checking capabilities?
 
-**Investigation needed:**
+**Research Results:**
 
-- Review Fisher documentation for check-only commands
-- Test Fisher's behavior when checking for updates
-- Implement proper checking if available
+✅ **Available Commands (Fisher v4.4.5):**
+
+- `fisher list [regex]` - List installed plugins (safe, read-only)
+- `fisher update` - Update all installed plugins (performs updates)
+- `fisher update plugin_name` - Update specific plugins (performs updates)
+
+❌ **No Check-Only Functionality:**
+
+- No built-in command to check for plugin updates without installing
+- No `--outdated` or `--check` flags available
+- No dry-run or preview modes
+- Fisher focuses on simplicity and performance, not advanced features
+
+📁 **Plugin Tracking:**
+
+- Installed plugins tracked in `$__fish_config_dir/fish_plugins`
+- Could potentially create custom script to check GitHub releases
+- Would require additional tooling beyond Fisher itself
+
+**Recommendation:**
+
+- **Mark as indeterminate**: Fisher doesn't provide update checking capability
+- **Return `CANNOT_DETERMINE`**: Focus on simplicity means no advanced features
+- **Alternative approach**: Consider custom implementation using GitHub API to check plugin repositories for updates
 
 ### 4. Cache Staleness vs Silent Failures
 
 **Question:** How should the system handle managers that cannot provide update information?
 
-**Decision needed:**
+**Research Results - Best Practices (2024-2025):**
 
-- Should these be cached as "unknown" state?
-- How long should "cannot determine" results be cached?
-- Should there be different cache durations for different manager types?
+🎯 **Cache Management Strategy:**
+
+- Implement proper cache eviction policies with appropriate Time-to-Live (TTL) values
+- Different cache durations for different manager types based on their characteristics
+- Automated cache invalidation to prevent stale data lingering too long
+
+⚠️ **Silent Failure Prevention:**
+
+- Clear distinction between temporary failures vs permanent incapability
+- Comprehensive logging for debugging cache-related issues
+- Automated monitoring to detect when managers become unresponsive
+
+📊 **Recommended Cache Duration Strategy:**
+
+- **Fast managers** (pacman, apt): 5-10 minutes TTL
+- **Slow/unreliable managers** (UV tools, Fisher): 30-60 minutes TTL
+- **Indeterminate managers**: 24 hours TTL (since checking doesn't change)
+- **Failed checks**: 5 minutes TTL (retry sooner for temporary issues)
+
+**Recommended Implementation:**
+
+- **Cache indeterminate states**: Store `CANNOT_DETERMINE` with longer TTL
+- **Differentiated handling**: Don't mix temporary failures with permanent incapability
+- **Graceful degradation**: Silent in quiet mode, informational in normal mode
+- **Health monitoring**: Track which managers consistently fail vs succeed
 
 ### 5. Backwards Compatibility
 
 **Question:** Will changing the return format of check_updates() break existing integrations?
 
-**Investigation needed:**
+**Research Results - API Compatibility Best Practices (2024-2025):**
 
-- Review all callers of check_updates() methods
-- Ensure pkgstatus fish function continues to work
-- Verify JSON output format remains compatible
+🔄 **Semantic Versioning Approach:**
+
+- **Minor version change**: Adding new return states while maintaining existing format
+- **Current format**: `(bool, int)` tuple for `(has_updates, count)`
+- **Enhanced format**: Still `(bool, int)` but with conventional meaning for special values
+
+✅ **Backward-Compatible Solution:**
+
+- **Maintain tuple format**: Keep `(bool, int)` return type
+- **Use conventional values**: `(False, -1)` for `CANNOT_DETERMINE`
+- **Existing code compatibility**: `count > 0` checks still work correctly
+- **Clear semantics**: Negative count indicates incapability, not failure
+
+📊 **Safe Migration Strategy:**
+
+- **Phase 1**: Update internal implementations to use conventional values
+- **Phase 2**: Update callers to handle negative counts appropriately
+- **Phase 3**: Add comprehensive logging for monitoring
+- **No breaking changes**: Existing integrations continue working
+
+**Recommended Implementation:**
+
+- **Keep current API**: `def check_updates(self) -> Tuple[bool, int]:`
+- **New semantics**:
+  - `(True, positive_int)` = updates available
+  - `(False, 0)` = no updates
+  - `(False, -1)` = cannot determine
+- **Gradual enhancement**: Update callers to interpret negative counts as indeterminate
+- **Comprehensive testing**: Verify all existing integration points continue working
 
 ## Success Criteria
 
