@@ -534,6 +534,18 @@ class Linux:
             self.run_command_with_error_handling(
                 ["ssh-add", current_key], logger, "Add SSH key to agent"
             )
+
+            # Create default SSH key symlink for automatic loading
+            default_key_link = expand("~/.ssh/id_ed25519_default")
+            if not exists(default_key_link):
+                try:
+                    os.symlink(current_key, default_key_link)
+                    print(
+                        f"✅ Created SSH key symlink: id_ed25519_default -> {os.path.basename(current_key)}"
+                    )
+                except OSError as e:
+                    print(f"⚠️  WARNING: Could not create SSH key symlink: {e}")
+
             key_name = f'"{socket.gethostname()} {self.environment}"'
             self.run_command_with_error_handling(
                 ["/usr/bin/gh", "ssh-key", "add", f"{current_key}.pub", "-t", key_name],

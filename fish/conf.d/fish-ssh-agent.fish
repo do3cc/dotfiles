@@ -6,10 +6,14 @@ if not __ssh_agent_is_started
     __ssh_agent_start
 end
 
-# Auto-load environment-specific SSH key
-if test -n "$DOTFILES_ENVIRONMENT"
-    set ssh_key_path $HOME/.ssh/id_ed25519_(hostname)_$DOTFILES_ENVIRONMENT
-    if test -f $ssh_key_path
-        ssh-add $ssh_key_path 2>/dev/null
+# Auto-load default SSH key (symlink created by init script)
+set default_key_path $HOME/.ssh/id_ed25519_default
+if test -f $default_key_path
+    # Check if key is already loaded to avoid duplicates
+    if not ssh-add -l | grep -q $default_key_path
+        ssh-add $default_key_path 2>/dev/null
+        if test $status -eq 0
+            echo "✅ SSH key loaded: id_ed25519_default"
+        end
     end
 end
