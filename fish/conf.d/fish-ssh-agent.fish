@@ -7,7 +7,6 @@ if not __ssh_agent_is_started
 end
 
 # Auto-load default SSH key (symlink created by init script)
-set default_key_path $HOME/.ssh/id_ed25519_default
-if test -f $default_key_path
-    ssh-add $default_key_path 2>/dev/null
+if test -f $HOME/.ssh/id_ed25519_default
+    ssh-add $HOME/.ssh/id_ed25519_default 2>/dev/null
 end
