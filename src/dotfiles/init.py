@@ -244,6 +244,47 @@ class Linux:
         else:
             print("✅ Pyenv already installed")
 
+        # Install dotfiles package globally via uv tool
+        logger.log_progress("installing_dotfiles_package_globally")
+        try:
+            print("Installing dotfiles package to ~/.local/bin...")
+            result = subprocess.run(
+                ["uv", "tool", "install", "--editable", "."],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            logger.log_subprocess_result(
+                "Install dotfiles package globally",
+                ["uv", "tool", "install", "--editable", "."],
+                result,
+            )
+            print("✅ Dotfiles package installed globally to ~/.local/bin")
+        except subprocess.CalledProcessError as e:
+            logger.log_exception(
+                e,
+                "dotfiles_package_installation_failed",
+                returncode=e.returncode,
+                stdout=e.stdout,
+                stderr=e.stderr,
+            )
+            print(f"❌ ERROR: Failed to install dotfiles package: {e}")
+            if e.stderr:
+                print(f"💡 Error output: {e.stderr}")
+            print("💡 Try: Ensure uv is properly installed and configured")
+            raise
+        except subprocess.TimeoutExpired as e:
+            logger.log_exception(e, "dotfiles_package_installation_timeout", timeout=60)
+            print("❌ ERROR: Dotfiles package installation timed out")
+            print("💡 Try: Check internet connection and try again")
+            raise
+        except FileNotFoundError as e:
+            logger.log_exception(e, "uv_command_not_found")
+            print("❌ ERROR: uv command not found")
+            print("💡 Try: Install uv first or ensure it's in PATH")
+            raise
+
     def link_configs(self, logger: LoggingHelpers):
         """Create symlinks with comprehensive error handling"""
         # Ensure ~/.config exists
