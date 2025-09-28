@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import click
-from .logging_config import setup_logging, bind_context, LoggingHelpers
+from .logging_config import setup_logging, bind_context
 from .output_formatting import ConsoleOutput
 
 
@@ -438,7 +438,7 @@ class SoftwareManagerOrchestrator:
                 results[manager.name] = manager.check_updates()
             except Exception as e:
                 # Log error instead of print - this gets logged to structured logs
-                logger = LoggingHelpers(setup_logging("swman"))
+                logger = setup_logging("swman")
                 logger.log_error(
                     f"Error checking {manager.name}", error=str(e), manager=manager.name
                 )
@@ -542,7 +542,6 @@ def main(
 
     # Initialize logging and console output
     logger = setup_logging("swman")
-    logger = LoggingHelpers(logger)
     output = ConsoleOutput(verbose=verbose, quiet=quiet)
     logger.log_info("swman_started")
 

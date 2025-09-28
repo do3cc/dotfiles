@@ -8,7 +8,6 @@ import time
 import traceback
 import urllib.request
 import urllib.error
-
 import click
 from .logging_config import (
     setup_logging,
@@ -425,7 +424,7 @@ class Linux:
                 user_entry = pwd.getpwuid(os.getuid())
                 if not user_entry.pw_shell.endswith("/fish"):
                     print(f"Changing shell from {user_entry.pw_shell} to fish")
-                    self.self.run_command_with_error_handling(
+                    self.run_command_with_error_handling(
                         ["chsh", "-s", "/usr/bin/fish"], logger, "Change shell to fish"
                     )
                     self.restart_required = True
@@ -1511,7 +1510,7 @@ def main(no_remote, quiet, verbose):
     """
     # Initialize logging and console output
     logger = setup_logging("init")
-    logger.info("init_script_started")
+    logger.log_info("init_script_started")
     output = ConsoleOutput(verbose=verbose, quiet=quiet)
 
     try:
@@ -1540,12 +1539,9 @@ def main(no_remote, quiet, verbose):
 
         # Set up logging context
         bind_context(environment=environment, no_remote_mode=no_remote)
-        logger.info(
+        logger.log_info(
             "environment_validated", environment=environment, no_remote_mode=no_remote
         )
-
-        # Create logging helpers for use throughout the script
-        logger = LoggingHelpers(logger)
 
         output.status(
             f"Installing dotfiles for {environment} environment{' (no-remote mode)' if no_remote else ''}",
