@@ -476,9 +476,9 @@ class Linux:
         except Exception as e:
             print(f"Warning: Could not check/change shell: {e}")
 
-    def link_accounts(self, logger: LoggingHelpers):
+    def link_accounts(self, logger: LoggingHelpers, output: ConsoleOutput):
         if self.no_remote_mode:
-            print("No-remote mode: Skipping GitHub and SSH key setup")
+            output.info("No-remote mode: Skipping GitHub and SSH key setup")
             return
 
         try:
@@ -540,17 +540,11 @@ class Linux:
             if not exists(default_key_link):
                 try:
                     os.symlink(current_key, default_key_link)
-                    logger.log_info(
-                        "ssh_key_symlink_created",
-                        symlink_path="id_ed25519_default",
-                        target_key=os.path.basename(current_key),
+                    output.success(
+                        f"Created SSH key symlink: id_ed25519_default -> {os.path.basename(current_key)}"
                     )
                 except OSError as e:
-                    logger.log_warning(
-                        "ssh_key_symlink_creation_failed",
-                        symlink_path=default_key_link,
-                        error=str(e),
-                    )
+                    output.error(f"Could not create SSH key symlink: {e}")
 
             key_name = f'"{socket.gethostname()} {self.environment}"'
             self.run_command_with_error_handling(
@@ -1618,7 +1612,10 @@ def main(no_remote, quiet, verbose):
                 lambda: operating_system.validate_git_credential_helper(logger),
             ),
             ("Setting up shell", lambda: operating_system.setup_shell(logger)),
-            ("Setting up accounts", lambda: operating_system.link_accounts(logger)),
+            (
+                "Setting up accounts",
+                lambda: operating_system.link_accounts(logger, output),
+            ),
         ]
 
         # Use Rich progress bar for the installation steps
