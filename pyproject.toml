@@ -14,15 +14,10 @@ dependencies = [
 ]
 
 [project.scripts]
-dotfiles-init = "init:main"
-dotfiles-swman = "swman:main"
-dotfiles-pkgstatus = "pkgstatus:main"
+dotfiles-init = "dotfiles.init:main"
+dotfiles-swman = "dotfiles.swman:main"
+dotfiles-pkgstatus = "dotfiles.pkgstatus:main"
 
 [tool.hatch.build.targets.wheel]
-include = [
-    "init.py",
-    "swman.py",
-    "pkgstatus.py",
-    "logging_config.py"
-]
+packages = ["src/dotfiles"]
 # Trigger PR update
