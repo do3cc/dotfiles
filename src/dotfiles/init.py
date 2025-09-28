@@ -1469,7 +1469,7 @@ def main(no_remote, quiet, verbose):
     """
     # Initialize logging and console output
     logger = setup_logging("init")
-    logger.info("init_script_started")
+    logger.log_info("init_script_started")
     output = ConsoleOutput(verbose=verbose, quiet=quiet)
 
     try:
@@ -1498,7 +1498,7 @@ def main(no_remote, quiet, verbose):
 
         # Set up logging context
         bind_context(environment=environment, no_remote_mode=no_remote)
-        logger.info(
+        logger.log_info(
             "environment_validated", environment=environment, no_remote_mode=no_remote
         )
 
