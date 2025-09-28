@@ -1,11 +1,14 @@
+from dataclasses import dataclass, field
 from datetime import datetime
 import os
 from os.path import abspath, exists, expanduser
+from pathlib import Path
 import socket
 import subprocess
 import sys
 import time
 import traceback
+from typing import List, Tuple, Optional, Dict
 import urllib.request
 import urllib.error
 import click
@@ -21,58 +24,77 @@ def expand(path):
     return abspath(expanduser(path))
 
 
-def check_systemd_service_status(service):
-    """Check if a systemd service is enabled and active"""
-    try:
-        # Check if service is enabled
-        enabled_result = subprocess.run(
-            ["systemctl", "is-enabled", service], capture_output=True, text=True
-        )
-        is_enabled = (
-            enabled_result.returncode == 0 and "enabled" in enabled_result.stdout
-        )
-
-        # Check if service is active
-        active_result = subprocess.run(
-            ["systemctl", "is-active", service], capture_output=True, text=True
-        )
-        is_active = active_result.returncode == 0 and "active" in active_result.stdout
-
-        return is_enabled, is_active
-    except Exception:
-        # If systemctl check fails, assume service needs setup
-        return False, False
-
-
 def ensure_path(path):
     if not exists(expand(path)):
         os.makedirs(expand(path))
 
 
+@dataclass
+class EnvironmentConfig:
+    """Type-safe configuration for a specific environment."""
+
+    # Package management
+    packages: List[str] = field(default_factory=list)
+    aur_packages: List[str] = field(default_factory=list)
+
+    # Configuration directories: (source_dir, target_dir)
+    config_dirs: List[Tuple[str, str]] = field(default_factory=list)
+
+    # System services to enable
+    systemd_services: List[str] = field(default_factory=list)
+
+    # Environment-specific overrides
+    ssh_key_email: Optional[str] = None
+
+    def merge_with(self, base_config: "EnvironmentConfig") -> "EnvironmentConfig":
+        """Merge this config with a base, with this taking priority."""
+        return EnvironmentConfig(
+            packages=base_config.packages + self.packages,
+            aur_packages=base_config.aur_packages + self.aur_packages,
+            config_dirs=base_config.config_dirs + self.config_dirs,
+            systemd_services=base_config.systemd_services + self.systemd_services,
+            ssh_key_email=self.ssh_key_email or base_config.ssh_key_email,
+        )
+
+
 class Linux:
-    config_dirs = [
-        ("alacritty", "alacritty"),
-        ("direnv", "direnv"),
-        ("fish", "fish"),
-        ("lazy_nvim", "nvim"),
-        ("tmux", "tmux"),
-        ("git", "git"),
-    ]
-
-    ssh_key_email = "sshkeys@patrick-gerken.de"
-
-    environment_specific = {
-        "config_dirs": {
-            "private": [
-                ("irssi", "irssi"),
-            ]
-        },
-        "ssh_key_email": {"work": "patrick.gerken@zumtobelgroup.com"},
-    }
-
     def __init__(self, environment="minimal", no_remote_mode=False):
         self.environment = environment
         self.no_remote_mode = no_remote_mode
+        # Single source of truth for this environment's configuration
+        self.config = self._build_environment_config(environment)
+
+    def _get_base_config(self) -> EnvironmentConfig:
+        """Get base configuration for Linux systems."""
+        return EnvironmentConfig(
+            config_dirs=[
+                ("alacritty", "alacritty"),
+                ("direnv", "direnv"),
+                ("fish", "fish"),
+                ("lazy_nvim", "nvim"),
+                ("tmux", "tmux"),
+                ("git", "git"),
+            ],
+            ssh_key_email="sshkeys@patrick-gerken.de",
+        )
+
+    def _get_environment_configs(self) -> Dict[str, EnvironmentConfig]:
+        """Get environment-specific configurations."""
+        return {
+            "private": EnvironmentConfig(
+                config_dirs=[("irssi", "irssi")],
+            ),
+            "work": EnvironmentConfig(
+                ssh_key_email="patrick.gerken@zumtobelgroup.com",
+            ),
+        }
+
+    def _build_environment_config(self, environment: str) -> EnvironmentConfig:
+        """Build complete configuration for an environment."""
+        base = self._get_base_config()
+        env_configs = self._get_environment_configs()
+        env_specific = env_configs.get(environment, EnvironmentConfig())
+        return env_specific.merge_with(base)
 
     def run_command_with_error_handling(
         self,
@@ -138,7 +160,31 @@ class Linux:
             print(f"🔍 Command: {' '.join(command)}")
             raise
 
-    def install_dependencies(self, logger: LoggingHelpers):
+    def check_systemd_service_status(self, service):
+        """Check if a systemd service is enabled and active"""
+        try:
+            # Check if service is enabled
+            enabled_result = subprocess.run(
+                ["systemctl", "is-enabled", service], capture_output=True, text=True
+            )
+            is_enabled = (
+                enabled_result.returncode == 0 and "enabled" in enabled_result.stdout
+            )
+
+            # Check if service is active
+            active_result = subprocess.run(
+                ["systemctl", "is-active", service], capture_output=True, text=True
+            )
+            is_active = (
+                active_result.returncode == 0 and "active" in active_result.stdout
+            )
+
+            return is_enabled, is_active
+        except Exception:
+            # If systemctl check fails, assume service needs setup
+            return False, False
+
+    def install_dependencies(self, logger: LoggingHelpers, output: ConsoleOutput):
         """Install NVM and Pyenv with proper error handling"""
         logger.log_progress("starting_dependency_installation")
 
@@ -150,13 +196,13 @@ class Linux:
             nvm_script = "doesnotexist"
             try:
                 logger.log_progress("installing_nvm")
-                print("Installing NVM...")
+                output.status("Installing NVM...")
                 nvm_script = expand("./install_scripts/install_nvm.sh")
 
                 if not exists(nvm_script):
                     logger.log_error("nvm_script_not_found", script_path=nvm_script)
-                    print("❌ ERROR: NVM installation script not found")
-                    print(f"💡 Expected: {nvm_script}")
+                    output.error("NVM installation script not found")
+                    output.info(f"Expected: {nvm_script}")
                     raise FileNotFoundError(f"NVM script not found: {nvm_script}")
 
                 logger.log_info("executing_nvm_script", script=nvm_script)
@@ -171,12 +217,12 @@ class Linux:
                     "NVM installation", ["/usr/bin/bash", nvm_script], result
                 )
                 logger.log_progress("nvm_installed_successfully")
-                print("✅ NVM installed successfully")
+                output.success("NVM installed successfully")
 
             except subprocess.TimeoutExpired as e:
                 logger.log_exception(e, "nvm_installation_timeout", timeout=300)
-                print("❌ ERROR: NVM installation timed out (network issues?)")
-                print("💡 Try: Check internet connection and run again")
+                output.error("NVM installation timed out (network issues?)")
+                output.info("Try: Check internet connection and run again")
                 raise
             except subprocess.CalledProcessError as e:
                 logger.log_exception(
@@ -186,26 +232,24 @@ class Linux:
                     stdout=e.stdout,
                     stderr=e.stderr,
                 )
-                print(
-                    f"❌ ERROR: NVM installation failed with exit code {e.returncode}"
-                )
+                output.error(f"NVM installation failed with exit code {e.returncode}")
                 if e.stderr:
-                    print(f"💡 Error output: {e.stderr}")
-                print("💡 Try: Check network connection and script permissions")
+                    output.info(f"Error output: {e.stderr}")
+                output.info("Try: Check network connection and script permissions")
                 raise
             except FileNotFoundError as e:
                 logger.log_exception(
                     e, "NVM installation file not found", script_path=nvm_script
                 )
                 if "/usr/bin/bash" in str(e):
-                    print("❌ ERROR: Bash not found at /usr/bin/bash")
-                    print("💡 Try: Install bash or update the script")
+                    output.error("Bash not found at /usr/bin/bash")
+                    output.info("Try: Install bash or update the script")
                 else:
-                    print(f"❌ ERROR: {e}")
+                    output.error(f"{e}")
                 raise
         else:
             logger.log_info("nvm_already_installed", nvm_path=nvm_path)
-            print("✅ NVM already installed")
+            output.success("NVM already installed")
 
         # Install Pyenv
         pyenv_path = expand("~/.config/pyenv")
@@ -295,10 +339,7 @@ class Linux:
             print("💡 Try: Check home directory permissions")
             raise
 
-        for config_dir_src, config_dir_target in (
-            self.config_dirs
-            + self.environment_specific["config_dirs"].get(self.environment, [])
-        ):
+        for config_dir_src, config_dir_target in self.config.config_dirs:
             target_path = expand(f"~/.config/{config_dir_target}")
             source_path = expand(f"./{config_dir_src}")
 
@@ -474,9 +515,7 @@ class Linux:
         current_key = expand(f"~/.ssh/id_ed25519_{key_suffix}")
 
         if not exists(current_key):
-            ssh_key_email = self.environment_specific["ssh_key_email"].get(
-                self.environment, self.ssh_key_email
-            )
+            ssh_key_email = self.config.ssh_key_email
             self.run_command_with_error_handling(
                 [
                     "ssh-keygen",
@@ -520,78 +559,86 @@ class Linux:
 
 
 class Arch(Linux):
-    aur_packages = [
-        "google-java-format",  # Java formatting tool
-        "nodejs-markdown-toc",  # TOC Generator in javascript
-        "tmux-plugin-manager",  # Tmux Plugin Manager (TPM)
-    ]
-    pacman_packages = [
-        "ast-grep",  # structural code search tool
-        "bat",  # syntax highlighted cat alternative
-        "direnv",  # environment variable manager
-        "eza",  # modern ls replacement
-        "fd",  # fast find replacement
-        "fish",  # friendly interactive shell
-        "git",  # version control system
-        "github-cli",  # GitHub command line interface
-        "glab",  # GitLab command line interface
-        "htop",  # interactive process viewer
-        "jdk-openjdk",  # Java development kit
-        "jq",  # JSON command line processor
-        "texlive-latex",  # for markdown rendering
-        "lazygit",  # git cli used by lazy vim
-        "less",  # terminal pager
-        "lua51",  # Lua scripting language
-        "luarocks",  # Lua package manager
-        "man-db",  # manual page database
-        "markdownlint-cli2",  # linter for markdown
-        "mermaid-cli",  # diagram generation tool
-        "neovim",  # modern Vim text editor
-        "nmap",  # network discovery and scanning
-        "npm",  # Node.js package manager
-        "prettier",  # code formatter for JS/TS/JSON/YAML/MD
-        "python-pip",  # Global pip
-        "rsync",  # file synchronization tool
-        "shfmt",  # shell script formatter
-        "starship",  # cross-shell prompt
-        "stylua",  # Lua code formatter
-        "tectonic",  # LaTeX engine
-        "the_silver_searcher",  # fast text search tool
-        "tig",  # text-mode Git interface
-        "tealdeer",  # fast tldr client
-        "tree-sitter-cli",  # parser generator tool
-        "uv",  # fast Python package manager
-        "wget",  # web file downloader
-        "yarn",  # Node.js package manager
-    ]
+    def _get_base_config(self) -> EnvironmentConfig:
+        """Get base configuration for Arch Linux systems."""
+        base = super()._get_base_config()
+        arch_config = EnvironmentConfig(
+            packages=[
+                "ast-grep",  # structural code search tool
+                "bat",  # syntax highlighted cat alternative
+                "direnv",  # environment variable manager
+                "eza",  # modern ls replacement
+                "fd",  # fast find replacement
+                "fish",  # friendly interactive shell
+                "git",  # version control system
+                "github-cli",  # GitHub command line interface
+                "glab",  # GitLab command line interface
+                "htop",  # interactive process viewer
+                "jdk-openjdk",  # Java development kit
+                "jq",  # JSON command line processor
+                "texlive-latex",  # for markdown rendering
+                "lazygit",  # git cli used by lazy vim
+                "less",  # terminal pager
+                "lua51",  # Lua scripting language
+                "luarocks",  # Lua package manager
+                "man-db",  # manual page database
+                "markdownlint-cli2",  # linter for markdown
+                "mermaid-cli",  # diagram generation tool
+                "neovim",  # modern Vim text editor
+                "nmap",  # network discovery and scanning
+                "npm",  # Node.js package manager
+                "prettier",  # code formatter for JS/TS/JSON/YAML/MD
+                "python-pip",  # Global pip
+                "rsync",  # file synchronization tool
+                "shfmt",  # shell script formatter
+                "starship",  # cross-shell prompt
+                "stylua",  # Lua code formatter
+                "tectonic",  # LaTeX engine
+                "the_silver_searcher",  # fast text search tool
+                "tig",  # text-mode Git interface
+                "tealdeer",  # fast tldr client
+                "tree-sitter-cli",  # parser generator tool
+                "uv",  # fast Python package manager
+                "wget",  # web file downloader
+                "yarn",  # Node.js package manager
+            ],
+            aur_packages=[
+                "google-java-format",  # Java formatting tool
+                "nodejs-markdown-toc",  # TOC Generator in javascript
+                "tmux-plugin-manager",  # Tmux Plugin Manager (TPM)
+            ],
+        )
+        return arch_config.merge_with(base)
 
-    environment_specific = {
-        "aur_packages": {
-            "private": [
-                "hyprshot",  # Hyprland screenshot tool
-            ]
-        },
-        "pacman_packages": {
-            "private": [
-                "bitwarden",  # password manager
-                "firefox",  # web browser
-                "ghostscript",  # PostScript and PDF interpreter
-                "imagemagick",  # image manipulation toolkit
-                "noto-fonts-emoji",  # emoji font collection
-                "otf-font-awesome",  # icon font
-                "python-gobject",  # Python GObject bindings
-                "tailscale",  # mesh VPN service
-            ]
-        },
-        "systemd_services_to_enable": {
-            "private": [
-                "tailscaled",
-            ]
-        },
-        "config_dirs": Linux.environment_specific["config_dirs"],
-        "ssh_key_email": Linux.environment_specific["ssh_key_email"],
-    }
-    systemd_services_to_enable = []
+    def _get_environment_configs(self) -> Dict[str, EnvironmentConfig]:
+        """Get environment-specific configurations for Arch Linux."""
+        base_configs = super()._get_environment_configs()
+
+        # Add Arch-specific environment configurations
+        arch_configs = {
+            "private": EnvironmentConfig(
+                packages=[
+                    "bitwarden",  # password manager
+                    "firefox",  # web browser
+                    "ghostscript",  # PostScript and PDF interpreter
+                    "imagemagick",  # image manipulation toolkit
+                    "noto-fonts-emoji",  # emoji font collection
+                    "otf-font-awesome",  # icon font
+                    "python-gobject",  # Python GObject bindings
+                    "tailscale",  # mesh VPN service
+                ],
+                systemd_services=["tailscaled"],
+            ),
+        }
+
+        # Merge with base configurations
+        merged_configs = {}
+        for env_name in set(base_configs.keys()) | set(arch_configs.keys()):
+            base_env = base_configs.get(env_name, EnvironmentConfig())
+            arch_env = arch_configs.get(env_name, EnvironmentConfig())
+            merged_configs[env_name] = arch_env.merge_with(base_env)
+
+        return merged_configs
 
     def check_packages_installed(self, packages, logger: LoggingHelpers):
         """Check which packages are already installed via pacman"""
@@ -647,40 +694,24 @@ class Arch(Linux):
             # If pacman check fails, assume all packages need installation
             return [], packages
 
-    def should_update_system(self):
-        """Check if system update should be performed (not done in last 24 hours)"""
-        update_marker = expand("~/.cache/dotfiles_last_update")
+    def should_update_system(self) -> bool:
+        """Check if system update needed (not done in last 24 hours)"""
+        marker_file = Path.home() / ".cache" / "dotfiles_last_update"
 
-        if not exists(update_marker):
+        if not marker_file.exists():
             return True
 
         try:
-            with open(update_marker, "r") as f:
-                last_update_str = f.read().strip()
-
-            last_update = datetime.fromisoformat(last_update_str)
-            time_since_update = datetime.now() - last_update
-
-            # Update if more than 24 hours have passed
-            return time_since_update.total_seconds() > 24 * 60 * 60
-
+            last_update = datetime.fromisoformat(marker_file.read_text().strip())
+            return (datetime.now() - last_update).total_seconds() > 86400  # 24 hours
         except (ValueError, OSError):
-            # If we can't read/parse the file, assume we should update
             return True
 
-    def mark_system_updated(self):
-        """Mark that system update was performed"""
-        update_marker = expand("~/.cache/dotfiles_last_update")
-
-        # Ensure cache directory exists
-        cache_dir = os.path.dirname(update_marker)
-        os.makedirs(cache_dir, exist_ok=True)
-
-        try:
-            with open(update_marker, "w") as f:
-                f.write(datetime.now().isoformat())
-        except OSError as e:
-            print(f"⚠️  WARNING: Could not write update marker: {e}")
+    def mark_system_updated(self) -> None:
+        """Mark system as updated with current timestamp"""
+        marker_file = Path.home() / ".cache" / "dotfiles_last_update"
+        marker_file.parent.mkdir(exist_ok=True)
+        marker_file.write_text(datetime.now().isoformat())
 
     def update_system(self, logger: LoggingHelpers):
         """Perform system update if needed"""
@@ -739,7 +770,7 @@ class Arch(Linux):
             print("💡 Try: Run 'sudo pacman -Syu' manually to check for issues")
             raise
 
-    def install_dependencies(self, logger: LoggingHelpers):
+    def install_dependencies(self, logger: LoggingHelpers, output: ConsoleOutput):
         """Install packages with retry logic and comprehensive error handling"""
 
         # Perform system update if needed
@@ -917,9 +948,7 @@ class Arch(Linux):
                     print("✅ Yay source already cloned")
 
             # Check and install main packages
-            all_packages = self.pacman_packages + self.environment_specific[
-                "pacman_packages"
-            ].get(self.environment, [])
+            all_packages = self.config.packages
             print(f"Checking {len(all_packages)} pacman packages...")
 
             installed, missing = self.check_packages_installed(all_packages, logger)
@@ -941,9 +970,7 @@ class Arch(Linux):
                 print("✅ All pacman packages already installed")
 
             # Check and install AUR packages
-            aur_packages = self.aur_packages + self.environment_specific[
-                "aur_packages"
-            ].get(self.environment, [])
+            aur_packages = self.config.aur_packages
             if aur_packages and yay_installed:
                 print(f"Checking {len(aur_packages)} AUR packages...")
                 installed_aur, missing_aur = self.check_packages_installed(
@@ -978,18 +1005,13 @@ class Arch(Linux):
                 print("⚠️  WARNING: AUR packages requested but yay not available")
 
             # Check and enable systemd services
-            services_to_enable = (
-                self.systemd_services_to_enable
-                + self.environment_specific["systemd_services_to_enable"].get(
-                    self.environment, []
-                )
-            )
+            services_to_enable = self.config.systemd_services
             if services_to_enable:
                 print(f"Checking {len(services_to_enable)} systemd services...")
 
             for service in services_to_enable:
                 try:
-                    is_enabled, is_active = check_systemd_service_status(service)
+                    is_enabled, is_active = self.check_systemd_service_status(service)
 
                     if is_enabled and is_active:
                         print(f"✅ Service already enabled and active: {service}")
@@ -1038,7 +1060,7 @@ class Arch(Linux):
             raise
 
         # Call parent class
-        super().install_dependencies(logger)
+        super().install_dependencies(logger, output)
 
 
 class Debian(Linux):
@@ -1149,7 +1171,7 @@ class Debian(Linux):
         "zlib1g-dev",  # compression library
     ]
 
-    def install_dependencies(self, logger: LoggingHelpers):
+    def install_dependencies(self, logger: LoggingHelpers, output: ConsoleOutput):
         """Install packages with retry logic and comprehensive error handling"""
 
         if self.no_remote_mode:
@@ -1423,7 +1445,7 @@ class Debian(Linux):
             raise
 
         # Call parent class
-        super().install_dependencies(logger)
+        super().install_dependencies(logger, output)
 
 
 def detect_operating_system(environment="minimal", no_remote_mode=False):
@@ -1570,7 +1592,7 @@ def main(no_remote, quiet, verbose):
         steps = [
             (
                 "Installing dependencies",
-                lambda: operating_system.install_dependencies(logger),
+                lambda: operating_system.install_dependencies(logger, output),
             ),
             ("Linking configurations", lambda: operating_system.link_configs(logger)),
             (
