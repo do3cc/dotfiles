@@ -25,7 +25,7 @@ This is a personal dotfiles repository for Linux systems (primarily Arch/Garuda)
 - **ALWAYS fetch before branching**: `git fetch origin main`
 - **ALWAYS branch from latest main**: `git checkout -b new-branch origin/main`
 - **NEVER work directly on main branch**
-- **ALWAYS use worktrees for significant changes**: `git worktree add ../feature-branch new-branch`
+- **ALWAYS use worktrees for significant changes**: `git worktree add worktrees/feature/feature-name new-branch`
 - **ALWAYS rebase/merge against current main before PR**
 
 ### Safe Development Practices
@@ -35,12 +35,50 @@ This is a personal dotfiles repository for Linux systems (primarily Arch/Garuda)
 - **Test before committing**: Run `make test-compile` to verify all tools work
 - **Use conventional commits**: Follow the conventional commit format with `cog commit`
 
-### Worktree Isolation
+### Git Worktree Best Practices
 
-- Create isolated worktrees for each feature: `git worktree add ../issue-X-impl issue-X-branch`
-- Work in the worktree directory, not the main repository
-- This prevents accidental changes to the main working directory
-- Allows parallel development without context switching
+#### Directory Organization
+
+- All worktrees are located in `worktrees/` subdirectory within the main repository
+- Organized by purpose: `review/`, `feature/`, `bugfix/`, `experimental/`
+- Use descriptive names: `feature/issue-25-logging-enhancement`
+
+#### Worktree Management Commands
+
+```bash
+# Create new worktrees using organized structure
+git worktree add worktrees/feature/issue-X-description branch-name
+git worktree add worktrees/review/pr-X-description main
+
+# List and manage worktrees
+git wtlist                    # List all worktrees (alias)
+git wtprune                   # Clean up removed worktrees (alias)
+wt-list                       # Enhanced listing with structure
+wt-clean                      # Cleanup and maintenance
+
+# Navigation and creation
+wt-new feature issue-25 branch-name    # Create new organized worktree
+wt-goto issue-25                       # Quick navigation to matching worktree
+wt-remove issue-25                     # Safely remove worktree after checks
+```
+
+#### Workflow Guidelines
+
+1. **Create purpose-specific worktrees** for different types of work
+2. **Use consistent naming** following the established convention
+3. **Clean up regularly** using `wt-clean` function
+4. **Keep worktrees focused** - one worktree per logical work unit
+5. **Review before removal** to ensure no work is lost
+
+#### For Claude Code AI Assistant
+
+When working with worktrees:
+
+1. Always check `git worktree list` to understand current setup
+2. Create worktrees in appropriate purpose directories
+3. Use descriptive names that match the issue/PR being worked on
+4. Clean up worktrees after merging branches
+5. Prefer the organized structure over ad-hoc sibling directories
 
 ## Installation and Setup
 
@@ -179,6 +217,36 @@ uv run dotfiles-pkgstatus --refresh
 
 **Supported package managers:** pacman, yay, uv-tools, lazy.nvim, fisher
 
+### Project Status Tool (status)
+
+Comprehensive project status overview including GitHub issues, PRs, branches, and worktrees:
+
+```bash
+# Using entry point (recommended)
+uv run dotfiles-status
+
+# Skip GitHub API calls (faster, local-only)
+uv run dotfiles-status --no-github
+
+# JSON output for programmatic use
+uv run dotfiles-status --json
+
+# Example output shows:
+# - Open GitHub issues and pull requests
+# - Active worktrees organized by type (review/feature/bugfix/experimental)
+# - Local branches with ahead/behind status
+# - Uncommitted work indicators
+# - Summary statistics
+```
+
+**Key features:**
+
+- **GitHub Integration**: Fetches open issues and PRs using `gh` CLI
+- **Worktree Analysis**: Shows organized worktrees with uncommitted change detection
+- **Branch Status**: Displays ahead/behind counts and worktree associations
+- **Multiple Formats**: Human-readable text and machine-readable JSON output
+- **Offline Mode**: `--no-github` flag for local-only analysis
+
 ## Logging Requirements for Python Tools
 
 All Python tools in this repository must use structured logging via the shared `logging_config.py` module:
@@ -306,3 +374,57 @@ The compilation test is fast (~10 seconds) and catches import errors, syntax iss
 - Shell integration includes direnv for project-specific environments
 - SSH key generation uses permanent keys per hostname and environment (e.g., `id_ed25519_hostname_private`)
 - Always use branches for implementation so that I can review them in isolation in github
+
+## Claude Code Slash Commands
+
+The project includes custom slash commands for quick project status analysis:
+
+### Available Commands
+
+```bash
+/status                    # Comprehensive project overview
+/quick-status             # Essential info for immediate decisions
+/detailed-status [scope]  # Deep analysis with optional filtering
+```
+
+### Command Details
+
+**`/status`** - Full project status including:
+
+- Open GitHub issues and pull requests
+- Active worktrees with uncommitted change detection
+- Branch analysis with ahead/behind status
+- Work in progress highlights and next steps
+
+**`/quick-status`** - Fast local analysis focusing on:
+
+- Top 3 immediate action items
+- Uncommitted work requiring attention
+- Branches ready for merging
+- Next recommended task (max 10 lines)
+
+**`/detailed-status [scope]`** - Advanced analysis with filtering:
+
+- `github` - Focus on GitHub issues and PRs only
+- `local` - Focus on local branches and worktrees only
+- `worktrees` - Deep dive into worktree organization
+- `branches` - Analyze branch relationships and sync status
+- (no parameter) - Full comprehensive analysis
+
+### Usage Examples
+
+```bash
+# Quick daily standup info
+/quick-status
+
+# Full project overview
+/status
+
+# Focus on GitHub work
+/detailed-status github
+
+# Analyze local repository state
+/detailed-status local
+```
+
+These commands leverage the `dotfiles-status` tool and provide Claude with structured prompts for consistent, actionable project analysis.

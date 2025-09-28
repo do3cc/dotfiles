@@ -17,6 +17,7 @@ dependencies = [
 dotfiles-init = "dotfiles.init:main"
 dotfiles-swman = "dotfiles.swman:main"
 dotfiles-pkgstatus = "dotfiles.pkgstatus:main"
+dotfiles-status = "dotfiles.project_status:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/dotfiles"]

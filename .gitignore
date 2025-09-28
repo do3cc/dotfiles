@@ -2,3 +2,4 @@
 nvim.appimage
 __pycache__/
 .envrc
+worktrees/
