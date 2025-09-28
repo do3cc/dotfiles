@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import click
-from .logging_config import setup_logging, bind_context, LoggingHelpers
+from .logging_config import setup_logging, bind_context
 from .output_formatting import ConsoleOutput
 
 
@@ -510,7 +510,6 @@ def main(quiet, json_output, refresh, cache_dir, verbose):
     """
     # Initialize logging and console output
     logger = setup_logging("pkgstatus")
-    logger = LoggingHelpers(logger)
     output = ConsoleOutput(verbose=verbose, quiet=quiet)
     logger.log_info("pkgstatus_started")
 

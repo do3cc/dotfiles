@@ -8,14 +8,17 @@ import time
 import traceback
 import urllib.request
 import urllib.error
+from typing import TYPE_CHECKING
 
 import click
 from .logging_config import (
     setup_logging,
     bind_context,
-    LoggingHelpers,
 )
 from .output_formatting import ConsoleOutput
+
+if TYPE_CHECKING:
+    from .logging_config import LoggingHelpers
 
 
 def expand(path):
@@ -384,7 +387,7 @@ class Linux:
                 user_entry = pwd.getpwuid(os.getuid())
                 if not user_entry.pw_shell.endswith("/fish"):
                     print(f"Changing shell from {user_entry.pw_shell} to fish")
-                    self.self.run_command_with_error_handling(
+                    self.run_command_with_error_handling(
                         ["chsh", "-s", "/usr/bin/fish"], logger, "Change shell to fish"
                     )
                     self.restart_required = True
@@ -1503,8 +1506,7 @@ def main(no_remote, quiet, verbose):
             "environment_validated", environment=environment, no_remote_mode=no_remote
         )
 
-        # Create logging helpers for use throughout the script
-        logger = LoggingHelpers(logger)
+        # Logger is now ready to use (LoggingHelpers instance returned by setup_logging)
 
         output.status(
             f"Installing dotfiles for {environment} environment{' (no-remote mode)' if no_remote else ''}",

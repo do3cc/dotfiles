@@ -13,15 +13,15 @@ from pathlib import Path
 import structlog
 
 
-def setup_logging(script_name: str) -> structlog.BoundLogger:
+def setup_logging(script_name: str) -> "LoggingHelpers":
     """
-    Configure structured logging for a dotfiles Python tool.
+    Configure structured logging and return ready-to-use LoggingHelpers instance.
 
     Args:
         script_name: Name of the script (e.g., "init", "swman", "pkgstatus")
 
     Returns:
-        Configured structlog logger
+        LoggingHelpers instance ready for use
     """
     # Ensure log directory exists
     log_dir = Path.home() / ".cache" / "dotfiles" / "logs"
@@ -66,7 +66,8 @@ def setup_logging(script_name: str) -> structlog.BoundLogger:
     logger = structlog.get_logger()
     logger = logger.bind(script=script_name, pid=os.getpid())
 
-    return logger
+    # Return LoggingHelpers instance instead of raw logger
+    return LoggingHelpers(logger)
 
 
 def bind_context(**kwargs) -> None:
