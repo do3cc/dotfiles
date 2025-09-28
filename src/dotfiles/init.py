@@ -540,11 +540,17 @@ class Linux:
             if not exists(default_key_link):
                 try:
                     os.symlink(current_key, default_key_link)
-                    print(
-                        f"✅ Created SSH key symlink: id_ed25519_default -> {os.path.basename(current_key)}"
+                    logger.log_info(
+                        "ssh_key_symlink_created",
+                        symlink_path="id_ed25519_default",
+                        target_key=os.path.basename(current_key),
                     )
                 except OSError as e:
-                    print(f"⚠️  WARNING: Could not create SSH key symlink: {e}")
+                    logger.log_warning(
+                        "ssh_key_symlink_creation_failed",
+                        symlink_path=default_key_link,
+                        error=str(e),
+                    )
 
             key_name = f'"{socket.gethostname()} {self.environment}"'
             self.run_command_with_error_handling(

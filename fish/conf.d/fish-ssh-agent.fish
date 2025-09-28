@@ -9,11 +9,5 @@ end
 # Auto-load default SSH key (symlink created by init script)
 set default_key_path $HOME/.ssh/id_ed25519_default
 if test -f $default_key_path
-    # Check if key is already loaded to avoid duplicates
-    if not ssh-add -l | grep -q $default_key_path
-        ssh-add $default_key_path 2>/dev/null
-        if test $status -eq 0
-            echo "✅ SSH key loaded: id_ed25519_default"
-        end
-    end
+    ssh-add $default_key_path 2>/dev/null
 end
