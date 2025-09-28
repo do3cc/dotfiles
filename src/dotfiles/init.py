@@ -81,7 +81,7 @@ class Linux:
     def run_command_with_error_handling(
         self,
         command,
-        logger: LoggingHelpers,
+        logger: "LoggingHelpers",
         description="Command",
         timeout=300,
         **kwargs,
@@ -142,7 +142,7 @@ class Linux:
             print(f"🔍 Command: {' '.join(command)}")
             raise
 
-    def install_dependencies(self, logger: LoggingHelpers):
+    def install_dependencies(self, logger: "LoggingHelpers"):
         """Install NVM and Pyenv with proper error handling"""
         logger.log_progress("starting_dependency_installation")
 
@@ -247,7 +247,7 @@ class Linux:
         else:
             print("✅ Pyenv already installed")
 
-    def link_configs(self, logger: LoggingHelpers):
+    def link_configs(self, logger: "LoggingHelpers"):
         """Create symlinks with comprehensive error handling"""
         # Ensure ~/.config exists
         config_base_dir = expand("~/.config")
@@ -335,7 +335,7 @@ class Linux:
                 print(f"❌ ERROR: Unexpected error processing {config_dir_target}: {e}")
                 continue
 
-    def validate_git_credential_helper(self, logger: LoggingHelpers):
+    def validate_git_credential_helper(self, logger: "LoggingHelpers"):
         """Validate that git credential helper is properly configured"""
         try:
             # Check if libsecret binary exists
@@ -376,7 +376,7 @@ class Linux:
             print(f"❌ ERROR: Failed to validate git credential helper: {e}")
             return False
 
-    def setup_shell(self, logger: LoggingHelpers):
+    def setup_shell(self, logger: "LoggingHelpers"):
         # Check current user's default shell
         try:
             current_shell = os.environ.get("SHELL", "")
@@ -398,7 +398,7 @@ class Linux:
         except Exception as e:
             print(f"Warning: Could not check/change shell: {e}")
 
-    def link_accounts(self, logger: LoggingHelpers):
+    def link_accounts(self, logger: "LoggingHelpers"):
         if self.no_remote_mode:
             print("No-remote mode: Skipping GitHub and SSH key setup")
             return
@@ -556,7 +556,7 @@ class Arch(Linux):
     }
     systemd_services_to_enable = []
 
-    def check_packages_installed(self, packages, logger: LoggingHelpers):
+    def check_packages_installed(self, packages, logger: "LoggingHelpers"):
         """Check which packages are already installed via pacman"""
         logger.log_info(
             "checking_pacman_packages",
@@ -645,7 +645,7 @@ class Arch(Linux):
         except OSError as e:
             print(f"⚠️  WARNING: Could not write update marker: {e}")
 
-    def update_system(self, logger: LoggingHelpers):
+    def update_system(self, logger: "LoggingHelpers"):
         """Perform system update if needed"""
         if self.no_remote_mode:
             print("No-remote mode: Skipping system updates")
@@ -702,7 +702,7 @@ class Arch(Linux):
             print("💡 Try: Run 'sudo pacman -Syu' manually to check for issues")
             raise
 
-    def install_dependencies(self, logger: LoggingHelpers):
+    def install_dependencies(self, logger: "LoggingHelpers"):
         """Install packages with retry logic and comprehensive error handling"""
 
         # Perform system update if needed
@@ -1005,7 +1005,7 @@ class Arch(Linux):
 
 
 class Debian(Linux):
-    def check_packages_installed(self, packages, logger: LoggingHelpers):
+    def check_packages_installed(self, packages, logger: "LoggingHelpers"):
         """Check which packages are already installed via apt"""
         if not packages:
             return [], []
@@ -1112,7 +1112,7 @@ class Debian(Linux):
         "zlib1g-dev",  # compression library
     ]
 
-    def install_dependencies(self, logger: LoggingHelpers):
+    def install_dependencies(self, logger: "LoggingHelpers"):
         """Install packages with retry logic and comprehensive error handling"""
 
         if self.no_remote_mode:
