@@ -10,7 +10,7 @@ import urllib.request
 import urllib.error
 
 import click
-from logging_config import (
+from .logging_config import (
     setup_logging,
     bind_context,
     LoggingHelpers,
