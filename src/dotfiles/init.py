@@ -14,8 +14,8 @@ from .logging_config import (
     setup_logging,
     bind_context,
     LoggingHelpers,
-    ConsoleOutput,
 )
+from .output_formatting import ConsoleOutput
 
 
 def expand(path):

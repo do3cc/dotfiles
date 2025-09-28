@@ -19,7 +19,8 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import click
-from .logging_config import setup_logging, bind_context, LoggingHelpers, ConsoleOutput
+from .logging_config import setup_logging, bind_context, LoggingHelpers
+from .output_formatting import ConsoleOutput
 
 
 def run_with_streaming_output(
