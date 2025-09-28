@@ -476,9 +476,9 @@ class Linux:
         except Exception as e:
             print(f"Warning: Could not check/change shell: {e}")
 
-    def link_accounts(self, logger: LoggingHelpers):
+    def link_accounts(self, logger: LoggingHelpers, output: ConsoleOutput):
         if self.no_remote_mode:
-            print("No-remote mode: Skipping GitHub and SSH key setup")
+            output.info("No-remote mode: Skipping GitHub and SSH key setup")
             return
 
         try:
@@ -534,6 +534,18 @@ class Linux:
             self.run_command_with_error_handling(
                 ["ssh-add", current_key], logger, "Add SSH key to agent"
             )
+
+            # Create default SSH key symlink for automatic loading
+            default_key_link = expand("~/.ssh/id_ed25519_default")
+            if not exists(default_key_link):
+                try:
+                    os.symlink(current_key, default_key_link)
+                    output.success(
+                        f"Created SSH key symlink: id_ed25519_default -> {os.path.basename(current_key)}"
+                    )
+                except OSError as e:
+                    output.error(f"Could not create SSH key symlink: {e}")
+
             key_name = f'"{socket.gethostname()} {self.environment}"'
             self.run_command_with_error_handling(
                 ["/usr/bin/gh", "ssh-key", "add", f"{current_key}.pub", "-t", key_name],
@@ -1600,7 +1612,10 @@ def main(no_remote, quiet, verbose):
                 lambda: operating_system.validate_git_credential_helper(logger),
             ),
             ("Setting up shell", lambda: operating_system.setup_shell(logger)),
-            ("Setting up accounts", lambda: operating_system.link_accounts(logger)),
+            (
+                "Setting up accounts",
+                lambda: operating_system.link_accounts(logger, output),
+            ),
         ]
 
         # Use Rich progress bar for the installation steps
