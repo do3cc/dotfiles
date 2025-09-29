@@ -60,7 +60,7 @@ jobs:
 
       - name: Pre-warm Caches
         run: |
-          mkdir -p ~/.cache/dotfiles-ci/{pacman,apt,uv-cache,uv-python-cache,containers}
+          mkdir -p ~/.cache/dotfiles-ci/{pacman,apt,uv-cache,uv-python-cache,containers,${{ matrix.os }}}
           # Pre-download common packages if cache miss
           if [[ ! -f ~/.cache/dotfiles-ci/${{ matrix.os }}/.warmed ]]; then
             echo "Cache miss - will warm ${{ matrix.os }} cache during build"
