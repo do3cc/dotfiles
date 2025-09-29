@@ -61,14 +61,24 @@ Based on the GitHub issue and error traces:
 - **Cause**: `checkupdates` is provided by the `pacman-contrib` package which is missing from `Arch.pacman_packages` list
 - **Solution**: Add `pacman-contrib` to the required packages list
 
-**Issue 2: Architectural Duplication**
+**Issue 2: CRITICAL Architectural Inconsistency**
+
+- **MAJOR Discovery**: Debian/Ubuntu systems do NOT perform system updates at all!
+  - **Arch class** (line 742): `install_dependencies()` calls `self.update_system()` first
+  - **Debian class** (line 1152): `install_dependencies()` skips system updates entirely
+  - **Linux base class** (line 141): Only installs NVM/Pyenv
+- **Architecture Gap**: Only Arch-based systems get system updates, Debian/Ubuntu systems are left unpatched
+- **Security Risk**: Debian/Ubuntu users miss critical security updates during dotfiles installation
+- **Inconsistent UX**: Arch users get updated systems, Debian users don't
+
+**Issue 3: Existing SystemManager Duplication**
 
 - **Discovery**: The repository already has a comprehensive software management system in `swman.py` that includes:
   - SystemManager class with identical `checkupdates` logic (lines 102-116)
   - Proper error handling for missing `checkupdates` command
-  - Graceful fallback mechanisms
+  - BUT only supports Arch systems currently
 - **Root Problem**: `init.py` duplicates update functionality instead of leveraging existing infrastructure
-- **Solution**: Refactor `init.py` to use `swman.py` SystemManager for updates
+- **Solution**: Extend SystemManager to support Debian/Ubuntu AND use it consistently
 
 **Issue 3: Fallback System Update Failing**
 
@@ -86,26 +96,26 @@ Based on the GitHub issue and error traces:
 
 ### 2. Implementation Strategy
 
-**Phase 1: Immediate Fixes (1-2 days)**
+**Phase 1: Critical Fixes (1-2 days)**
 
-1. Add `pacman-contrib` to the `Arch.pacman_packages` list (quick fix)
-2. Import and use `SystemManager` from `swman.py` in `init.py`
-3. Replace `Arch.update_system()` method with call to `SystemManager.update()`
-4. Add comprehensive logging for the integration
+1. **Immediate CachyOS fix**: Add `pacman-contrib` to `Arch.pacman_packages` list
+2. **Extend SystemManager**: Add Debian/Ubuntu support with `apt update && apt upgrade`
+3. **Import SystemManager**: Add to both Arch AND Debian classes in `init.py`
+4. **Basic testing**: Verify no regression and both systems get updates
 
 **Phase 2: Architectural Consolidation (2-3 days)**
 
-1. Refactor `Arch.update_system()` to delegate to `SystemManager`
-2. Ensure proper error handling and logging integration
-3. Remove duplicate update logic from `init.py`
-4. Add configuration to control update behavior in init context
+1. **Replace Arch.update_system()**: Delegate to `SystemManager.update()`
+2. **Add Debian.update_system()**: New method that delegates to `SystemManager.update()`
+3. **Ensure parity**: Both Arch and Debian systems get system updates during init
+4. **Remove duplicate logic**: Clean up redundant subprocess calls
 
-**Phase 3: Testing and Enhancement (1-2 days)**
+**Phase 3: Testing and Validation (2-3 days)**
 
-1. Test consolidated approach on CachyOS environment specifically
-2. Test with missing `pacman-contrib` package
-3. Validate that both `swman` and `init` work consistently
-4. Add integration tests for the unified approach
+1. **Test Arch systems**: CachyOS, Garuda, pure Arch
+2. **Test Debian systems**: Ubuntu, Debian in containers
+3. **Integration testing**: Verify `swman` and `init` work consistently
+4. **Security validation**: Ensure all systems get security updates
 
 ### 3. Detailed Implementation Steps
 
@@ -115,16 +125,81 @@ Based on the GitHub issue and error traces:
 **Location**: `Arch.pacman_packages` list (around line 528)
 **Change**: Add `"pacman-contrib"` to ensure `checkupdates` is available
 
-#### Step 2: Import SystemManager and Consolidate Logic
+#### Step 2: Extend SystemManager for Debian/Ubuntu Support
+
+**File**: `src/dotfiles/swman.py`
+**Location**: Add new DebianSystemManager class after SystemManager
+**New Implementation**:
+
+```python
+class DebianSystemManager(PackageManager):
+    """System package manager for Debian/Ubuntu systems using apt"""
+
+    def __init__(self):
+        super().__init__("debian-system")
+
+    def is_available(self) -> bool:
+        return self._command_exists("apt")
+
+    def check_updates(self) -> Tuple[bool, int]:
+        try:
+            # Update package lists first
+            result = subprocess.run(
+                ["sudo", "apt", "update"], capture_output=True, text=True, timeout=60
+            )
+            if result.returncode != 0:
+                return False, 0
+
+            # Check for upgradeable packages
+            result = subprocess.run(
+                ["apt", "list", "--upgradable"], capture_output=True, text=True, timeout=30
+            )
+            if result.returncode == 0:
+                upgradeable = [line for line in result.stdout.split('\n')
+                              if '/' in line and 'upgradable' in line]
+                return len(upgradeable) > 0, len(upgradeable)
+            return False, 0
+        except (subprocess.SubprocessError, FileNotFoundError):
+            return False, 0
+
+    def update(self, dry_run: bool = False) -> ManagerResult:
+        start_time = time.time()
+
+        if dry_run:
+            has_updates, count = self.check_updates()
+            return ManagerResult(
+                name=self.name, success=True, message=f"{count} updates available",
+                execution_time=time.time() - start_time, details={"count": count}
+            )
+
+        try:
+            # Update package lists and upgrade system
+            subprocess.run(
+                ["sudo", "apt", "update", "&&", "sudo", "apt", "upgrade", "-y"],
+                shell=True, check=True, timeout=1800
+            )
+
+            return ManagerResult(
+                name=self.name, success=True, message="System updated successfully",
+                execution_time=time.time() - start_time
+            )
+        except subprocess.CalledProcessError as e:
+            return ManagerResult(
+                name=self.name, success=False, message=f"Update failed: {e}",
+                execution_time=time.time() - start_time
+            )
+```
+
+#### Step 3: Import SystemManager and Add Debian Support
 
 **File**: `src/dotfiles/init.py`
-**Location**: Import section and `Arch.update_system()` method (lines 691-740)
+**Location**: Import section and both Arch/Debian classes
 **Changes**:
 
-1. Add import: `from .swman import SystemManager`
-2. Replace the entire `update_system()` method with SystemManager delegation
-3. Maintain the existing 24-hour update check logic
-4. Preserve user-facing messages and progress indicators
+1. Add import: `from .swman import SystemManager, DebianSystemManager`
+2. Update both Arch and Debian classes to use appropriate SystemManager
+3. Maintain the existing 24-hour update check logic for Arch
+4. Add equivalent update timing logic for Debian
 5. Ensure proper logging integration with existing LoggingHelpers
 
 #### Step 3: Create Unified Update Interface
@@ -384,14 +459,18 @@ uv run dotfiles-init --verbose
 - Integration testing and edge case validation
 - Documentation updates
 
-**Total Estimated Time**: 4-7 days
+**Total Estimated Time**: 5-8 days
 
-**Key Benefits of New Approach**:
+**CRITICAL Benefits of New Approach**:
 
-- Eliminates code duplication between init.py and swman.py
-- Leverages existing robust error handling in SystemManager
-- Provides consistent update behavior across all tools
-- Reduces maintenance burden by centralizing update logic
+- **Fixes Security Gap**: Debian/Ubuntu systems will now receive system updates during dotfiles installation
+- **Architectural Consistency**: All supported OS families get system updates, not just Arch
+- **Code Consolidation**: Eliminates duplication between init.py and swman.py
+- **Robust Error Handling**: Leverages existing SystemManager infrastructure
+- **Unified Behavior**: Consistent update experience across all tools and platforms
+- **Maintenance Reduction**: Centralizes update logic for all supported systems
+
+**Security Impact**: This addresses a **critical security vulnerability** where Debian/Ubuntu users were running unpatched systems after dotfiles installation.
 
 ## Next Steps
 
