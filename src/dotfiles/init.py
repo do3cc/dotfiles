@@ -18,6 +18,7 @@ from .logging_config import (
     LoggingHelpers,
 )
 from .output_formatting import ConsoleOutput
+from .swman import DebianSystemManager, PacmanManager
 
 
 def expand(path):
@@ -599,6 +600,7 @@ class Arch(Linux):
                 "neovim",  # modern Vim text editor
                 "nmap",  # network discovery and scanning
                 "npm",  # Node.js package manager
+                "pacman-contrib",  # pacman utilities including checkupdates
                 "prettier",  # code formatter for JS/TS/JSON/YAML/MD
                 "python-pip",  # Global pip
                 "rsync",  # file synchronization tool
@@ -726,7 +728,7 @@ class Arch(Linux):
         marker_file.write_text(datetime.now().isoformat())
 
     def update_system(self, logger: LoggingHelpers):
-        """Perform system update if needed"""
+        """Perform system update if needed using PacmanManager"""
         if self.no_remote_mode:
             print("No-remote mode: Skipping system updates")
             return
@@ -735,51 +737,43 @@ class Arch(Linux):
             print("✅ System updated within last 24 hours, skipping update")
             return
 
-        # Check if updates are available (non-sudo command)
         try:
-            result = subprocess.run(
-                ["checkupdates"], capture_output=True, text=True, timeout=30
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                updates = result.stdout.strip().split("\n")
-                print(f"🔄 Found {len(updates)} system updates available")
-                # Use streaming subprocess for system update to show progress
-                # System updates can take 10-15 minutes and users need to see progress
-                result = subprocess.run(
-                    ["sudo", "pacman", "-Syu", "--noconfirm"],
-                    check=True,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    timeout=1800,  # 30 minutes for system updates (can be large)
-                )
-                logger.log_subprocess_result(
-                    "System update",
-                    ["sudo", "pacman", "-Syu", "--noconfirm"],
-                    result,
-                )
-                print("✅ System update completed successfully")
-                self.mark_system_updated()
+            manager = PacmanManager()
+            if manager.is_available():
+                # Check for updates first
+                has_updates, count = manager.check_updates()
+                if has_updates:
+                    print(f"🔄 Found {count} system updates available")
+                    # Perform the update
+                    result = manager.update(dry_run=False)
+
+                    if result.status.value == "success":
+                        print("✅ System update completed successfully")
+                        logger.log_progress("system update completed successfully")
+                        self.mark_system_updated()
+                    else:
+                        print(
+                            f"⚠️  System update completed with status: {result.status.value}"
+                        )
+                        print(f"Message: {result.message}")
+                        logger.log_warning(
+                            "system update completed with warnings",
+                            status=result.status.value,
+                            message=result.message,
+                        )
+                        self.mark_system_updated()
+                else:
+                    print("✅ No system updates available")
+                    self.mark_system_updated()
             else:
-                print("✅ No system updates available")
-                self.mark_system_updated()
-        except FileNotFoundError:
-            # checkupdates not available, fallback to regular update
-            print("🔄 Updating system packages...")
-            # Use streaming subprocess for fallback system update to show progress
-            result = subprocess.run(
-                ["sudo", "pacman", "-Syu", "--noconfirm"],
-                check=True,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=1800,  # 30 minutes for system updates (can be large)
-            )
-            logger.log_subprocess_result(
-                "System update", ["sudo", "pacman", "-Syu", "--noconfirm"], result
-            )
-            print("✅ System update completed successfully")
-            self.mark_system_updated()
-        except Exception:
+                print(
+                    "⚠️  Pacman package manager not available, skipping system updates"
+                )
+                logger.log_warning("pacman not available for system updates")
+        except Exception as e:
+            print(f"❌ ERROR during system update: {e}")
             print("💡 Try: Run 'sudo pacman -Syu' manually to check for issues")
+            logger.log_exception(e, "system update failed")
             raise
 
     def install_dependencies(self, logger: LoggingHelpers, output: ConsoleOutput):
@@ -1458,6 +1452,39 @@ class Debian(Linux):
 
         # Call parent class
         super().install_dependencies(logger, output)
+
+    def update_system(self, logger: LoggingHelpers):
+        """Update system packages using DebianSystemManager"""
+        if self.no_remote_mode:
+            print("No-remote mode: Skipping system updates")
+            return
+
+        try:
+            manager = DebianSystemManager()
+            if manager.is_available():
+                print("Updating system packages...")
+                result = manager.update(dry_run=False)
+
+                if result.status.value == "success":
+                    print("✅ System packages updated successfully")
+                    logger.log_progress("system update completed successfully")
+                else:
+                    print(
+                        f"⚠️  System update completed with status: {result.status.value}"
+                    )
+                    print(f"Message: {result.message}")
+                    logger.log_warning(
+                        "system update completed with warnings",
+                        status=result.status.value,
+                        message=result.message,
+                    )
+            else:
+                print("⚠️  APT package manager not available, skipping system updates")
+                logger.log_warning("apt not available for system updates")
+        except Exception as e:
+            print(f"❌ ERROR during system update: {e}")
+            logger.log_exception(e, "system update failed")
+            raise
 
 
 def detect_operating_system(environment="minimal", no_remote_mode=False):

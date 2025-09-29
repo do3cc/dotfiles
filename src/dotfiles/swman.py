@@ -255,6 +255,109 @@ class YayManager(PackageManager):
             return False
 
 
+class DebianSystemManager(PackageManager):
+    """System package manager for Debian/Ubuntu systems using apt"""
+
+    def __init__(self):
+        super().__init__("apt", ManagerType.SYSTEM)
+
+    def is_available(self) -> bool:
+        return self._command_exists("apt")
+
+    def check_updates(self) -> Tuple[bool, int]:
+        """Check for available updates using apt list --upgradable"""
+        try:
+            # First update the package list
+            result = subprocess.run(
+                ["sudo", "apt", "update"], capture_output=True, text=True, timeout=60
+            )
+            if result.returncode != 0:
+                return False, 0
+
+            # Check for upgradable packages
+            result = subprocess.run(
+                ["apt", "list", "--upgradable"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0:
+                # Count lines excluding header
+                lines = result.stdout.strip().split("\n")
+                count = len([line for line in lines if "/" in line]) if lines else 0
+                return count > 0, count
+            return False, 0
+        except (subprocess.SubprocessError, FileNotFoundError):
+            return False, 0
+
+    def update(self, dry_run: bool = False) -> ManagerResult:
+        """Perform system updates using apt"""
+        start_time = time.time()
+
+        if dry_run:
+            has_updates, count = self.check_updates()
+            return ManagerResult(
+                name=self.name,
+                status=UpdateStatus.SUCCESS,
+                message=f"Would update {count} packages",
+                duration=time.time() - start_time,
+                updates_available=count,
+            )
+
+        try:
+            # First update package lists
+            result = run_with_streaming_output(["sudo", "apt", "update"], timeout=300)
+            if result.returncode != 0:
+                return ManagerResult(
+                    name=self.name,
+                    status=UpdateStatus.FAILED,
+                    message=f"Package list update failed: {result.stderr}",
+                    duration=time.time() - start_time,
+                )
+
+            # Then upgrade packages with streaming output
+            result = run_with_streaming_output(
+                ["sudo", "apt", "upgrade", "-y"], timeout=600
+            )
+
+            if result.returncode == 0:
+                return ManagerResult(
+                    name=self.name,
+                    status=UpdateStatus.SUCCESS,
+                    message="System packages updated successfully",
+                    duration=time.time() - start_time,
+                )
+            else:
+                return ManagerResult(
+                    name=self.name,
+                    status=UpdateStatus.FAILED,
+                    message=f"Update failed: {result.stderr}",
+                    duration=time.time() - start_time,
+                )
+        except subprocess.TimeoutExpired:
+            return ManagerResult(
+                name=self.name,
+                status=UpdateStatus.FAILED,
+                message="Update timed out",
+                duration=time.time() - start_time,
+            )
+        except Exception as e:
+            return ManagerResult(
+                name=self.name,
+                status=UpdateStatus.FAILED,
+                message=f"Unexpected error: {e}",
+                duration=time.time() - start_time,
+            )
+
+    @staticmethod
+    def _command_exists(command: str) -> bool:
+        try:
+            subprocess.run(["which", command], capture_output=True, check=True)
+            return True
+        except subprocess.CalledProcessError:
+            return False
+
+
 class UvToolsManager(PackageManager):
     def __init__(self):
         super().__init__("uv-tools", ManagerType.TOOL)
