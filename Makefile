@@ -55,10 +55,10 @@ help:
 	@echo "  test-arch   - Test on Arch Linux container"
 	@echo "  test-debian - Test on Debian container"
 	@echo "  test-ubuntu - Test on Ubuntu container"
-	@echo "  cache-start - Start HTTP caching proxy"
-	@echo "  cache-stop  - Stop HTTP caching proxy"
-	@echo "  cache-stats - Show HTTP cache statistics"
-	@echo "  cache-images- Pre-pull base images for faster builds"
+	@echo "  cache-start - Set up local build cache directories and base images"
+	@echo "  cache-stop  - Clear local build cache and remove cached images"
+	@echo "  cache-stats - Show local build cache statistics and sizes"
+	@echo "  cache-images- Pre-pull base container images for faster builds"
 	@echo "  clean       - Remove test containers and images"
 	@echo "  help        - Show this help message"
 
@@ -167,9 +167,9 @@ test-ubuntu:
 			timeout 900 uv run dotfiles-init --no-remote || echo '⚠️ Test timed out after 15 minutes'"
 	@echo "✅ Ubuntu test completed"
 
-# Start caching by creating cache directory and pre-downloading
+# Set up local build cache (CI: ~/.cache/dotfiles-ci, Local: ~/.cache/dotfiles-build)
 cache-start:
-	@echo "🚀 Setting up build cache..."
+	@echo "🚀 Setting up local build cache..."
 	@echo "📦 Setting up cache directories..."
 	@mkdir -p $(CACHE_DIR)/{pacman,apt,uv,uv-cache,uv-python-cache,containers}
 	@chmod 777 $(CACHE_DIR)/{uv-python-cache,uv-cache}
@@ -181,18 +181,19 @@ cache-start:
 	@echo "📦 Caching uv installer..."
 	@curl -LsSf https://astral.sh/uv/install.sh -o $(CACHE_DIR)/uv/install.sh
 	@chmod +x $(CACHE_DIR)/uv/install.sh
-	@echo "✅ Build cache ready at $(CACHE_DIR)/"
+	@echo "✅ Local build cache ready at $(CACHE_DIR)/"
 
-# Clear build cache
+# Clear local build cache and remove cached images
 cache-stop:
-	@echo "🧹 Clearing build cache..."
+	@echo "🧹 Clearing local build cache..."
 	@rm -rf $(CACHE_DIR)
 	@podman rmi ghcr.io/archlinux/archlinux:latest public.ecr.aws/docker/library/debian:bookworm ubuntu:22.04 2>/dev/null || true
 	@echo "✅ Build cache cleared"
 
-# Show cache statistics
+# Show local build cache statistics
 cache-stats:
-	@echo "📊 Build Cache Statistics:"
+	@echo "📊 Local Build Cache Statistics:"
+	@echo "Environment: $(if $(CI),CI (GitHub Actions),Local Development)"
 	@if [ -d $(CACHE_DIR) ]; then \
 		echo "Cache Status: 🟢 Active"; \
 		echo "Cache Location: $(CACHE_DIR)"; \
@@ -205,7 +206,7 @@ cache-stats:
 		podman images --format "{{.Repository}}:{{.Tag}} {{.Size}}" | grep -E "(archlinux|debian|ubuntu)" || echo "No cached images"; \
 	else \
 		echo "Cache Status: 🔴 Not active"; \
-		echo "Run 'make cache-start' to set up build cache"; \
+		echo "Run 'make cache-start' to set up local build cache"; \
 	fi
 
 # Pre-pull base images for faster builds
