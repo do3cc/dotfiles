@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import click
-from .logging_config import setup_logging, bind_context
+from .logging_config import setup_logging, bind_context, log_info
 from .output_formatting import ConsoleOutput
 
 
@@ -262,8 +262,6 @@ class UvToolsManager(PackageManager):
         return self._command_exists("uv")
 
     def check_updates(self) -> Tuple[bool, int]:
-        from .logging_config import log_info
-
         # UV doesn't have a direct "check updates" command yet
         # We'd need to parse `uv tool list` and check each tool
         # Return cannot_determine status instead of false positive
@@ -337,8 +335,6 @@ class LazyNvimManager(PackageManager):
         return lazy_path.exists() and self._command_exists("nvim")
 
     def check_updates(self) -> Tuple[bool, int]:
-        from .logging_config import log_info
-
         # Lazy.nvim doesn't provide headless read-only update checking
         # Return cannot_determine status instead of false positive
         result = (False, -1)  # -1 indicates "cannot determine"
@@ -405,8 +401,6 @@ class FisherManager(PackageManager):
         )
 
     def check_updates(self) -> Tuple[bool, int]:
-        from .logging_config import log_info
-
         # Fisher doesn't provide update checking without installation
         # Return cannot_determine status instead of false positive
         result = (False, -1)  # -1 indicates "cannot determine"
