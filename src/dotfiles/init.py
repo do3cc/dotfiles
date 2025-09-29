@@ -58,9 +58,10 @@ class EnvironmentConfig:
 
 
 class Linux:
-    def __init__(self, environment="minimal", no_remote_mode=False):
+    def __init__(self, environment="minimal", no_remote_mode=False, with_gita=False):
         self.environment = environment
         self.no_remote_mode = no_remote_mode
+        self.with_gita = with_gita
         # Single source of truth for this environment's configuration
         self.config = self._build_environment_config(environment)
 
@@ -568,6 +569,157 @@ class Linux:
             except subprocess.CalledProcessError:
                 print("Tailscale not available, running setup...")
                 subprocess.run(["sudo", "tailscale", "up", "--operator=do3cc"])
+
+    def install_gita(self, logger: LoggingHelpers, output: ConsoleOutput):
+        """Install gita multi-repository management tool via pip"""
+        if not self.with_gita:
+            logger.log_info("gita_installation_skipped", reason="not_requested")
+            return
+
+        logger.log_progress("starting_gita_installation")
+        output.info("Installing gita multi-repository management tool...")
+
+        try:
+            # Check if gita is already installed
+            result = subprocess.run(
+                ["gita", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                logger.log_info("gita_already_installed", version=result.stdout.strip())
+                output.success("Gita already installed")
+                return
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # gita not installed, proceed with installation
+            pass
+
+        try:
+            output.info("Installing gita via uv pip...")
+            result = subprocess.run(
+                ["uv", "pip", "install", "--user", "gita"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,  # 2 minute timeout
+            )
+            logger.log_subprocess_result(
+                "gita installation via uv pip",
+                ["uv", "pip", "install", "--user", "gita"],
+                result,
+            )
+
+            # Verify installation
+            verify_result = subprocess.run(
+                ["gita", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if verify_result.returncode == 0:
+                logger.log_progress(
+                    "gita_installed_successfully", version=verify_result.stdout.strip()
+                )
+                output.success(
+                    f"Gita installed successfully: {verify_result.stdout.strip()}"
+                )
+
+                # Auto-discover and add project directories
+                self._setup_gita_repositories(logger, output)
+            else:
+                raise subprocess.CalledProcessError(
+                    verify_result.returncode, ["gita", "--version"]
+                )
+
+        except subprocess.TimeoutExpired as e:
+            logger.log_exception(e, "gita_installation_timeout", timeout=120)
+            output.error("Gita installation timed out")
+            output.info("Try: Check internet connection and run again")
+            raise
+        except subprocess.CalledProcessError as e:
+            logger.log_exception(
+                e,
+                "gita_installation_failed",
+                returncode=e.returncode,
+                stdout=e.stdout,
+                stderr=e.stderr,
+            )
+            output.error(f"Gita installation failed with exit code {e.returncode}")
+            if e.stderr:
+                output.info(f"Error details: {e.stderr}")
+            output.info("Try: Ensure uv is properly installed and configured")
+            raise
+        except FileNotFoundError as e:
+            logger.log_exception(e, "uv_command_not_found_for_gita")
+            output.error("UV command not found - cannot install gita")
+            output.info("Try: Install uv first or ensure it's in PATH")
+            raise
+
+    def _setup_gita_repositories(self, logger: LoggingHelpers, output: ConsoleOutput):
+        """Auto-discover and setup gita repositories in common project directories"""
+        logger.log_progress("starting_gita_repository_setup")
+
+        # Common project directory patterns
+        project_dirs = [
+            expand("~/projects"),
+            expand("~/dev"),
+            expand("~/work"),
+            expand("~/code"),
+        ]
+
+        repos_found = []
+        for project_dir in project_dirs:
+            if exists(project_dir):
+                logger.log_info("checking_project_directory", path=project_dir)
+                try:
+                    # Find git repositories in this directory (one level deep)
+                    for item in os.listdir(project_dir):
+                        repo_path = os.path.join(project_dir, item)
+                        if os.path.isdir(repo_path) and exists(
+                            os.path.join(repo_path, ".git")
+                        ):
+                            repos_found.append(repo_path)
+                            logger.log_info("git_repository_found", path=repo_path)
+                except (OSError, PermissionError) as e:
+                    logger.log_warning(
+                        "project_directory_access_failed",
+                        path=project_dir,
+                        error=str(e),
+                    )
+                    continue
+
+        if repos_found:
+            output.info(f"Found {len(repos_found)} git repositories to add to gita")
+            logger.log_info("adding_repositories_to_gita", count=len(repos_found))
+
+            for repo_path in repos_found:
+                try:
+                    result = subprocess.run(
+                        ["gita", "add", repo_path],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                    if result.returncode == 0:
+                        logger.log_info("repository_added_to_gita", path=repo_path)
+                    else:
+                        logger.log_warning(
+                            "repository_add_failed",
+                            path=repo_path,
+                            stderr=result.stderr,
+                        )
+                except subprocess.TimeoutExpired:
+                    logger.log_warning("repository_add_timeout", path=repo_path)
+                except Exception as e:
+                    logger.log_exception(e, "repository_add_error", path=repo_path)
+
+            output.success("Git repositories configured in gita")
+            output.info("Run 'gita ll' to see status of all repositories")
+        else:
+            logger.log_info("no_git_repositories_found")
+            output.info("No git repositories found in common project directories")
+            output.info("Add repositories manually with: gita add <path>")
 
 
 class Arch(Linux):
@@ -1460,18 +1612,36 @@ class Debian(Linux):
         super().install_dependencies(logger, output)
 
 
-def detect_operating_system(environment="minimal", no_remote_mode=False):
+def detect_operating_system(
+    environment="minimal", no_remote_mode=False, with_gita=False
+):
     """Detect and return the appropriate operating system class"""
     with open("/etc/os-release") as release_file:
         content = release_file.read()
         if 'NAME="Arch Linux"' in content:
-            return Arch(environment=environment, no_remote_mode=no_remote_mode)
+            return Arch(
+                environment=environment,
+                no_remote_mode=no_remote_mode,
+                with_gita=with_gita,
+            )
         elif 'NAME="CachyOS Linux"' in content:
-            return Arch(environment=environment, no_remote_mode=no_remote_mode)
+            return Arch(
+                environment=environment,
+                no_remote_mode=no_remote_mode,
+                with_gita=with_gita,
+            )
         elif 'NAME="Garuda Linux"' in content:
-            return Arch(environment=environment, no_remote_mode=no_remote_mode)
+            return Arch(
+                environment=environment,
+                no_remote_mode=no_remote_mode,
+                with_gita=with_gita,
+            )
         elif "ID=debian" in content or "ID_LIKE=debian" in content:
-            return Debian(environment=environment, no_remote_mode=no_remote_mode)
+            return Debian(
+                environment=environment,
+                no_remote_mode=no_remote_mode,
+                with_gita=with_gita,
+            )
         else:
             raise NotImplementedError(f"Unknown operating system, found {content}")
 
@@ -1488,6 +1658,7 @@ OPTIONS:
     --environment {minimal,work,private}
                         Environment configuration to install (default: minimal)
     --no-remote        Skip remote activities (GitHub, SSH keys, Tailscale)
+    --with-gita        Install gita multi-repository management tool
     --help             Show this help message and exit
 
 ENVIRONMENTS:
@@ -1509,6 +1680,7 @@ EXAMPLES:
     export DOTFILES_ENVIRONMENT=work && uv run init.py      # Install work environment
     export DOTFILES_ENVIRONMENT=private && uv run init.py   # Install full desktop environment
     DOTFILES_ENVIRONMENT=minimal uv run init.py --no-remote # Install without remote activities
+    DOTFILES_ENVIRONMENT=work uv run init.py --with-gita    # Install work environment with gita
 
 ENVIRONMENT VARIABLE:
     DOTFILES_ENVIRONMENT    Required. Must be set to: minimal, work, or private
@@ -1527,7 +1699,12 @@ For more information, see the README or CLAUDE.md files.
 )
 @click.option("--quiet", is_flag=True, help="Suppress non-essential output")
 @click.option("--verbose", is_flag=True, help="Show detailed output")
-def main(no_remote, quiet, verbose):
+@click.option(
+    "--with-gita",
+    is_flag=True,
+    help="Install gita multi-repository management tool",
+)
+def main(no_remote, quiet, verbose, with_gita):
     """Install and configure dotfiles for Linux systems
 
     \\b
@@ -1538,6 +1715,7 @@ def main(no_remote, quiet, verbose):
       export DOTFILES_ENVIRONMENT=minimal && dotfiles-init
       export DOTFILES_ENVIRONMENT=work && dotfiles-init --no-remote
       export DOTFILES_ENVIRONMENT=private && dotfiles-init --verbose
+      export DOTFILES_ENVIRONMENT=work && dotfiles-init --with-gita
 
     \\b
     Valid environments: minimal, work, private
@@ -1584,7 +1762,7 @@ def main(no_remote, quiet, verbose):
 
         try:
             operating_system = detect_operating_system(
-                environment=environment, no_remote_mode=no_remote
+                environment=environment, no_remote_mode=no_remote, with_gita=with_gita
             )
         except FileNotFoundError:
             output.error("Cannot detect operating system (/etc/os-release not found)")
@@ -1606,6 +1784,7 @@ def main(no_remote, quiet, verbose):
                 "Installing dependencies",
                 lambda: operating_system.install_dependencies(logger, output),
             ),
+            ("Installing gita", lambda: operating_system.install_gita(logger, output)),
             ("Linking configurations", lambda: operating_system.link_configs(logger)),
             (
                 "Validating git credential helper",
