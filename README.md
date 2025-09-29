@@ -92,6 +92,30 @@ uv run dotfiles-pkgstatus --refresh        # Force cache refresh
 - Configurations symlinked to `~/.config/`
 - XDG Base Directory compliant
 
+## Testing
+
+### Quick Verification
+
+```bash
+make test-compile    # Fast compilation test (~10 seconds)
+```
+
+### Full Integration Testing
+
+```bash
+make test           # Test on all OS containers (Arch, Debian)
+make test-arch      # Test Arch Linux only
+make test-debian    # Test Debian only
+```
+
+### With Caching (Faster Development)
+
+```bash
+make cache-start    # Set up local build cache
+make test           # Run tests with cache
+make cache-stats    # Show cache statistics
+```
+
 ## Commit Guidelines
 
 **Always use `cog commit` instead of `git commit`** for conventional commits with automatic changelog generation.

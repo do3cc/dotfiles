@@ -9,40 +9,67 @@ name: CI Tests
   workflow_dispatch:
 
 jobs:
-  test-arch:
-    name: Test Arch Linux Installation
+  test:
+    name: Test ${{ matrix.os }} Installation
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [arch, debian]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Calculate Weekly Cache Key
+        id: cache-week
+        run: echo "week=$(date +%Y%U)" >> $GITHUB_OUTPUT
+
+      - name: Setup Multi-Level Package Cache
+        uses: actions/cache@v4
+        id: package-cache
+        with:
+          path: |
+            ~/.cache/dotfiles-ci/pacman
+            ~/.cache/dotfiles-ci/apt
+            ~/.cache/dotfiles-ci/uv-cache
+            ~/.cache/dotfiles-ci/uv-python-cache
+          # Enhanced key strategy with time-based rotation for security updates
+          key: packages-${{ runner.os }}-${{ matrix.os }}-${{ steps.cache-week.outputs.week }}-${{ hashFiles('init.py', 'pyproject.toml') }}
+          restore-keys: |
+            packages-${{ runner.os }}-${{ matrix.os }}-${{ steps.cache-week.outputs.week }}-
+            packages-${{ runner.os }}-${{ matrix.os }}-
+            packages-${{ runner.os }}-
+
+      - name: Setup Container Layer Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/dotfiles-ci/containers
+          key: containers-${{ runner.os }}-${{ hashFiles('test/Containerfile.*', 'Makefile') }}
+          restore-keys: |
+            containers-${{ runner.os }}-
+
+      - name: Cache Hit Statistics
+        run: |
+          echo "Package cache hit: ${{ steps.package-cache.outputs.cache-hit }}"
+          echo "Cache sizes:" && du -sh ~/.cache/dotfiles-ci/* 2>/dev/null || echo "No cache yet"
 
       - name: Set up Podman
         run: |
           sudo apt-get update
           sudo apt-get install -y podman
 
-      - name: Test Arch Linux minimal environment
+      - name: Pre-warm Caches
+        run: |
+          mkdir -p ~/.cache/dotfiles-ci/{pacman,apt,uv-cache,uv-python-cache,containers,${{ matrix.os }}}
+          # Pre-download common packages if cache miss
+          if [[ ! -f ~/.cache/dotfiles-ci/${{ matrix.os }}/.warmed ]]; then
+            echo "Cache miss - will warm ${{ matrix.os }} cache during build"
+            touch ~/.cache/dotfiles-ci/${{ matrix.os }}/.warmed
+          fi
+
+      - name: Test ${{ matrix.os }} minimal environment
         run: |
           chmod +x test/run_tests.sh
-          ./test/run_tests.sh --arch --environment minimal --cleanup
-        timeout-minutes: 45
-
-  test-debian:
-    name: Test Debian Installation
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Podman
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y podman
-
-      - name: Test Debian minimal environment
-        run: |
-          chmod +x test/run_tests.sh
-          ./test/run_tests.sh --debian --environment minimal --cleanup
+          export CI_CACHE_DIR=~/.cache/dotfiles-ci
+          ./test/run_tests.sh --${{ matrix.os }} --environment minimal --cleanup
         timeout-minutes: 45
