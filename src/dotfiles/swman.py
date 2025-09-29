@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import click
-from .logging_config import setup_logging, bind_context, log_info
+from .logging_config import setup_logging, bind_context
 from .output_formatting import ConsoleOutput
 
 
@@ -78,6 +78,7 @@ class PackageManager:
     def __init__(self, name: str, manager_type: ManagerType):
         self.name = name
         self.type = manager_type
+        self.logger = setup_logging("swman")
 
     def is_available(self) -> bool:
         """Check if this package manager is available on the system."""
@@ -267,7 +268,7 @@ class UvToolsManager(PackageManager):
         # Return cannot_determine status instead of false positive
         result = (False, -1)  # -1 indicates "cannot determine"
 
-        log_info(
+        self.logger.log_info(
             "manager_check_result",
             manager=self.name,
             can_check=False,
@@ -339,7 +340,7 @@ class LazyNvimManager(PackageManager):
         # Return cannot_determine status instead of false positive
         result = (False, -1)  # -1 indicates "cannot determine"
 
-        log_info(
+        self.logger.log_info(
             "manager_check_result",
             manager=self.name,
             can_check=False,
@@ -405,7 +406,7 @@ class FisherManager(PackageManager):
         # Return cannot_determine status instead of false positive
         result = (False, -1)  # -1 indicates "cannot determine"
 
-        log_info(
+        self.logger.log_info(
             "manager_check_result",
             manager=self.name,
             can_check=False,
