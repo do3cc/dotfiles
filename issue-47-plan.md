@@ -116,6 +116,8 @@ Based on the GitHub issue and error traces:
 2. **Test Debian systems**: Ubuntu, Debian in containers
 3. **Integration testing**: Verify `swman` and `init` work consistently
 4. **Security validation**: Ensure all systems get security updates
+5. **Fix test coverage gap**: Add tests WITHOUT `--no-remote` to catch real package installation failures
+6. **CI improvement**: Ensure dependency issues like missing `pacman-contrib` are caught by automated tests
 
 ### 3. Detailed Implementation Steps
 
@@ -256,6 +258,38 @@ def update_system(self, logger: LoggingHelpers):
 3. Keep only the timing logic (`should_update_system`, `mark_system_updated`)
 4. Maintain user-facing progress and status messages
 
+#### Step 6: Fix Test Coverage Gap
+
+**File**: `Makefile`
+**Location**: Test targets and new test targets
+**Changes**:
+
+1. **Add new test target**: `test-arch-full` without `--no-remote` flag
+2. **Add new test target**: `test-debian-full` without `--no-remote` flag
+3. **Update CI workflow**: Include full integration tests that validate real package installation
+4. **Test dependency validation**: Ensure missing packages like `pacman-contrib` cause test failures
+
+**Implementation**:
+
+```makefile
+# Full integration tests (without --no-remote)
+test-arch-full:
+	@echo "🧪 Full integration test on Arch Linux (with package installation)..."
+	@podman run --rm \
+		-e DOTFILES_ENVIRONMENT=private \
+		-v $(PWD):/dotfiles:O \
+		dotfiles-test-arch \
+		bash -c "uv sync && uv run dotfiles-init"  # No --no-remote flag
+
+test-debian-full:
+	@echo "🧪 Full integration test on Debian (with package installation)..."
+	@podman run --rm \
+		-e DOTFILES_ENVIRONMENT=private \
+		-v $(PWD):/dotfiles:O \
+		dotfiles-test-debian \
+		bash -c "uv sync && uv run dotfiles-init"  # No --no-remote flag
+```
+
 ## Files to Modify
 
 1. **`/home/do3cc/projects/dotfiles/src/dotfiles/init.py`**
@@ -345,6 +379,17 @@ uv run dotfiles-init --verbose
 - **Q**: Why didn't the full exception traceback appear in the log file as expected by the user?
 - **Context**: The logging configuration should capture full tracebacks
 - **Investigation Needed**: Verify exception logging is working correctly in the `LoggingHelpers.log_exception()` method
+
+### 4. Docker Test Coverage Gap Discovery
+
+- **CRITICAL FINDING**: Docker tests use `--no-remote` flag which **skips all system updates and package installation**
+- **Root Cause**: Makefile line 105: `uv run dotfiles-init --no-remote`
+- **Impact**: Tests never execute the failing code paths:
+  - Arch: `update_system()` exits early with "No-remote mode: Skipping system updates"
+  - Debian: `install_dependencies()` exits early with "No-remote mode: Skipping package installation and system updates"
+- **Result**: Missing `pacman-contrib` dependency was never detected by CI
+- **Test Gap**: Docker tests are essentially "mock tests" that skip the actual functionality
+- **Recommendation**: Add integration tests WITHOUT `--no-remote` to validate real package installation flows
 
 ### 4. Architectural Integration Strategy
 
