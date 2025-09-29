@@ -58,44 +58,54 @@ Based on the GitHub issue and error traces:
 
 **Issue 1: Missing `checkupdates` Command**
 
-- **Cause**: `checkupdates` is provided by the `pacman-contrib` package which may not be installed
-- **Solution**: Add `pacman-contrib` to the required packages list and improve error handling
+- **Cause**: `checkupdates` is provided by the `pacman-contrib` package which is missing from `Arch.pacman_packages` list
+- **Solution**: Add `pacman-contrib` to the required packages list
 
-**Issue 2: Fallback System Update Failing**
+**Issue 2: Architectural Duplication**
+
+- **Discovery**: The repository already has a comprehensive software management system in `swman.py` that includes:
+  - SystemManager class with identical `checkupdates` logic (lines 102-116)
+  - Proper error handling for missing `checkupdates` command
+  - Graceful fallback mechanisms
+- **Root Problem**: `init.py` duplicates update functionality instead of leveraging existing infrastructure
+- **Solution**: Refactor `init.py` to use `swman.py` SystemManager for updates
+
+**Issue 3: Fallback System Update Failing**
 
 - **Cause**: The `sudo pacman -Syu --noconfirm` command is returning exit status 1
 - **Solutions**:
   - Add better error handling and diagnostics
   - Implement retry logic with different pacman options
   - Add system state validation before attempting updates
+  - **Better approach**: Use the existing SystemManager.update() method
 
-**Issue 3: Insufficient Error Logging**
+**Issue 4: Insufficient Error Logging**
 
 - **Cause**: Exception handling may not be capturing full tracebacks in logs
 - **Solution**: Improve exception logging in the `update_system()` method
 
 ### 2. Implementation Strategy
 
-**Phase 1: Immediate Fixes**
+**Phase 1: Immediate Fixes (1-2 days)**
 
-1. Add `pacman-contrib` to the `Arch.pacman_packages` list
-2. Improve error handling in `update_system()` method
-3. Add comprehensive logging for subprocess failures
-4. Add system diagnostics before attempting updates
+1. Add `pacman-contrib` to the `Arch.pacman_packages` list (quick fix)
+2. Import and use `SystemManager` from `swman.py` in `init.py`
+3. Replace `Arch.update_system()` method with call to `SystemManager.update()`
+4. Add comprehensive logging for the integration
 
-**Phase 2: Robustness Improvements**
+**Phase 2: Architectural Consolidation (2-3 days)**
 
-1. Implement alternative update checking methods when `checkupdates` is unavailable
-2. Add retry logic with exponential backoff
-3. Implement better system state validation
-4. Add more granular error reporting
+1. Refactor `Arch.update_system()` to delegate to `SystemManager`
+2. Ensure proper error handling and logging integration
+3. Remove duplicate update logic from `init.py`
+4. Add configuration to control update behavior in init context
 
-**Phase 3: Testing and Validation**
+**Phase 3: Testing and Enhancement (1-2 days)**
 
-1. Test on CachyOS environment specifically
+1. Test consolidated approach on CachyOS environment specifically
 2. Test with missing `pacman-contrib` package
-3. Test fallback scenarios
-4. Validate logging output
+3. Validate that both `swman` and `init` work consistently
+4. Add integration tests for the unified approach
 
 ### 3. Detailed Implementation Steps
 
@@ -105,48 +115,71 @@ Based on the GitHub issue and error traces:
 **Location**: `Arch.pacman_packages` list (around line 528)
 **Change**: Add `"pacman-contrib"` to ensure `checkupdates` is available
 
-#### Step 2: Enhance Error Handling and Logging
+#### Step 2: Import SystemManager and Consolidate Logic
 
 **File**: `src/dotfiles/init.py`
-**Location**: `Arch.update_system()` method (lines 691-740)
+**Location**: Import section and `Arch.update_system()` method (lines 691-740)
 **Changes**:
 
-1. Add comprehensive logging before subprocess calls
-2. Improve exception handling with full traceback logging
-3. Add system diagnostics (disk space, pacman lock status, etc.)
-4. Implement more informative error messages
+1. Add import: `from .swman import SystemManager`
+2. Replace the entire `update_system()` method with SystemManager delegation
+3. Maintain the existing 24-hour update check logic
+4. Preserve user-facing messages and progress indicators
+5. Ensure proper logging integration with existing LoggingHelpers
 
-#### Step 3: Implement Alternative Update Detection
+#### Step 3: Create Unified Update Interface
+
+**File**: `src/dotfiles/init.py`
+**Location**: `Arch.update_system()` method
+**New Implementation**:
+
+```python
+def update_system(self, logger: LoggingHelpers):
+    """Update system using the centralized SystemManager"""
+    if not self.should_update_system():
+        print("✅ System updated within last 24 hours, skipping update")
+        return
+
+    try:
+        # Use the existing SystemManager for consistent update behavior
+        system_manager = SystemManager()
+        result = system_manager.update(dry_run=False)
+
+        if result.success:
+            print("✅ System update completed successfully")
+            self.mark_system_updated()
+            logger.log_info("system_update_completed",
+                           packages_updated=result.details.get("count", 0))
+        else:
+            raise Exception(f"System update failed: {result.message}")
+
+    except Exception as e:
+        logger.log_exception(e, "System update failed")
+        print("💡 Try: Run 'sudo pacman -Syu' manually to check for issues")
+        raise
+```
+
+#### Step 4: Ensure Consistent Behavior
+
+**File**: `src/dotfiles/swman.py`
+**Location**: Review SystemManager implementation
+**Changes**:
+
+1. Verify SystemManager handles all cases that init.py needs
+2. Ensure proper error reporting and logging
+3. Add any missing functionality for init.py use case
+4. Document the integration pattern
+
+#### Step 5: Remove Duplicate Code
 
 **File**: `src/dotfiles/init.py`
 **Location**: `Arch.update_system()` method
 **Changes**:
 
-1. Add fallback method to check for updates without `checkupdates`
-2. Use `pacman -Qu` as alternative update detection
-3. Implement graceful degradation when tools are missing
-
-#### Step 4: Add System State Validation
-
-**File**: `src/dotfiles/init.py`
-**Location**: `Arch.update_system()` method
-**Changes**:
-
-1. Check for pacman lock file conflicts
-2. Validate available disk space
-3. Check network connectivity for package downloads
-4. Verify sudo privileges before attempting system updates
-
-#### Step 5: Improve Subprocess Error Handling
-
-**File**: `src/dotfiles/init.py`
-**Location**: Multiple subprocess calls in `Arch` class
-**Changes**:
-
-1. Add timeout handling for long-running operations
-2. Capture and log stderr output for failed commands
-3. Implement retry logic for transient failures
-4. Add process cleanup for interrupted operations
+1. Remove all subprocess calls to pacman and checkupdates
+2. Remove duplicate error handling logic
+3. Keep only the timing logic (`should_update_system`, `mark_system_updated`)
+4. Maintain user-facing progress and status messages
 
 ## Files to Modify
 
@@ -238,11 +271,17 @@ uv run dotfiles-init --verbose
 - **Context**: The logging configuration should capture full tracebacks
 - **Investigation Needed**: Verify exception logging is working correctly in the `LoggingHelpers.log_exception()` method
 
-### 4. Package Management Strategy
+### 4. Architectural Integration Strategy
 
-- **Q**: Should we implement a more robust package management strategy that handles missing dependencies automatically?
-- **Context**: If `pacman-contrib` is missing, should the system attempt to install it first?
-- **Decision Needed**: Auto-install missing dependencies vs. graceful degradation vs. clear error reporting
+- **Q**: Should init.py fully delegate to SystemManager or maintain some update logic independently?
+- **Context**: SystemManager has robust error handling but init.py has specific timing and user interaction requirements
+- **Decision Needed**: Full delegation vs. hybrid approach vs. enhanced SystemManager interface
+
+### 5. SystemManager Compatibility
+
+- **Q**: Does SystemManager.update() provide all the functionality that init.py's update_system() currently provides?
+- **Context**: Need to ensure no regression in user experience or functionality
+- **Investigation Needed**: Compare SystemManager capabilities with current init.py update behavior
 
 ### 5. Recovery and Rollback
 
@@ -324,28 +363,35 @@ uv run dotfiles-init --verbose
 
 ## Timeline Estimate
 
-### Phase 1: Critical Fixes (1-2 days)
+### Phase 1: Immediate Fixes (1-2 days)
 
 - Add `pacman-contrib` dependency
-- Fix immediate error handling issues
-- Improve logging for better diagnostics
-- Basic testing and validation
+- Integrate SystemManager into init.py
+- Basic testing and validation of consolidated approach
+- Verify no regression in user experience
 
-### Phase 2: Enhanced Robustness (2-3 days)
+### Phase 2: Architectural Consolidation (2-3 days)
 
-- Implement alternative update detection methods
-- Add comprehensive system validation
-- Implement retry logic and recovery mechanisms
+- Refactor update_system() method to use SystemManager
+- Remove duplicate update logic from init.py
+- Enhance SystemManager if needed for init.py requirements
 - Comprehensive testing across scenarios
 
-### Phase 3: Polish and Documentation (1 day)
+### Phase 3: Testing and Validation (1-2 days)
 
-- Refine error messages and user experience
-- Update documentation and code comments
-- Final integration testing
-- Prepare for deployment
+- Test consolidated approach on CachyOS
+- Validate both swman and init work consistently
+- Integration testing and edge case validation
+- Documentation updates
 
-**Total Estimated Time**: 4-6 days
+**Total Estimated Time**: 4-7 days
+
+**Key Benefits of New Approach**:
+
+- Eliminates code duplication between init.py and swman.py
+- Leverages existing robust error handling in SystemManager
+- Provides consistent update behavior across all tools
+- Reduces maintenance burden by centralizing update logic
 
 ## Next Steps
 
