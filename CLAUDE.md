@@ -140,6 +140,7 @@ The script handles:
 
 - Main config in `config.fish` with starship prompt, direnv integration
 - Custom functions for Git shortcuts and tool integration
+- Gita worktree maintenance system for automated repository cleanup
 - NVM integration for Node.js version management
 
 **Neovim (`lazy_nvim/`)**:
@@ -456,3 +457,135 @@ The project includes custom slash commands for quick project status analysis:
 ```
 
 These commands leverage the `dotfiles-status` tool and provide Claude with structured prompts for consistent, actionable project analysis.
+
+## Gita Worktree Maintenance System
+
+The repository includes an automated worktree maintenance system that integrates with [gita](https://github.com/nosarthur/gita) for managing multiple git repositories with worktrees.
+
+### Automatic Background Maintenance
+
+The system runs automatically when fish shell starts and provides silent maintenance suggestions when issues are detected:
+
+- **Silent Operation**: Only shows output when actionable items are found
+- **Background Fetching**: Automatically fetches from remotes without user interaction
+- **Issue Detection**: Identifies merged branches, stale worktrees, and uncommitted work
+- **Blacklist Support**: Skip repositories that don't use worktrees via `~/.config/gita-worktree-blacklist`
+
+### Interactive Commands
+
+#### Core Commands
+
+```bash
+# Background check (runs automatically on shell startup)
+gita-worktree-check
+
+# Detailed status of all repositories with worktrees
+gita-worktree-status
+
+# Interactive pull operations with confirmation prompts
+gita-worktree-pull
+
+# Show cleanup commands for user to execute
+gita-worktree-cleanup
+
+# Comprehensive analysis and reporting
+gita-worktree-audit
+```
+
+#### Supporting Commands
+
+```bash
+# Discover all gita-managed repositories
+gita-repo-discovery
+
+# Check if a repository uses worktrees
+gita-worktree-detect <repo-name>
+
+# Silent background fetching across all repos
+gita-batch-fetch [--silent] [--timeout <seconds>]
+```
+
+### Configuration
+
+#### Blacklist Configuration
+
+Create `~/.config/gita-worktree-blacklist` to exclude repositories from maintenance:
+
+```
+# One repository name per line
+repo-without-worktrees
+legacy-project
+experimental-repo
+```
+
+#### Fish Integration
+
+The system integrates with fish shell startup in `fish/config.fish`:
+
+```fish
+# Run gita worktree maintenance check
+gita-worktree-check
+```
+
+### Architecture
+
+The system is built with a modular architecture:
+
+- **Discovery Layer**: `gita-repo-discovery` finds all gita-managed repositories
+- **Detection Layer**: `gita-worktree-detect` identifies repositories using worktrees
+- **Analysis Layer**: `gita-worktree-detect-issues` finds maintenance opportunities
+- **Action Layer**: Interactive commands for user-controlled maintenance
+- **Background Layer**: `gita-batch-fetch` for silent remote synchronization
+
+### Issue Detection
+
+The system automatically detects:
+
+- **Merged Branches**: Branches merged to main that can be cleaned up
+- **Stale Worktrees**: Directory references that no longer exist
+- **Uncommitted Work**: Worktrees with pending changes
+- **Behind Main**: Worktrees that need to be updated
+- **Remote Sync**: Repositories that need fetching
+
+### Example Output
+
+When issues are detected during shell startup:
+
+```
+🔧 Worktree maintenance suggestions:
+  Repository: dotfiles
+    gita branch delete dotfiles feature-123  # Merged branch can be cleaned up
+    Worktree behind main by 3 commits: /path/to/worktree (feature-branch)
+  Repository: project-x
+    gita worktree prune project-x  # Remove stale worktree reference
+```
+
+### Performance
+
+- **Fast Startup**: Background checks complete quickly to avoid shell delays
+- **Parallel Operations**: Fetching and analysis run in parallel where possible
+- **Selective Processing**: Only processes repositories with worktrees
+- **Configurable Timeouts**: Network operations have configurable timeout limits
+
+### Testing
+
+The system includes comprehensive test coverage:
+
+```bash
+# Run all fish function tests
+./test/run_fish_tests.fish
+
+# Run specific test suites
+./test/test_gita_repo_discovery.fish
+./test/test_gita_worktree_detect.fish
+./test/test_gita_batch_fetch.fish
+./test/test_gita_worktree_check.fish
+./test/test_gita_interactive_functions.fish
+```
+
+### Integration with Existing Tools
+
+- **Works alongside**: Existing `wt-*` functions for local worktree management
+- **Complements**: `dotfiles-status` tool for project overview
+- **Extends**: Gita's multi-repository management with worktree-specific features
+- **Respects**: User workflow by showing commands rather than executing them automatically

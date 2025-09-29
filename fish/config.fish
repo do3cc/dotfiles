@@ -21,6 +21,9 @@ if status is-interactive
 
     # Show package/system status on startup
     pkgstatus --quiet
+
+    # Run gita worktree maintenance check
+    gita-worktree-check
 end
 
 # uv
