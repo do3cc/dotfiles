@@ -176,10 +176,15 @@ class StatusChecker:
                         total_updates = 0
 
                         for manager, (has_updates, count) in json_line.items():
+                            # Handle different update check states:
+                            # - count > 0: confirmed updates available
+                            # - count = 0: no updates
+                            # - count < 0: cannot determine (indeterminate)
                             packages[manager] = {
                                 "has_updates": has_updates,
                                 "count": count if isinstance(count, int) else 0,
                             }
+                            # Only count positive updates (exclude indeterminate managers)
                             if has_updates and isinstance(count, int) and count > 0:
                                 total_updates += count
 

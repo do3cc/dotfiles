@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import click
-from .logging_config import setup_logging, bind_context
+from .logging_config import setup_logging, bind_context, log_info
 from .output_formatting import ConsoleOutput
 
 
@@ -262,9 +262,21 @@ class UvToolsManager(PackageManager):
         return self._command_exists("uv")
 
     def check_updates(self) -> Tuple[bool, int]:
-        # UV doesn't have a direct "check updates" command
+        # UV doesn't have a direct "check updates" command yet
         # We'd need to parse `uv tool list` and check each tool
-        return True, 0  # Assume updates available for now
+        # Return cannot_determine status instead of false positive
+        result = (False, -1)  # -1 indicates "cannot determine"
+
+        log_info(
+            "manager_check_result",
+            manager=self.name,
+            can_check=False,
+            has_updates=result[0],
+            count=result[1],
+            reason="no_outdated_command_available",
+        )
+
+        return result
 
     def update(self, dry_run: bool = False) -> ManagerResult:
         start_time = time.time()
@@ -323,8 +335,20 @@ class LazyNvimManager(PackageManager):
         return lazy_path.exists() and self._command_exists("nvim")
 
     def check_updates(self) -> Tuple[bool, int]:
-        # Lazy.nvim has automatic checking enabled in your config
-        return True, 0  # Assume updates available
+        # Lazy.nvim doesn't provide headless read-only update checking
+        # Return cannot_determine status instead of false positive
+        result = (False, -1)  # -1 indicates "cannot determine"
+
+        log_info(
+            "manager_check_result",
+            manager=self.name,
+            can_check=False,
+            has_updates=result[0],
+            count=result[1],
+            reason="no_headless_check_command",
+        )
+
+        return result
 
     def update(self, dry_run: bool = False) -> ManagerResult:
         start_time = time.time()
@@ -377,7 +401,20 @@ class FisherManager(PackageManager):
         )
 
     def check_updates(self) -> Tuple[bool, int]:
-        return True, 0  # Assume updates available
+        # Fisher doesn't provide update checking without installation
+        # Return cannot_determine status instead of false positive
+        result = (False, -1)  # -1 indicates "cannot determine"
+
+        log_info(
+            "manager_check_result",
+            manager=self.name,
+            can_check=False,
+            has_updates=result[0],
+            count=result[1],
+            reason="no_check_only_command",
+        )
+
+        return result
 
     def update(self, dry_run: bool = False) -> ManagerResult:
         start_time = time.time()
