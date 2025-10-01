@@ -1,4 +1,5 @@
 #!/usr/bin/env -S uv run python
+# pyright: strict
 """
 pkgstatus.py - Package and System Status Checker
 
@@ -12,22 +13,22 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
 
 import click
-from .logging_config import setup_logging, bind_context
+from .logging_config import setup_logging
 from .output_formatting import ConsoleOutput
+from typing import Any
 
 
 @dataclass
 class StatusResult:
-    packages: Dict
-    git: Dict
-    init: Dict
+    packages: tuple[str, dict[str, str | int | dict[str, str]]]
+    git: dict[str, str | int | bool]
+    init: dict[str, str | int | bool | float]
 
 
 class StatusChecker:
-    def __init__(self, cache_dir: Optional[str] = None):
+    def __init__(self, cache_dir: str | None = None):
         self.cache_dir = (
             Path(cache_dir or os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser()
             / "dotfiles"
@@ -40,7 +41,7 @@ class StatusChecker:
         self.git_cache = self.cache_dir / "git.json"
         self.init_cache = self.cache_dir / "init.json"
 
-    def get_config(self, key: str, default):
+    def get_config(self, key: str, default: str) -> str:
         """Get Fish universal variable configuration"""
         try:
             result = subprocess.run(
@@ -62,7 +63,9 @@ class StatusChecker:
         file_age = time.time() - cache_file.stat().st_mtime
         return file_age > (max_age_hours * 3600)
 
-    def get_packages_status(self, force_refresh: bool = False) -> Dict:
+    def get_packages_status(
+        self, force_refresh: bool = False
+    ) -> tuple[str, dict[str, str | int | dict[str, str]]]:
         """Get package status with caching"""
         cache_hours = int(self.get_config("cache_hours", "6"))
 
@@ -72,14 +75,14 @@ class StatusChecker:
         return self._load_cache(
             self.packages_cache,
             {
-                "packages": {},
+                "packages": dict(),
                 "total_updates": 0,
                 "last_check": 0,
                 "error": "Cache unavailable",
             },
         )
 
-    def get_git_status(self, force_refresh: bool = False) -> Dict:
+    def get_git_status(self, force_refresh: bool = False) -> dict[str, str | bool]:
         """Get git status with caching"""
         enabled = self.get_config("git_enabled", "true") == "true"
         if not enabled:
@@ -92,7 +95,7 @@ class StatusChecker:
             self.git_cache, {"enabled": True, "error": "Git status unavailable"}
         )
 
-    def get_init_status(self, force_refresh: bool = False) -> Dict:
+    def get_init_status(self, force_refresh: bool = False) -> dict[str, bool | str]:
         """Get init script status with caching"""
         enabled = self.get_config("init_enabled", "true") == "true"
         if not enabled:
@@ -105,7 +108,7 @@ class StatusChecker:
             self.init_cache, {"enabled": True, "error": "Init status unavailable"}
         )
 
-    def _load_cache(self, cache_file: Path, default: Dict) -> Dict:
+    def _load_cache(self, cache_file: Path, default: Any) -> Any:
         """Load JSON from cache file with fallback"""
         try:
             with open(cache_file, "r") as f:
@@ -113,7 +116,7 @@ class StatusChecker:
         except Exception:
             return default
 
-    def _save_cache(self, cache_file: Path, data: Dict):
+    def _save_cache(self, cache_file: Path, data: Any):
         """Save data to cache file atomically"""
         temp_file = cache_file.with_suffix(".tmp")
         try:
@@ -124,12 +127,12 @@ class StatusChecker:
             if temp_file.exists():
                 temp_file.unlink()
 
-    def _refresh_packages_cache(self):
+    def _refresh_packages_cache(self) -> None:
         """Refresh package status cache"""
         timestamp = int(time.time())
 
         # Try to find swman
-        swman_cmd = None
+        swman_cmd: str | None = None
         if Path("./swman.py").is_file():
             swman_cmd = "./swman.py"
         elif subprocess.run(["which", "swman.py"], capture_output=True).returncode == 0:
@@ -159,20 +162,21 @@ class StatusChecker:
                             json_end_idx = i
                             break
 
+                    json_line: dict[str, tuple[bool, int]] | None = None
                     if json_start_idx != -1 and json_end_idx != -1:
                         json_lines = output_lines[json_start_idx : json_end_idx + 1]
                         json_text = "\n".join(json_lines)
                         try:
-                            packages_data = json.loads(json_text)
+                            packages_data: dict[str, tuple[bool, int]] = json.loads(
+                                json_text
+                            )
                             json_line = packages_data
                         except json.JSONDecodeError:
                             json_line = None
-                    else:
-                        json_line = None
 
                     if json_line:
                         # Transform swman format to our format
-                        packages = {}
+                        packages: dict[str, dict[str, bool | int]] = {}
                         total_updates = 0
 
                         for manager, (has_updates, count) in json_line.items():
@@ -182,13 +186,15 @@ class StatusChecker:
                             # - count < 0: cannot determine (indeterminate)
                             packages[manager] = {
                                 "has_updates": has_updates,
-                                "count": count if isinstance(count, int) else 0,
+                                "count": count,
                             }
                             # Only count positive updates (exclude indeterminate managers)
-                            if has_updates and isinstance(count, int) and count > 0:
+                            if has_updates and count > 0:
                                 total_updates += count
 
-                        data = {
+                        data: dict[
+                            str, int | bool | dict[str, dict[str, bool | int]]
+                        ] = {
                             "packages": packages,
                             "total_updates": total_updates,
                             "last_check": timestamp,
@@ -232,10 +238,10 @@ class StatusChecker:
 
         self._save_cache(self.packages_cache, data)
 
-    def _refresh_git_cache(self):
+    def _refresh_git_cache(self) -> None:
         """Refresh git status cache"""
         timestamp = int(time.time())
-        data = {"enabled": True, "last_check": timestamp}
+        data: dict[str, str | int | bool] = {"enabled": True, "last_check": timestamp}
 
         try:
             # Check if we're in a git repository
@@ -272,7 +278,8 @@ class StatusChecker:
                 data["ahead"] = 0
                 data["behind"] = 0
 
-                if data["branch"] != "detached":
+                branch_value = data.get("branch")
+                if branch_value != "detached":
                     try:
                         upstream_result = subprocess.run(
                             ["git", "rev-parse", "--abbrev-ref", "@{upstream}"],
@@ -310,10 +317,13 @@ class StatusChecker:
 
         self._save_cache(self.git_cache, data)
 
-    def _refresh_init_cache(self):
+    def _refresh_init_cache(self) -> None:
         """Refresh init script status cache"""
         timestamp = int(time.time())
-        data = {"enabled": True, "last_check": timestamp}
+        data: dict[str, str | int | bool | float] = {
+            "enabled": True,
+            "last_check": timestamp,
+        }
 
         # Check if we're in dotfiles directory
         if Path("./init.py").exists():
@@ -356,26 +366,36 @@ class StatusChecker:
 
     def format_quiet_output(self, status: StatusResult) -> str:
         """Format output for quiet mode (only show if issues)"""
-        messages = []
+        messages: list[str] = []
 
         # Check package updates
-        pkg_data = status.packages
-        total_updates = pkg_data.get("total_updates", 0)
+        _status_str, pkg_data = status.packages
+        total_updates_raw = pkg_data.get("total_updates", 0)
+        total_updates = total_updates_raw if isinstance(total_updates_raw, int) else 0
         if total_updates > 0:
-            if pkg_data.get("stale", False):
+            stale_raw = pkg_data.get("stale", False)
+            stale = stale_raw if isinstance(stale_raw, bool) else False
+            if stale:
                 messages.append(
                     f"⚠️  {total_updates} package updates available (stale cache)"
                 )
             else:
-                last_check = pkg_data.get("last_check", 0)
+                last_check_raw = pkg_data.get("last_check", 0)
+                last_check = last_check_raw if isinstance(last_check_raw, int) else 0
                 age = self._format_age(last_check)
                 messages.append(f"⚠️  {total_updates} package updates available ({age})")
 
         # Check git status
         git_data = status.git
-        if git_data.get("enabled", False) and git_data.get("in_repo", False):
-            uncommitted = git_data.get("uncommitted", 0)
-            ahead = git_data.get("ahead", 0)
+        enabled_raw = git_data.get("enabled", False)
+        in_repo_raw = git_data.get("in_repo", False)
+        enabled = enabled_raw if isinstance(enabled_raw, bool) else False
+        in_repo = in_repo_raw if isinstance(in_repo_raw, bool) else False
+        if enabled and in_repo:
+            uncommitted_raw = git_data.get("uncommitted", 0)
+            ahead_raw = git_data.get("ahead", 0)
+            uncommitted = uncommitted_raw if isinstance(uncommitted_raw, int) else 0
+            ahead = ahead_raw if isinstance(ahead_raw, int) else 0
             if uncommitted > 0 or ahead > 0:
                 git_msg = "🔄 Git:"
                 if uncommitted > 0:
@@ -386,8 +406,13 @@ class StatusChecker:
 
         # Check init status
         init_data = status.init
-        if init_data.get("enabled", False) and init_data.get("needs_update", False):
-            age_hours = init_data.get("age_hours", 0)
+        init_enabled_raw = init_data.get("enabled", False)
+        needs_update_raw = init_data.get("needs_update", False)
+        init_enabled = init_enabled_raw if isinstance(init_enabled_raw, bool) else False
+        needs_update = needs_update_raw if isinstance(needs_update_raw, bool) else False
+        if init_enabled and needs_update:
+            age_hours_raw = init_data.get("age_hours", 0)
+            age_hours = age_hours_raw if isinstance(age_hours_raw, (int, float)) else 0
             messages.append(f"⚙️  Init script not run in {int(age_hours / 24)}d")
 
         # Add tool name prefix to all messages
@@ -513,47 +538,66 @@ def main(quiet, json_output, refresh, cache_dir, verbose):
 
     For more information, see the README or run 'dotfiles-swman --help'
     """
-    # Initialize logging and console output
-    logger = setup_logging("pkgstatus")
-    output = ConsoleOutput(verbose=verbose, quiet=quiet)
-    logger.log_info("pkgstatus_started")
-
-    # Set up logging context
-    bind_context(quiet=quiet, json_output=json_output, refresh=refresh)
-    logger.log_info(
-        "pkgstatus_operation_started",
+    # Initialize logging and console output with CLI context
+    logger = setup_logging("pkgstatus").bind(
+        verbose=verbose,
         quiet=quiet,
         json_output=json_output,
         refresh=refresh,
+        cache_dir=cache_dir or "default",
     )
+    output = ConsoleOutput(verbose=verbose, quiet=quiet)
+    logger.log_info("pkgstatus_started")
 
-    checker = StatusChecker(cache_dir)
-    status = checker.get_status(refresh)
+    try:
+        checker = StatusChecker(cache_dir)
 
-    # Log status summary
-    logger.log_info(
-        "status_check_completed",
-        packages_status=status.packages.get("status", "unknown"),
-        packages_count=status.packages.get("available", 0),
-        git_status=status.git.get("status", "unknown"),
-        init_status=status.init.get("status", "unknown"),
-    )
+        # Gather status with logging
+        gather_log = logger.bind(operation="gather_status")
+        gather_log.log_info("operation_started")
+        status = checker.get_status(refresh)
+        gather_log.log_info("operation_completed")
 
-    if json_output:
-        status_output = {
-            "packages": status.packages,
-            "git": status.git,
-            "init": status.init,
-        }
-        output.json(status_output)
-    elif quiet:
-        quiet_output = checker.format_quiet_output(status)
-        if quiet_output:  # Only print if there are issues
-            click.echo(quiet_output)
-    else:
-        # Display interactive output with Rich formatting
-        interactive_output = checker.format_interactive_output(status)
-        click.echo(interactive_output)
+        # Log comprehensive status summary
+        logger.log_info(
+            "status_check_completed",
+            packages_total_updates=status.packages.get("total_updates", 0),
+            packages_error=status.packages.get("error"),
+            git_in_repo=status.git.get("in_repo", False),
+            git_uncommitted=status.git.get("uncommitted", 0),
+            git_ahead=status.git.get("ahead", 0),
+            git_behind=status.git.get("behind", 0),
+            init_needs_update=status.init.get("needs_update", False),
+        )
+
+        if json_output:
+            status_output = {
+                "packages": status.packages,
+                "git": status.git,
+                "init": status.init,
+            }
+            output.json(status_output)
+        elif quiet:
+            quiet_output = checker.format_quiet_output(status)
+            if quiet_output:  # Only print if there are issues
+                click.echo(quiet_output)
+        else:
+            # Display interactive output with Rich formatting
+            interactive_output = checker.format_interactive_output(status)
+            click.echo(interactive_output)
+
+        return 0
+
+    except Exception as e:
+        logger.log_exception(e, "status_check_failed")
+        output.error(f"Failed to check status: {e}")
+        if verbose:
+            output.info("DETAILED ERROR INFORMATION:")
+            import traceback
+
+            traceback.print_exc()
+            output.info("Check the error details above and retry")
+        return 1
 
 
 if __name__ == "__main__":

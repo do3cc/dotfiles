@@ -21,4 +21,9 @@ dotfiles-status = "dotfiles.project_status:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/dotfiles"]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.405",
+]
 # Trigger PR update

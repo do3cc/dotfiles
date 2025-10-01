@@ -1,4 +1,5 @@
 #!/usr/bin/env -S uv run python
+# pyright: strict
 """
 swman - Software Manager Orchestrator
 
@@ -19,13 +20,13 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import click
-from .logging_config import setup_logging, bind_context
+from .logging_config import LoggingHelpers, log_unused_variables, setup_logging
 from .output_formatting import ConsoleOutput
 
 
 def run_with_streaming_output(
     command: List[str], timeout: int = 600
-) -> subprocess.CompletedProcess:
+) -> subprocess.CompletedProcess[str]:
     """
     Execute command with real-time output streaming for package managers.
 
@@ -75,10 +76,10 @@ class ManagerResult:
 
 
 class PackageManager:
-    def __init__(self, name: str, manager_type: ManagerType):
-        self.name = name
-        self.type = manager_type
-        self.logger = setup_logging("swman")
+    def __init__(self, name: str, manager_type: ManagerType) -> None:
+        self.name: str = name
+        self.type: ManagerType = manager_type
+        self.logger: LoggingHelpers = setup_logging("swman")
 
     def is_available(self) -> bool:
         """Check if this package manager is available on the system."""
@@ -88,13 +89,13 @@ class PackageManager:
         """Check for available updates. Returns (has_updates, count)."""
         raise NotImplementedError
 
-    def update(self, dry_run: bool = False) -> ManagerResult:
+    def update(self, dry_run: bool = False) -> ManagerResult:  # ignore
         """Perform the update operation."""
         raise NotImplementedError
 
 
 class PacmanManager(PackageManager):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("pacman", ManagerType.SYSTEM)
 
     def is_available(self) -> bool:
@@ -121,6 +122,7 @@ class PacmanManager(PackageManager):
 
         if dry_run:
             has_updates, count = self.check_updates()
+            log_unused_variables(self.logger.logger, has_updates=str(has_updates))
             return ManagerResult(
                 name=self.name,
                 status=UpdateStatus.SUCCESS,
@@ -131,7 +133,7 @@ class PacmanManager(PackageManager):
 
         try:
             # Use streaming output to show real-time pacman progress
-            result = run_with_streaming_output(
+            result: subprocess.CompletedProcess[str] = run_with_streaming_output(
                 ["sudo", "pacman", "-Syu", "--noconfirm"], timeout=600
             )
 
@@ -175,7 +177,7 @@ class PacmanManager(PackageManager):
 
 
 class YayManager(PackageManager):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("yay", ManagerType.SYSTEM)
 
     def is_available(self) -> bool:
@@ -202,6 +204,7 @@ class YayManager(PackageManager):
 
         if dry_run:
             has_updates, count = self.check_updates()
+            log_unused_variables(self.logger.logger, has_updates=str(has_updates))
             return ManagerResult(
                 name=self.name,
                 status=UpdateStatus.SUCCESS,
@@ -212,7 +215,7 @@ class YayManager(PackageManager):
 
         try:
             # Use streaming output to show real-time yay/AUR progress
-            result = run_with_streaming_output(
+            result: subprocess.CompletedProcess[str] = run_with_streaming_output(
                 ["yay", "-Syu", "--noconfirm"],
                 timeout=1800,  # 30 minutes for AUR builds
             )
@@ -258,7 +261,7 @@ class YayManager(PackageManager):
 class DebianSystemManager(PackageManager):
     """System package manager for Debian/Ubuntu systems using apt"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("apt", ManagerType.SYSTEM)
 
     def is_available(self) -> bool:
@@ -296,6 +299,7 @@ class DebianSystemManager(PackageManager):
 
         if dry_run:
             has_updates, count = self.check_updates()
+            log_unused_variables(self.logger.logger, has_updates=str(has_updates))
             return ManagerResult(
                 name=self.name,
                 status=UpdateStatus.SUCCESS,
@@ -306,7 +310,9 @@ class DebianSystemManager(PackageManager):
 
         try:
             # First update package lists
-            result = run_with_streaming_output(["sudo", "apt", "update"], timeout=300)
+            result: subprocess.CompletedProcess[str] = run_with_streaming_output(
+                ["sudo", "apt", "update"], timeout=300
+            )
             if result.returncode != 0:
                 return ManagerResult(
                     name=self.name,
@@ -681,8 +687,18 @@ def main(
 ):
     """Software Manager Orchestrator - Unified package manager updates"""
 
-    # Initialize logging and console output
-    logger = setup_logging("swman")
+    # Initialize logging and console output with CLI context
+    logger = setup_logging("swman").bind(
+        verbose=verbose,
+        quiet=quiet,
+        dry_run=dry_run,
+        json_output=json_output,
+        check=check,
+        system=system,
+        tools=tools,
+        plugins=plugins,
+        update_all=update_all,
+    )
     output = ConsoleOutput(verbose=verbose, quiet=quiet)
     logger.log_info("swman_started")
 
@@ -695,15 +711,16 @@ def main(
     orchestrator = SoftwareManagerOrchestrator()
 
     if check:
-        logger.log_info("check_operation_started")
+        check_log = logger.bind(operation="check")
+        check_log.log_info("operation_started")
         output.status("Checking for updates...")
         check_results = orchestrator.check_all()
         # check_results is Dict[str, Tuple[bool, int]] where tuple is (success, updates_count)
         total_updates = sum(
             r[1] for r in check_results.values() if r[0]
         )  # r[1] is updates_count, r[0] is success
-        logger.log_info(
-            "check_operation_completed",
+        check_log.log_info(
+            "operation_completed",
             total_managers=len(check_results),
             managers_with_updates=sum(
                 1 for r in check_results.values() if r[0] and r[1] > 0
@@ -730,27 +747,39 @@ def main(
     if update_all:
         operation_types.append("all")
 
-    bind_context(operation_types=operation_types, dry_run=dry_run)
+    logger = logger.bind(operation_types=operation_types, dry_run=dry_run)
 
     if system:
-        logger.log_info("system_update_started")
+        sys_log = logger.bind(operation="system", manager_type="SYSTEM")
+        sys_log.log_info("operation_started")
         output.status("Updating system packages...", "🔄")
-        results.extend(orchestrator.update_by_type(ManagerType.SYSTEM, dry_run))
+        sys_results = orchestrator.update_by_type(ManagerType.SYSTEM, dry_run)
+        results.extend(sys_results)
+        sys_log.log_info("operation_completed", result_count=len(sys_results))
 
     if tools:
-        logger.log_info("tools_update_started")
+        tools_log = logger.bind(operation="tools", manager_type="TOOL")
+        tools_log.log_info("operation_started")
         output.status("Updating development tools...", "🔧")
-        results.extend(orchestrator.update_by_type(ManagerType.TOOL, dry_run))
+        tools_results = orchestrator.update_by_type(ManagerType.TOOL, dry_run)
+        results.extend(tools_results)
+        tools_log.log_info("operation_completed", result_count=len(tools_results))
 
     if plugins:
-        logger.log_info("plugins_update_started")
+        plugins_log = logger.bind(operation="plugins", manager_type="PLUGIN")
+        plugins_log.log_info("operation_started")
         output.status("Updating plugins...", "🔌")
-        results.extend(orchestrator.update_by_type(ManagerType.PLUGIN, dry_run))
+        plugins_results = orchestrator.update_by_type(ManagerType.PLUGIN, dry_run)
+        results.extend(plugins_results)
+        plugins_log.log_info("operation_completed", result_count=len(plugins_results))
 
     if update_all:
-        logger.log_info("all_update_started")
+        all_log = logger.bind(operation="all")
+        all_log.log_info("operation_started")
         output.status("Updating everything...", "🚀")
-        results.extend(orchestrator.update_all(dry_run))
+        all_results = orchestrator.update_all(dry_run)
+        results.extend(all_results)
+        all_log.log_info("operation_completed", result_count=len(all_results))
 
     if json_output:
         output.json(

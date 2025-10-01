@@ -1,3 +1,4 @@
+# pyright: strict
 """
 dotfiles - Personal dotfiles and system management tools
 
