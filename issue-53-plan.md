@@ -17,7 +17,7 @@ Based on the GitHub issue, the implementation requires:
 
 2. **Test Coverage Scope**
    - All Python tools: `dotfiles-init`, `dotfiles-swman`, `dotfiles-pkgstatus`, `dotfiles-status`
-   - Shared modules: `logging_config.py`, `output_formatting.py`
+   - Shared modules: `logging_config.py`, `output_formatting.py`, `process_helper.py`
 
 3. **Test Types**
    - Unit tests for individual functions and classes
@@ -45,8 +45,9 @@ src/dotfiles/
 ├── swman.py             # dotfiles-swman entry point
 ├── pkgstatus.py         # dotfiles-pkgstatus entry point
 ├── project_status.py    # dotfiles-status entry point
-├── logging_config.py    # Shared logging with structlog
-└── output_formatting.py # Rich-based console output
+├── logging_config.py    # Shared logging with structlog (LoggingHelpers class)
+├── output_formatting.py # Rich-based console output (ConsoleOutput class)
+└── process_helper.py    # Shared subprocess execution with error handling
 ```
 
 ### Existing Test Infrastructure
@@ -81,12 +82,13 @@ Current `pyproject.toml` dependencies:
 
 ### Code Characteristics Requiring Testing
 
-1. **Subprocess Operations** - Heavy use of subprocess.run() throughout all tools
+1. **Subprocess Operations** - Centralized in `process_helper.py` with `run_command_with_error_handling()`
 2. **File System Operations** - Config linking, path expansion, directory creation
 3. **External API Calls** - GitHub API (gh CLI), package managers (pacman, apt, yay)
 4. **Click CLI Entry Points** - All tools use Click decorators for CLI parsing
 5. **Rich Output Formatting** - ConsoleOutput class for styled terminal output
-6. **Structured Logging** - LoggingHelpers with event-based logging pattern
+6. **Structured Logging** - LoggingHelpers class with event-based logging pattern
+7. **Type Safety** - All modules use `pyright: strict` for comprehensive type checking
 
 ## Implementation Approach
 
@@ -115,6 +117,7 @@ tests/
 ├── conftest.py              # Shared fixtures and configuration
 ├── test_logging_config.py   # Tests for logging_config.py
 ├── test_output_formatting.py # Tests for output_formatting.py
+├── test_process_helper.py   # Tests for process_helper.py
 ├── test_init.py             # Tests for init.py
 ├── test_swman.py            # Tests for swman.py
 ├── test_pkgstatus.py        # Tests for pkgstatus.py
@@ -171,8 +174,10 @@ exclude_lines = [
 Focus areas:
 
 - `setup_logging()` creates proper logger with script name context
-- `bind_context()` adds key-value pairs to global context
-- `LoggingHelpers` methods create proper structured log events
+- `LoggingHelpers` class methods (log_error, log_info, log_warning, etc.)
+- `LoggingHelpers.bind()` returns new instance with bound context
+- `log_subprocess_result()` logs comprehensive command execution details
+- `log_exception()` captures full exception context and traceback
 - Log files are created with proper rotation settings
 - Event-based logging pattern (snake_case events)
 
@@ -181,6 +186,7 @@ Test approach:
 - Mock file system operations for log file creation
 - Verify structlog configuration
 - Validate log output format (JSON)
+- Test LoggingHelpers context binding returns new instances
 - Property-based tests for context binding with arbitrary keys/values
 
 **2.2 Tests for `output_formatting.py`**
@@ -188,7 +194,8 @@ Test approach:
 Focus areas:
 
 - `ConsoleOutput` class initialization with verbose/quiet flags
-- Output methods respect quiet/verbose settings
+- Output methods (status, success, error, warning, info) respect quiet/verbose settings
+- Optional logger parameter integration
 - Table formatting with Rich
 - Progress context creation
 - JSON pretty printing
@@ -198,7 +205,26 @@ Test approach:
 - Mock Rich Console to capture output
 - Verify emoji and styling are applied correctly
 - Test verbose/quiet behavior with various combinations
+- Test optional logger parameter passes to logging
 - Property-based tests for table data with hypothesis strategies
+
+**2.3 Tests for `process_helper.py`**
+
+Focus areas:
+
+- `run_command_with_error_handling()` executes commands with proper logging
+- Timeout handling raises TimeoutExpired with proper error messages
+- CalledProcessError handling logs stdout/stderr
+- Successful command execution logs via log_subprocess_result()
+- Context binding for command description and parameters
+
+Test approach:
+
+- Mock subprocess.run() for various success/failure scenarios
+- Test timeout behavior with mocked TimeoutExpired exceptions
+- Verify error output includes command, stdout, stderr
+- Test integration between process_helper, logging, and output formatting
+- Property-based tests for command lists and timeout values
 
 ### Phase 3: Tool-Specific Tests
 
@@ -464,16 +490,17 @@ Document:
 
 1. `tests/__init__.py` - Empty init file
 2. `tests/conftest.py` - Shared fixtures (temp directories, mock subprocess, etc.)
-3. `tests/test_logging_config.py` - 15-20 tests
-4. `tests/test_output_formatting.py` - 15-20 tests
-5. `tests/test_init.py` - 30-40 tests (largest module)
-6. `tests/test_swman.py` - 25-35 tests
-7. `tests/test_pkgstatus.py` - 20-30 tests
-8. `tests/test_project_status.py` - 20-30 tests
-9. `tests/fixtures/__init__.py` - Shared test data
-10. `tests/fixtures/strategies.py` - Hypothesis strategies
-11. `tests/README.md` - Testing documentation
-12. `.github/workflows/test.yml` - CI/CD workflow
+3. `tests/test_logging_config.py` - 15-20 tests for LoggingHelpers class
+4. `tests/test_output_formatting.py` - 15-20 tests for ConsoleOutput class
+5. `tests/test_process_helper.py` - 10-15 tests for run_command_with_error_handling
+6. `tests/test_init.py` - 30-40 tests (largest module with EnvironmentConfig, Linux, Arch, Debian classes)
+7. `tests/test_swman.py` - 25-35 tests for PackageManager hierarchy and SoftwareManagerOrchestrator
+8. `tests/test_pkgstatus.py` - 20-30 tests for StatusChecker and dataclasses
+9. `tests/test_project_status.py` - 20-30 tests for ProjectStatusChecker and dataclasses
+10. `tests/fixtures/__init__.py` - Shared test data
+11. `tests/fixtures/strategies.py` - Hypothesis strategies
+12. `tests/README.md` - Testing documentation
+13. `.github/workflows/test.yml` - CI/CD workflow
 
 ### Files to Modify
 
@@ -517,12 +544,13 @@ Document:
 ### Coverage Goals
 
 Target coverage by module:
-- `logging_config.py` - 90%+ (straightforward logging setup)
-- `output_formatting.py` - 85%+ (mostly output methods)
-- `init.py` - 75%+ (complex with many external calls)
-- `swman.py` - 80%+ (manager classes well-suited to testing)
-- `pkgstatus.py` - 85%+ (cache logic is very testable)
-- `project_status.py` - 80%+ (data parsing and formatting)
+- `logging_config.py` - 90%+ (LoggingHelpers class methods are straightforward)
+- `output_formatting.py` - 85%+ (ConsoleOutput class methods)
+- `process_helper.py` - 95%+ (single focused function with clear paths)
+- `init.py` - 75%+ (complex with many external calls, EnvironmentConfig, multiple OS classes)
+- `swman.py` - 80%+ (PackageManager hierarchy and orchestrator well-suited to testing)
+- `pkgstatus.py` - 85%+ (cache logic and dataclasses are very testable)
+- `project_status.py` - 80%+ (data parsing, dataclasses, and formatting)
 
 ## Dependencies
 
@@ -687,7 +715,8 @@ Optional but helpful:
 
 ### Week 1: Infrastructure & Shared Modules
 - Day 1-2: Set up test infrastructure, dependencies, pytest config
-- Day 3-4: Write tests for `logging_config.py` and `output_formatting.py`
+- Day 3: Write tests for `logging_config.py` (LoggingHelpers class)
+- Day 4: Write tests for `output_formatting.py` (ConsoleOutput class) and `process_helper.py`
 - Day 5: Set up fixtures and mocking patterns in `conftest.py`
 
 ### Week 2: Core Tool Tests (Part 1)
