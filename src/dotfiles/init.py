@@ -138,7 +138,7 @@ class Linux:
         logger.log_progress("starting_dependency_installation")
 
         # Install NVM
-        nvm_path = self.homedir / "/.local/share/nvm"
+        nvm_path = self.homedir / ".local/share/nvm"
         logger = logger.bind(nvm_path=nvm_path)
         logger.log_info("checking_nvm_installation")
 
@@ -146,7 +146,7 @@ class Linux:
             nvm_script = "doesnotexist"
             try:
                 output.status("Installing NVM...", logger=logger)
-                nvm_script = self.homedir / "./install_scripts/install_nvm.sh"
+                nvm_script = self.homedir / "install_scripts/install_nvm.sh"
                 logger = logger.bind(nvm_script_path=nvm_script)
 
                 if not nvm_script.exists():
@@ -193,11 +193,11 @@ class Linux:
             output.success("NVM already installed")
 
         # Install Pyenv
-        pyenv_path = self.homedir / "~/.config/pyenv"
+        pyenv_path = self.homedir / ".config/pyenv"
         if not pyenv_path.exists():
             try:
                 output.status("Installing Pyenv...")
-                pyenv_script = self.homedir / "./install_scripts/install_pyenv.sh"
+                pyenv_script = self.homedir / "install_scripts/install_pyenv.sh"
                 logger = logger.bind(pyenv_script=pyenv_script)
                 if not pyenv_script.exists():
                     output.error(
@@ -281,7 +281,7 @@ class Linux:
 
         for config_dir_src, config_dir_target in self.config.config_dirs:
             target_path = self.homedir / f".config/{config_dir_target}"
-            source_path = self.homedir / "./{config_dir_src}"
+            source_path = self.homedir / f"{config_dir_src}"
             logger = logger.bind(target_path=target_path, source_path=source_path)
 
             try:
@@ -1459,7 +1459,7 @@ class Debian(Linux):
                 output.info("This is non-critical, continuing...", emoji="💡")
 
             # Download and install latest Neovim AppImage
-            nvim_appimage = self.homedir / "./nvim.appimage"
+            nvim_appimage = self.homedir / "nvim.appimage"
             logger = logger.bind(nvim_appimage=nvim_appimage)
             if not nvim_appimage.exists():
                 output.status("Downloading latest Neovim AppImage...", logger=logger)

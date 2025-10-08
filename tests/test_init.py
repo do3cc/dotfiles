@@ -65,10 +65,12 @@ def test_environmentconfig_merge_duplicatehandling(attribute: str, faker):
     getattr(env_config_a, attribute).append(duplicate)
 
     final_config = env_config_a.merge_with(env_config_b)
-    assert len(packages_b + packages_a) == len(final_config.packages)
-    assert len(aur_packages_b + aur_packages_a) == len(final_config.aur_packages)
-    assert len(config_dirs_b + config_dirs_a) == len(final_config.config_dirs)
-    assert len(systemd_services_b + systemd_services_a) == len(
+    # After adding a duplicate, merged list should deduplicate
+    # packages_a has duplicate from packages_b, so total unique = len(set(a+b))
+    assert len(set(packages_b + packages_a)) == len(final_config.packages)
+    assert len(set(aur_packages_b + aur_packages_a)) == len(final_config.aur_packages)
+    assert len(set(config_dirs_b + config_dirs_a)) == len(final_config.config_dirs)
+    assert len(set(systemd_services_b + systemd_services_a)) == len(
         final_config.systemd_services
     )
 
@@ -200,5 +202,6 @@ def test_checkSystemdServiceStatus(
         service_name, logger, output
     )
 
+
 def test_install_dependencies(logger, output):
-    
+    pass  # TODO: Implement

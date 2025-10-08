@@ -28,7 +28,7 @@ def setup_logging(script_name: str) -> "LoggingHelpers":
         LoggingHelpers instance ready for use
     """
     # Ensure log directory exists
-    log_dir = Path.home() / ".cache" / "dotfiles" / "logs"
+    log_dir = Path.home() / ".cache/dotfiles/logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
     log_file = log_dir / "dotfiles.log"
