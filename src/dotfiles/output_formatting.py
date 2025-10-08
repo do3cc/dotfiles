@@ -6,6 +6,8 @@ Provides consistent styling and formatting across all tools.
 Separated from logging to maintain single responsibility principle.
 """
 
+from __future__ import annotations
+
 from rich.console import Console
 from rich.progress import (
     Progress,

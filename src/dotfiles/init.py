@@ -20,10 +20,10 @@ from .logging_config import (
 from .output_formatting import ConsoleOutput
 from .swman import DebianSystemManager, PacmanManager
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from typing import Any, Callable
+    from collections.abc import Callable
 
 
 def expand(path: str) -> str:

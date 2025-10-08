@@ -8,16 +8,13 @@ Logs go to files only - use output_formatting module for user interaction.
 
 import logging
 import os
+import subprocess
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import structlog
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import subprocess
-    from typing import Any
+from typing import Any
 
 
 def setup_logging(script_name: str) -> "LoggingHelpers":
@@ -89,22 +86,22 @@ class LoggingHelpers:
     def __init__(self, logger: structlog.BoundLogger):
         self.logger = logger
 
-    def bind(self, **kwargs: Any) -> "LoggingHelpers":
+    def bind(self, **kwargs: object) -> "LoggingHelpers":
         return LoggingHelpers(self.logger.bind(**kwargs))
 
-    def log_error(self, message: str, **context: Any) -> None:
+    def log_error(self, message: str, **context: object) -> None:
         """Log error with context."""
         self.logger.error(message, **context)
 
-    def log_warning(self, message: str, **context: Any) -> None:
+    def log_warning(self, message: str, **context: object) -> None:
         """Log warning with context."""
         self.logger.warning(message, **context)
 
-    def log_info(self, message: str, **context: Any) -> None:
+    def log_info(self, message: str, **context: object) -> None:
         """Log info with context."""
         self.logger.info(message, **context)
 
-    def log_progress(self, message: str, **context: Any) -> None:
+    def log_progress(self, message: str, **context: object) -> None:
         """Log progress/status information."""
         self.logger.info("progress", message=message, **context)
 
@@ -145,7 +142,7 @@ class LoggingHelpers:
         debug_log.log_debug("Subprocess output")
 
     def log_exception(
-        self, exception: BaseException, context_msg: str, **context: Any
+        self, exception: BaseException, context_msg: str, **context: object
     ) -> None:
         """
         Log exception with full context and traceback.
@@ -163,7 +160,7 @@ class LoggingHelpers:
         )
 
     def log_file_operation(
-        self, operation: str, path: str, success: bool, **context: dict[str, Any]
+        self, operation: str, path: str, success: bool, **context: dict[str, object]
     ) -> None:
         """
         Log file system operations.
@@ -185,7 +182,7 @@ class LoggingHelpers:
         operation: str,
         packages: list[str],
         success: bool,
-        **context: dict[str, Any],
+        **context: dict[str, object],
     ) -> None:
         """
         Log package manager operations.

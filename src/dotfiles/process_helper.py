@@ -1,9 +1,9 @@
 # pyright: strict
 
 import subprocess
+from typing import Any
 from .logging_config import LoggingHelpers
 from .output_formatting import ConsoleOutput
-from typing import Any
 
 
 def run_command_with_error_handling(
