@@ -12,12 +12,13 @@ Provides comprehensive status overview including:
 
 import argparse
 import json
-import subprocess
 import sys
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from .logging_config import setup_logging
+from .output_formatting import ConsoleOutput
+from .process_helper import run_command_with_error_handling
 
 
 @dataclass
@@ -72,15 +73,16 @@ class WorktreeInfo:
 class ProjectStatusChecker:
     """Main class for checking project status"""
 
-    def __init__(self):
+    def __init__(self, output: ConsoleOutput):
         self.logger = setup_logging("project_status")
+        self.output = output
 
     def get_github_issues(self) -> List[IssueInfo]:
         """Fetch open GitHub issues"""
-        self.logger.log_info("fetching GitHub issues")
+        self.logger.log_info("github_issues_fetch_started")
 
         try:
-            result = subprocess.run(
+            result = run_command_with_error_handling(
                 [
                     "gh",
                     "issue",
@@ -88,20 +90,11 @@ class ProjectStatusChecker:
                     "--json",
                     "number,title,state,labels,assignees,url",
                 ],
-                capture_output=True,
-                text=True,
+                logger=self.logger,
+                output=self.output,
+                description="Fetch GitHub issues",
                 timeout=30,
             )
-
-            self.logger.log_subprocess_result(
-                "fetch GitHub issues", ["gh", "issue", "list"], result
-            )
-
-            if result.returncode != 0:
-                self.logger.log_error(
-                    "failed to fetch GitHub issues", error=result.stderr
-                )
-                return []
 
             issues_data: List[Any] = json.loads(result.stdout)
             issues: List[IssueInfo] = []
@@ -124,19 +117,19 @@ class ProjectStatusChecker:
                     )
                 )
 
-            self.logger.log_info("fetched GitHub issues", count=len(issues))
+            self.logger.log_info("github_issues_fetch_completed", count=len(issues))
             return issues
 
         except Exception as e:
-            self.logger.log_error("error fetching GitHub issues", error=str(e))
+            self.logger.log_exception(e, "github_issues_fetch_failed")
             return []
 
     def get_github_prs(self) -> List[PRInfo]:
         """Fetch open GitHub pull requests"""
-        self.logger.log_info("fetching GitHub pull requests")
+        self.logger.log_info("github_prs_fetch_started")
 
         try:
-            result = subprocess.run(
+            result = run_command_with_error_handling(
                 [
                     "gh",
                     "pr",
@@ -144,18 +137,11 @@ class ProjectStatusChecker:
                     "--json",
                     "number,title,state,headRefName,baseRefName,isDraft,url",
                 ],
-                capture_output=True,
-                text=True,
+                logger=self.logger,
+                output=self.output,
+                description="Fetch GitHub PRs",
                 timeout=30,
             )
-
-            self.logger.log_subprocess_result(
-                "fetch GitHub PRs", ["gh", "pr", "list"], result
-            )
-
-            if result.returncode != 0:
-                self.logger.log_error("failed to fetch GitHub PRs", error=result.stderr)
-                return []
 
             prs_data: List[Any] = json.loads(result.stdout)
             prs: List[PRInfo] = []
@@ -173,37 +159,31 @@ class ProjectStatusChecker:
                     )
                 )
 
-            self.logger.log_info("fetched GitHub PRs", count=len(prs))
+            self.logger.log_info("github_prs_fetch_completed", count=len(prs))
             return prs
 
         except Exception as e:
-            self.logger.log_error("error fetching GitHub PRs", error=str(e))
+            self.logger.log_exception(e, "github_prs_fetch_failed")
             return []
 
     def get_local_branches(self) -> List[BranchInfo]:
         """Get information about local branches"""
-        self.logger.log_info("analyzing local branches")
+        self.logger.log_info("local_branches_analysis_started")
 
         try:
             # Get branch info with tracking information
-            result = subprocess.run(
+            result = run_command_with_error_handling(
                 [
                     "git",
                     "for-each-ref",
                     "--format=%(refname:short)|%(objectname:short)|%(committerdate:iso)|%(upstream:trackshort)",
                     "refs/heads/",
                 ],
-                capture_output=True,
-                text=True,
+                logger=self.logger,
+                output=self.output,
+                description="Get branch info",
+                timeout=30,
             )
-
-            self.logger.log_subprocess_result(
-                "get branch info", ["git", "for-each-ref"], result
-            )
-
-            if result.returncode != 0:
-                self.logger.log_error("failed to get branch info", error=result.stderr)
-                return []
 
             branches: List[BranchInfo] = []
             worktrees = self.get_worktrees()
@@ -250,33 +230,27 @@ class ProjectStatusChecker:
                     )
                 )
 
-            self.logger.log_info("analyzed local branches", count=len(branches))
+            self.logger.log_info(
+                "local_branches_analysis_completed", count=len(branches)
+            )
             return branches
 
         except Exception as e:
-            self.logger.log_error("error analyzing branches", error=str(e))
+            self.logger.log_exception(e, "local_branches_analysis_failed")
             return []
 
     def get_worktrees(self) -> List[WorktreeInfo]:
         """Get information about git worktrees"""
-        self.logger.log_info("analyzing worktrees")
+        self.logger.log_info("worktrees_analysis_started")
 
         try:
-            result = subprocess.run(
+            result = run_command_with_error_handling(
                 ["git", "worktree", "list", "--porcelain"],
-                capture_output=True,
-                text=True,
+                logger=self.logger,
+                output=self.output,
+                description="Get worktree info",
+                timeout=30,
             )
-
-            self.logger.log_subprocess_result(
-                "get worktree info", ["git", "worktree", "list"], result
-            )
-
-            if result.returncode != 0:
-                self.logger.log_error(
-                    "failed to get worktree info", error=result.stderr
-                )
-                return []
 
             worktrees: List[WorktreeInfo] = []
             current_worktree: Dict[str, Any] = {}
@@ -303,11 +277,11 @@ class ProjectStatusChecker:
             if current_worktree:
                 worktrees.append(self._process_worktree_info(current_worktree))
 
-            self.logger.log_info("analyzed worktrees", count=len(worktrees))
+            self.logger.log_info("worktrees_analysis_completed", count=len(worktrees))
             return worktrees
 
         except Exception as e:
-            self.logger.log_error("error analyzing worktrees", error=str(e))
+            self.logger.log_exception(e, "worktrees_analysis_failed")
             return []
 
     def _process_worktree_info(self, wt_data: Dict[str, Any]) -> WorktreeInfo:
@@ -329,15 +303,16 @@ class ProjectStatusChecker:
         has_uncommitted: bool = False
         try:
             if not wt_data.get("bare", False):
-                result = subprocess.run(
+                result = run_command_with_error_handling(
                     ["git", "-C", path, "status", "--porcelain"],
-                    capture_output=True,
-                    text=True,
+                    logger=self.logger,
+                    output=self.output,
+                    description=f"Check worktree status for {path}",
                     timeout=10,
                 )
                 has_uncommitted = bool(result.stdout.strip())
-        except Exception:
-            pass  # Ignore errors checking status
+        except Exception as e:
+            self.logger.log_exception(e, "worktree_status_check_failed", path=path)
 
         return WorktreeInfo(
             path=path,
@@ -550,7 +525,8 @@ def main():
 
     args = parser.parse_args()
 
-    checker = ProjectStatusChecker()
+    output = ConsoleOutput()
+    checker = ProjectStatusChecker(output)
 
     # Gather all status information
     issues = [] if args.no_github else checker.get_github_issues()

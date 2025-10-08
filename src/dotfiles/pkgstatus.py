@@ -9,25 +9,264 @@ Handles all complex logic for package, git, and init status checking.
 
 import json
 import os
-import subprocess
+from subprocess import CalledProcessError, TimeoutExpired
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
 from pathlib import Path
 
 import click
-from .logging_config import setup_logging
+from .logging_config import setup_logging, LoggingHelpers
 from .output_formatting import ConsoleOutput
-from typing import Any
+from .process_helper import run_command_with_error_handling
+from .swman import SoftwareManagerOrchestrator
+from typing import Any, Callable, cast
+
+
+class CheckStatus(Enum):
+    """Status of a check operation."""
+
+    SUCCESS = "success"
+    UNAVAILABLE = "unavailable"
+    FAILED = "failed"
 
 
 @dataclass
-class StatusResult:
-    packages: tuple[str, dict[str, str | int | dict[str, str]]]
-    git: dict[str, str | int | bool]
-    init: dict[str, str | int | bool | float]
+class UpdateCheckResult:
+    """
+    System update status as reported by a single package manager.
+
+    Attributes:
+        name: Package manager name (e.g., "pacman", "yay", "apt")
+        has_updates: Whether the package manager found updates available
+        count: Number of updates found (0=no updates, >0=updates available, <0=indeterminate)
+    """
+
+    name: str
+    has_updates: bool = False
+    count: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return dict(name=self.name, has_updates=self.has_updates, count=self.count)
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict())
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "UpdateCheckResult":
+        return cls(
+            name=data["name"],
+            has_updates=bool(data["has_updates"]),
+            count=int(data["count"]),
+        )
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "UpdateCheckResult":
+        return cls.from_dict(json.loads(json_str))
+
+
+@dataclass
+class UpdateCheckCache:
+    """
+    Cached results from checking all package managers for system updates.
+
+    This represents a point-in-time snapshot of update availability.
+    Cache freshness is determined by file modification time, not stored state.
+
+    Attributes:
+        packages: Update check results from each individual package manager
+        total_updates: Total number of updates available across all managers
+        last_check: Unix timestamp when this cache entry was created
+        status: Check operation status
+    """
+
+    packages: list[UpdateCheckResult] = field(default_factory=lambda: [])
+    total_updates: int = 0
+    last_check: int = 0
+    status: CheckStatus = CheckStatus.SUCCESS
+
+    def to_dict(self) -> dict[str, Any]:
+        return dict(
+            packages=[x.to_dict() for x in self.packages],
+            total_updates=self.total_updates,
+            last_check=self.last_check,
+            status=self.status.value,
+        )
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict())
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "UpdateCheckCache":
+        return cls(
+            packages=[UpdateCheckResult.from_dict(x) for x in data.get("packages", [])],
+            total_updates=data.get("total_updates", 0),
+            last_check=data.get("last_check", 0),
+            status=CheckStatus(data.get("status", "success")),
+        )
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "UpdateCheckCache":
+        return cls.from_dict(json.loads(json_str))
+
+
+@dataclass
+class GitStatus:
+    """
+    Git repository status for the current working directory.
+
+    Attributes:
+        last_check: Unix timestamp of last check
+        enabled: Whether git status checking is enabled
+        in_repo: Whether current directory is in a git repository
+        uncommitted: Number of uncommitted changes
+        ahead: Number of commits ahead of remote
+        behind: Number of commits behind remote
+        branch: Current branch name, or "detached" if HEAD is detached
+        status: Check operation status
+    """
+
+    last_check: int = 0
+    enabled: bool = False
+    in_repo: bool = False
+    uncommitted: int = 0
+    ahead: int = 0
+    behind: int = 0
+    branch: str = "detached"
+    status: CheckStatus = CheckStatus.SUCCESS
+
+    def to_dict(self) -> dict[str, Any]:
+        return dict(
+            last_check=self.last_check,
+            enabled=self.enabled,
+            in_repo=self.in_repo,
+            uncommitted=self.uncommitted,
+            ahead=self.ahead,
+            behind=self.behind,
+            branch=self.branch,
+            status=self.status.value,
+        )
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict())
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "GitStatus":
+        return cls(
+            last_check=data.get("last_check", 0),
+            enabled=data.get("enabled", False),
+            in_repo=data.get("in_repo", False),
+            uncommitted=data.get("uncommitted", 0),
+            ahead=data.get("ahead", 0),
+            behind=data.get("behind", 0),
+            branch=data.get("branch", "detached"),
+            status=CheckStatus(data.get("status", "success")),
+        )
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "GitStatus":
+        return cls.from_dict(json.loads(json_str))
+
+
+@dataclass
+class InitScriptStatus:
+    """
+    Dotfiles init script execution status.
+
+    Tracks when the dotfiles init script was last run to determine
+    if the system configuration needs refreshing.
+
+    Attributes:
+        enabled: Whether init script status checking is enabled
+        last_check: Unix timestamp of last status check
+        last_run: Unix timestamp of last init script execution
+        status: Check operation status
+        in_dotfiles: Whether current directory is the dotfiles repository
+    """
+
+    enabled: bool = False
+    last_check: int = 0
+    last_run: int = 0
+    status: CheckStatus = CheckStatus.SUCCESS
+    in_dotfiles: bool = False
+
+    @property
+    def age_hours(self) -> float:
+        """Hours since init script was last run."""
+        if self.last_run == 0:
+            return 0.0
+        return (time.time() - self.last_run) / 3600
+
+    @property
+    def needs_update(self) -> bool:
+        """Whether init script should be run (>7 days since last run)."""
+        return self.age_hours > 168
+
+    def to_dict(self) -> dict[str, Any]:
+        return dict(
+            enabled=self.enabled,
+            last_check=self.last_check,
+            last_run=self.last_run,
+            status=self.status.value,
+            in_dotfiles=self.in_dotfiles,
+        )
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict())
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "InitScriptStatus":
+        return cls(
+            enabled=data.get("enabled", False),
+            last_check=data.get("last_check", 0),
+            last_run=data.get("last_run", 0),
+            status=CheckStatus(data.get("status", "success")),
+            in_dotfiles=data.get("in_dotfiles", False),
+        )
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "InitScriptStatus":
+        return cls.from_dict(json.loads(json_str))
+
+
+@dataclass
+class SystemStatus:
+    """
+    Complete system status combining package, git, and init script information.
+
+    Attributes:
+        packages: Aggregated package update status across all managers
+        package_cache_path: Path to the packages cache file
+        git: Git repository status for current directory
+        init: Dotfiles init script execution status
+    """
+
+    packages: UpdateCheckCache
+    package_cache_path: Path
+    git: GitStatus
+    init: InitScriptStatus
 
 
 class StatusChecker:
+    """
+    System status checker with intelligent caching for packages, git, and init script.
+
+    Provides cached status information for multiple aspects of system health:
+    - Package updates across multiple package managers (via swman)
+    - Git repository status for current directory
+    - Dotfiles init script freshness
+
+    Each status type has configurable cache expiration and can be force-refreshed.
+    Cache files are stored as JSON and loaded/saved atomically to prevent corruption.
+
+    Attributes:
+        cache_dir: Base directory for all cache files
+        packages_cache: Path to packages.json cache file
+        git_cache: Path to git.json cache file
+        init_cache: Path to init.json cache file
+    """
+
     def __init__(self, cache_dir: str | None = None):
         self.cache_dir = (
             Path(cache_dir or os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser()
@@ -41,18 +280,22 @@ class StatusChecker:
         self.git_cache = self.cache_dir / "git.json"
         self.init_cache = self.cache_dir / "init.json"
 
-    def get_config(self, key: str, default: str) -> str:
+    def _get_fish_config(
+        self, key: str, default: str, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> str:
         """Get Fish universal variable configuration"""
         try:
-            result = subprocess.run(
+            result = run_command_with_error_handling(
                 ["fish", "-c", f"echo $pkgstatus_{key}"],
-                capture_output=True,
-                text=True,
+                logger=logger,
+                output=output,
+                description=f"Get fish config pkgstatus_{key}",
                 timeout=5,
             )
             value = result.stdout.strip()
             return value if value else default
-        except Exception:
+        except Exception as e:
+            logger.log_exception(e, "fish_config_read_failed", key=key)
             return default
 
     def is_cache_expired(self, cache_file: Path, max_age_hours: int) -> bool:
@@ -64,338 +307,312 @@ class StatusChecker:
         return file_age > (max_age_hours * 3600)
 
     def get_packages_status(
-        self, force_refresh: bool = False
-    ) -> tuple[str, dict[str, str | int | dict[str, str]]]:
+        self,
+        logger: LoggingHelpers,
+        output: ConsoleOutput,
+        force_refresh: bool,
+    ) -> UpdateCheckCache:
         """Get package status with caching"""
-        cache_hours = int(self.get_config("cache_hours", "6"))
+        cache_hours = int(self._get_fish_config("cache_hours", "6", logger, output))
 
         if force_refresh or self.is_cache_expired(self.packages_cache, cache_hours):
-            self._refresh_packages_cache()
+            self._refresh_packages_cache(logger, output)
 
         return self._load_cache(
-            self.packages_cache,
-            {
-                "packages": dict(),
-                "total_updates": 0,
-                "last_check": 0,
-                "error": "Cache unavailable",
-            },
+            self.packages_cache, UpdateCheckCache, UpdateCheckCache, logger
         )
 
-    def get_git_status(self, force_refresh: bool = False) -> dict[str, str | bool]:
+    def get_git_status(
+        self, logger: LoggingHelpers, output: ConsoleOutput, force_refresh: bool
+    ) -> GitStatus:
         """Get git status with caching"""
-        enabled = self.get_config("git_enabled", "true") == "true"
+        enabled = self._get_fish_config("git_enabled", "true", logger, output) == "true"
+        logger = logger.bind(git_enabled=enabled)
         if not enabled:
-            return {"enabled": False}
+            logger.log_info("git_disabled")
+            return GitStatus(
+                enabled=False, in_repo=False, uncommitted=0, ahead=0, behind=0
+            )
 
         if force_refresh or self.is_cache_expired(self.git_cache, 1):  # 1 hour cache
-            self._refresh_git_cache()
+            logger.log_info("cache_refresh")
+            self._refresh_git_cache(logger, output)
 
-        return self._load_cache(
-            self.git_cache, {"enabled": True, "error": "Git status unavailable"}
-        )
+        return self._load_cache(self.git_cache, GitStatus, GitStatus, logger)
 
-    def get_init_status(self, force_refresh: bool = False) -> dict[str, bool | str]:
+    def get_init_status(
+        self, logger: LoggingHelpers, output: ConsoleOutput, force_refresh: bool
+    ) -> InitScriptStatus:
         """Get init script status with caching"""
-        enabled = self.get_config("init_enabled", "true") == "true"
+        enabled = (
+            self._get_fish_config("init_enabled", "true", logger, output) == "true"
+        )
+        logger = logger.bind(init_enabled=enabled)
         if not enabled:
-            return {"enabled": False}
+            logger.log_info("init_disabled")
+            return InitScriptStatus()
 
         if force_refresh or self.is_cache_expired(self.init_cache, 24):  # 24 hour cache
-            self._refresh_init_cache()
+            logger.log_info("cache_refresh")
+            self._refresh_init_cache(logger)
 
         return self._load_cache(
-            self.init_cache, {"enabled": True, "error": "Init status unavailable"}
+            self.init_cache,
+            InitScriptStatus,
+            lambda: InitScriptStatus(enabled=True, status=CheckStatus.UNAVAILABLE),
+            logger,
         )
 
-    def _load_cache(self, cache_file: Path, default: Any) -> Any:
+    def _load_cache[T: GitStatus | InitScriptStatus | UpdateCheckCache](
+        self,
+        cache_file: Path,
+        cls: type[T],
+        default_factory: type[T] | Callable[[], T],
+        logger: LoggingHelpers,
+    ) -> T:
         """Load JSON from cache file with fallback"""
+        logger = logger.bind(cache_file=str(cache_file), cls=cls.__name__)
+        # If cache file doesn't exist, return default (expected case)
+        if not cache_file.exists():
+            logger.log_info("cache_file_not_found")
+            return default_factory()
+
+        # Cache file exists - attempt to load it
+        # If this fails, it's a real error (corruption, permissions, etc.) that should be raised
         try:
             with open(cache_file, "r") as f:
-                return json.load(f)
-        except Exception:
-            return default
+                return cast(T, cls.from_json(f.read()))
+        except Exception as e:
+            logger.log_exception(
+                e,
+                "cache_load_failed",
+            )
+            raise
 
-    def _save_cache(self, cache_file: Path, data: Any):
+    def _save_cache(
+        self,
+        cache_file: Path,
+        data: GitStatus | InitScriptStatus | UpdateCheckCache,
+        logger: LoggingHelpers,
+    ) -> None:
         """Save data to cache file atomically"""
         temp_file = cache_file.with_suffix(".tmp")
         try:
             with open(temp_file, "w") as f:
-                json.dump(data, f)
+                f.write(data.to_json())
             temp_file.replace(cache_file)
-        except Exception:
+        except Exception as e:
+            logger.log_exception(e, "cache_save_failed", cache_file=str(cache_file))
             if temp_file.exists():
                 temp_file.unlink()
 
-    def _refresh_packages_cache(self) -> None:
-        """Refresh package status cache"""
+    def _refresh_packages_cache(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> None:
+        """Refresh package status cache by calling swman directly"""
         timestamp = int(time.time())
 
-        # Try to find swman
-        swman_cmd: str | None = None
-        if Path("./swman.py").is_file():
-            swman_cmd = "./swman.py"
-        elif subprocess.run(["which", "swman.py"], capture_output=True).returncode == 0:
-            swman_cmd = "swman.py"
+        try:
+            # Call swman directly instead of subprocess
+            orchestrator = SoftwareManagerOrchestrator()
+            check_results = orchestrator.check_all(logger=logger, output=output)
 
-        if swman_cmd:
-            try:
-                result = subprocess.run(
-                    [swman_cmd, "--check", "--json"],
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
+            # Transform swman format to our format
+            packages: list[UpdateCheckResult] = []
+            total_updates = 0
+
+            for manager, (has_updates, count) in check_results.items():
+                # Handle different update check states:
+                # - count > 0: confirmed updates available
+                # - count = 0: no updates
+                # - count < 0: cannot determine (indeterminate)
+                packages.append(
+                    UpdateCheckResult(
+                        name=manager, has_updates=has_updates, count=count
+                    )
                 )
+                # Only count positive updates (exclude indeterminate managers)
+                if has_updates and count > 0:
+                    total_updates += count
 
-                if result.returncode == 0:
-                    # Extract JSON from output (skip status messages)
-                    output_lines = result.stdout.strip().split("\n")
+            data = UpdateCheckCache(
+                packages=packages,
+                total_updates=total_updates,
+                last_check=timestamp,
+            )
 
-                    # Find where JSON starts and ends
-                    json_start_idx = -1
-                    json_end_idx = -1
+        except Exception as e:
+            logger.log_exception(e, "packages_cache_refresh_failed")
+            data = UpdateCheckCache()
 
-                    for i, line in enumerate(output_lines):
-                        if line.strip().startswith("{"):
-                            json_start_idx = i
-                        elif line.strip() == "}" and json_start_idx != -1:
-                            json_end_idx = i
-                            break
+        self._save_cache(self.packages_cache, data, logger)
 
-                    json_line: dict[str, tuple[bool, int]] | None = None
-                    if json_start_idx != -1 and json_end_idx != -1:
-                        json_lines = output_lines[json_start_idx : json_end_idx + 1]
-                        json_text = "\n".join(json_lines)
-                        try:
-                            packages_data: dict[str, tuple[bool, int]] = json.loads(
-                                json_text
-                            )
-                            json_line = packages_data
-                        except json.JSONDecodeError:
-                            json_line = None
-
-                    if json_line:
-                        # Transform swman format to our format
-                        packages: dict[str, dict[str, bool | int]] = {}
-                        total_updates = 0
-
-                        for manager, (has_updates, count) in json_line.items():
-                            # Handle different update check states:
-                            # - count > 0: confirmed updates available
-                            # - count = 0: no updates
-                            # - count < 0: cannot determine (indeterminate)
-                            packages[manager] = {
-                                "has_updates": has_updates,
-                                "count": count,
-                            }
-                            # Only count positive updates (exclude indeterminate managers)
-                            if has_updates and count > 0:
-                                total_updates += count
-
-                        data: dict[
-                            str, int | bool | dict[str, dict[str, bool | int]]
-                        ] = {
-                            "packages": packages,
-                            "total_updates": total_updates,
-                            "last_check": timestamp,
-                            "stale": False,
-                        }
-                    else:
-                        data = {
-                            "packages": {},
-                            "total_updates": 0,
-                            "last_check": timestamp,
-                            "error": "Invalid swman output",
-                        }
-                else:
-                    data = {
-                        "packages": {},
-                        "total_updates": 0,
-                        "last_check": timestamp,
-                        "error": "swman check failed",
-                    }
-            except subprocess.TimeoutExpired:
-                data = {
-                    "packages": {},
-                    "total_updates": 0,
-                    "last_check": timestamp,
-                    "error": "swman check timed out",
-                }
-            except Exception as e:
-                data = {
-                    "packages": {},
-                    "total_updates": 0,
-                    "last_check": timestamp,
-                    "error": f"swman error: {e}",
-                }
-        else:
-            data = {
-                "packages": {},
-                "total_updates": 0,
-                "last_check": timestamp,
-                "error": "swman not available",
-            }
-
-        self._save_cache(self.packages_cache, data)
-
-    def _refresh_git_cache(self) -> None:
+    def _refresh_git_cache(self, logger: LoggingHelpers, output: ConsoleOutput) -> None:
         """Refresh git status cache"""
         timestamp = int(time.time())
-        data: dict[str, str | int | bool] = {"enabled": True, "last_check": timestamp}
+        git_data = GitStatus(last_check=timestamp, enabled=True)
+        logger = logger.bind(timestamp=timestamp)
 
         try:
             # Check if we're in a git repository
-            result = subprocess.run(
-                ["git", "rev-parse", "--git-dir"], capture_output=True, timeout=5
+            try:
+                run_command_with_error_handling(
+                    ["git", "rev-parse", "--git-dir"],
+                    logger=logger,
+                    output=output,
+                    description="Check if in git repository",
+                    timeout=5,
+                )
+                git_data.in_repo = True
+                logger = logger.bind(in_repo=True)
+            except CalledProcessError:
+                # Git command failed (not in a repo) - this is expected/normal
+                logger.log_info("no_git_repo")
+                git_data.in_repo = False
+                self._save_cache(self.git_cache, git_data, logger)
+                return
+            # Other exceptions (timeout, git not found, permissions) bubble up to outer catch
+
+            # Get current branch
+            branch_result = run_command_with_error_handling(
+                ["git", "branch", "--show-current"],
+                logger=logger,
+                output=output,
+                description="Get current git branch",
+                timeout=5,
             )
+            git_data.branch = branch_result.stdout.strip() or "detached"
+            logger = logger.bind(branch=git_data.branch)
 
-            if result.returncode == 0:
-                data["in_repo"] = True
+            # Count uncommitted changes
+            status_result = run_command_with_error_handling(
+                ["git", "status", "--porcelain"],
+                logger=logger,
+                output=output,
+                description="Get git status",
+                timeout=5,
+            )
+            git_data.uncommitted = (
+                len(status_result.stdout.strip().split("\n"))
+                if status_result.stdout.strip()
+                else 0
+            )
+            logger = logger.bind(uncommitted=git_data.uncommitted)
 
-                # Get current branch
-                branch_result = subprocess.run(
-                    ["git", "branch", "--show-current"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                data["branch"] = branch_result.stdout.strip() or "detached"
+            if git_data.branch != "detached":
+                try:
+                    upstream_result = run_command_with_error_handling(
+                        ["git", "rev-parse", "--abbrev-ref", "@{upstream}"],
+                        logger=logger,
+                        output=output,
+                        description="Get git upstream branch",
+                        timeout=5,
+                    )
+                    upstream = upstream_result.stdout.strip()
+                    logger = logger.bind(upstream_branch_rev=upstream)
 
-                # Count uncommitted changes
-                status_result = subprocess.run(
-                    ["git", "status", "--porcelain"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                data["uncommitted"] = (
-                    len(status_result.stdout.strip().split("\n"))
-                    if status_result.stdout.strip()
-                    else 0
-                )
-
-                # Count commits ahead/behind
-                data["ahead"] = 0
-                data["behind"] = 0
-
-                branch_value = data.get("branch")
-                if branch_value != "detached":
-                    try:
-                        upstream_result = subprocess.run(
-                            ["git", "rev-parse", "--abbrev-ref", "@{upstream}"],
-                            capture_output=True,
-                            text=True,
-                            timeout=5,
+                    counts_result = run_command_with_error_handling(
+                        [
+                            "git",
+                            "rev-list",
+                            "--left-right",
+                            "--count",
+                            f"{upstream}...HEAD",
+                        ],
+                        logger=logger,
+                        output=output,
+                        description="Count commits ahead/behind",
+                        timeout=5,
+                    )
+                    counts = counts_result.stdout.strip().split()
+                    if len(counts) == 2:
+                        git_data.behind = int(counts[0])
+                        git_data.ahead = int(counts[1])
+                        logger = logger.bind(
+                            behind=git_data.behind, ahead=git_data.ahead
                         )
-                        if upstream_result.returncode == 0:
-                            upstream = upstream_result.stdout.strip()
+                except CalledProcessError as e:
+                    # No upstream branch configured - expected for local-only branches
+                    logger.log_exception(e, "git_upstream_check_failed")
 
-                            counts_result = subprocess.run(
-                                [
-                                    "git",
-                                    "rev-list",
-                                    "--left-right",
-                                    "--count",
-                                    f"{upstream}...HEAD",
-                                ],
-                                capture_output=True,
-                                text=True,
-                                timeout=5,
-                            )
-                            if counts_result.returncode == 0:
-                                counts = counts_result.stdout.strip().split()
-                                if len(counts) == 2:
-                                    data["behind"] = int(counts[0])
-                                    data["ahead"] = int(counts[1])
-                    except Exception:
-                        pass  # No upstream or other git issue
-            else:
-                data["in_repo"] = False
-
+        except CalledProcessError as e:
+            # Git command failed unexpectedly
+            git_data.status = CheckStatus.FAILED
+            logger.log_exception(e, "git_command_failed")
+        except TimeoutExpired as e:
+            # Git command timed out
+            git_data.status = CheckStatus.FAILED
+            logger.log_exception(e, "git_timeout")
         except Exception as e:
-            data["error"] = f"Git check failed: {e}"
+            # Unexpected error (git not installed, permissions, etc.)
+            git_data.status = CheckStatus.FAILED
+            logger.log_exception(e, "git_check_failed")
 
-        self._save_cache(self.git_cache, data)
+        self._save_cache(self.git_cache, git_data, logger)
 
-    def _refresh_init_cache(self) -> None:
+    def _refresh_init_cache(self, logger: LoggingHelpers) -> None:
         """Refresh init script status cache"""
         timestamp = int(time.time())
-        data: dict[str, str | int | bool | float] = {
-            "enabled": True,
-            "last_check": timestamp,
-        }
+        logger = logger.bind(timestamp=timestamp)
+        init_data = InitScriptStatus(enabled=True, last_check=timestamp)
 
         # Check if we're in dotfiles directory
         if Path("./init.py").exists():
-            data["in_dotfiles"] = True
+            init_data.in_dotfiles = True
 
             # Check last run time
             last_run_file = Path.home() / ".cache" / "dotfiles_last_update"
             last_run = 0
+            logger = logger.bind(last_run_file=last_run_file)
 
             if last_run_file.exists():
                 try:
                     with open(last_run_file, "r") as f:
                         last_run_str = f.read().strip()
                     # Parse ISO format timestamp
-                    from datetime import datetime
-
                     last_run_dt = datetime.fromisoformat(last_run_str)
                     last_run = int(last_run_dt.timestamp())
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.log_exception(e, "init_cache_timestamp_parse_failed")
 
-            data["last_run"] = last_run
-            age_hours = (timestamp - last_run) / 3600
-            data["age_hours"] = age_hours
+            init_data.last_run = last_run
+            # age_hours and needs_update are now computed properties
 
-            # Consider update needed if more than 7 days old
-            data["needs_update"] = age_hours > 168
-        else:
-            data["in_dotfiles"] = False
+        self._save_cache(self.init_cache, init_data, logger)
 
-        self._save_cache(self.init_cache, data)
-
-    def get_status(self, force_refresh: bool = False) -> StatusResult:
-        """Get complete status"""
-        return StatusResult(
-            packages=self.get_packages_status(force_refresh),
-            git=self.get_git_status(force_refresh),
-            init=self.get_init_status(force_refresh),
+    def get_system_status(
+        self,
+        logger: LoggingHelpers,
+        output: ConsoleOutput,
+        force_refresh: bool,
+    ) -> SystemStatus:
+        """Get complete system status across packages, git, and init script"""
+        return SystemStatus(
+            package_cache_path=self.packages_cache,
+            packages=self.get_packages_status(logger, output, force_refresh),
+            git=self.get_git_status(logger, output, force_refresh),
+            init=self.get_init_status(logger, output, force_refresh),
         )
 
-    def format_quiet_output(self, status: StatusResult) -> str:
+    def format_quiet_output(self, status: SystemStatus) -> str:
         """Format output for quiet mode (only show if issues)"""
         messages: list[str] = []
 
         # Check package updates
-        _status_str, pkg_data = status.packages
-        total_updates_raw = pkg_data.get("total_updates", 0)
-        total_updates = total_updates_raw if isinstance(total_updates_raw, int) else 0
+        pkg_data = status.packages
+        total_updates = pkg_data.total_updates
         if total_updates > 0:
-            stale_raw = pkg_data.get("stale", False)
-            stale = stale_raw if isinstance(stale_raw, bool) else False
-            if stale:
-                messages.append(
-                    f"⚠️  {total_updates} package updates available (stale cache)"
-                )
-            else:
-                last_check_raw = pkg_data.get("last_check", 0)
-                last_check = last_check_raw if isinstance(last_check_raw, int) else 0
-                age = self._format_age(last_check)
-                messages.append(f"⚠️  {total_updates} package updates available ({age})")
+            last_check = pkg_data.last_check
+            age = self._format_age(last_check)
+            messages.append(f"⚠️  {total_updates} package updates available ({age})")
 
         # Check git status
         git_data = status.git
-        enabled_raw = git_data.get("enabled", False)
-        in_repo_raw = git_data.get("in_repo", False)
-        enabled = enabled_raw if isinstance(enabled_raw, bool) else False
-        in_repo = in_repo_raw if isinstance(in_repo_raw, bool) else False
+        enabled = git_data.enabled
+        in_repo = git_data.in_repo
         if enabled and in_repo:
-            uncommitted_raw = git_data.get("uncommitted", 0)
-            ahead_raw = git_data.get("ahead", 0)
-            uncommitted = uncommitted_raw if isinstance(uncommitted_raw, int) else 0
-            ahead = ahead_raw if isinstance(ahead_raw, int) else 0
+            uncommitted = git_data.uncommitted
+            ahead = git_data.ahead
             if uncommitted > 0 or ahead > 0:
                 git_msg = "🔄 Git:"
                 if uncommitted > 0:
@@ -406,13 +623,10 @@ class StatusChecker:
 
         # Check init status
         init_data = status.init
-        init_enabled_raw = init_data.get("enabled", False)
-        needs_update_raw = init_data.get("needs_update", False)
-        init_enabled = init_enabled_raw if isinstance(init_enabled_raw, bool) else False
-        needs_update = needs_update_raw if isinstance(needs_update_raw, bool) else False
+        init_enabled = init_data.enabled
+        needs_update = init_data.needs_update
         if init_enabled and needs_update:
-            age_hours_raw = init_data.get("age_hours", 0)
-            age_hours = age_hours_raw if isinstance(age_hours_raw, (int, float)) else 0
+            age_hours = init_data.age_hours
             messages.append(f"⚙️  Init script not run in {int(age_hours / 24)}d")
 
         # Add tool name prefix to all messages
@@ -422,53 +636,45 @@ class StatusChecker:
             return "\n".join(prefixed_messages)
         return ""
 
-    def format_interactive_output(self, status: StatusResult) -> str:
+    def format_interactive_output(self, status: SystemStatus) -> str:
         """Format output for interactive mode"""
         lines = ["📦 Package Status:"]
 
         # Package status
         pkg_data = status.packages
-        pkg_error = pkg_data.get("error")
-        if pkg_error:
-            lines.append(f"   ❌ {pkg_error}")
+        if pkg_data.status != CheckStatus.SUCCESS:
+            lines.append(f"   ❌ Package check {pkg_data.status.value}")
         else:
-            total_updates = pkg_data.get("total_updates", 0)
+            total_updates = pkg_data.total_updates
             if total_updates > 0:
-                if pkg_data.get("stale", False):
-                    lines.append(
-                        f"   ⚠️  {total_updates} updates available (checking for new updates...)"
-                    )
-                else:
-                    last_check = pkg_data.get("last_check", 0)
-                    age = self._format_age(last_check)
-                    lines.append(
-                        f"   ⚠️  {total_updates} updates available (checked {age})"
-                    )
+                last_check = pkg_data.last_check
+                age = self._format_age(last_check)
+                lines.append(f"   ⚠️  {total_updates} updates available (checked {age})")
 
                 # Show breakdown by manager
-                packages = pkg_data.get("packages", {})
-                for manager, info in packages.items():
-                    if info.get("has_updates", False):
-                        count = info.get("count", 0)
-                        if count > 0:
-                            lines.append(f"      • {manager}: {count} updates")
+                packages = pkg_data.packages
+                for package in packages:
+                    if package.has_updates:
+                        if package.count > 0:
+                            lines.append(
+                                f"      • {package.name}: {package.count} updates"
+                            )
                         else:
-                            lines.append(f"      • {manager}: updates available")
+                            lines.append(f"      • {package.name}: updates available")
             else:
                 lines.append("   ✅ All packages up to date")
 
         # Git status
         git_data = status.git
-        if git_data.get("enabled", False):
+        if git_data.enabled:
             lines.extend(["", "🔄 Git Status:"])
-            git_error = git_data.get("error")
-            if git_error:
-                lines.append(f"   ❌ {git_error}")
-            elif git_data.get("in_repo", False):
-                branch = git_data.get("branch", "unknown")
-                uncommitted = git_data.get("uncommitted", 0)
-                ahead = git_data.get("ahead", 0)
-                behind = git_data.get("behind", 0)
+            if git_data.status != CheckStatus.SUCCESS:
+                lines.append(f"   ❌ Git check {git_data.status.value}")
+            elif git_data.in_repo:
+                branch = git_data.branch
+                uncommitted = git_data.uncommitted
+                ahead = git_data.ahead
+                behind = git_data.behind
 
                 lines.append(f"   📁 Branch: {branch}")
                 if uncommitted > 0:
@@ -484,19 +690,18 @@ class StatusChecker:
 
         # Init status
         init_data = status.init
-        if init_data.get("enabled", False):
+        if init_data.enabled:
             lines.extend(["", "⚙️  Init Status:"])
-            init_error = init_data.get("error")
-            if init_error:
-                lines.append(f"   ❌ {init_error}")
-            elif init_data.get("in_dotfiles", False):
-                if init_data.get("needs_update", False):
-                    age_hours = init_data.get("age_hours", 0)
+            if init_data.status != CheckStatus.SUCCESS:
+                lines.append(f"   ❌ Init check {init_data.status.value}")
+            elif init_data.in_dotfiles:
+                if init_data.needs_update:
+                    age_hours = init_data.age_hours
                     lines.append(
                         f"   ⚠️  Last run {int(age_hours / 24)}d ago - consider running"
                     )
                 else:
-                    last_run = init_data.get("last_run", 0)
+                    last_run = init_data.last_run
                     age_desc = self._format_age(last_run)
                     lines.append(f"   ✅ Recently run ({age_desc})")
             else:
@@ -527,7 +732,9 @@ class StatusChecker:
 @click.option("--refresh", is_flag=True, help="Force cache refresh")
 @click.option("--cache-dir", help="Override cache directory")
 @click.option("--verbose", is_flag=True, help="Show detailed output")
-def main(quiet, json_output, refresh, cache_dir, verbose):
+def main(
+    quiet: bool, json_output: bool, refresh: bool, cache_dir: str | None, verbose: bool
+):
     """Package and system status checker
 
     \b
@@ -555,19 +762,21 @@ def main(quiet, json_output, refresh, cache_dir, verbose):
         # Gather status with logging
         gather_log = logger.bind(operation="gather_status")
         gather_log.log_info("operation_started")
-        status = checker.get_status(refresh)
+        status = checker.get_system_status(logger, output, refresh)
         gather_log.log_info("operation_completed")
 
         # Log comprehensive status summary
         logger.log_info(
             "status_check_completed",
-            packages_total_updates=status.packages.get("total_updates", 0),
-            packages_error=status.packages.get("error"),
-            git_in_repo=status.git.get("in_repo", False),
-            git_uncommitted=status.git.get("uncommitted", 0),
-            git_ahead=status.git.get("ahead", 0),
-            git_behind=status.git.get("behind", 0),
-            init_needs_update=status.init.get("needs_update", False),
+            packages_total_updates=status.packages.total_updates,
+            packages_status=status.packages.status.value,
+            git_in_repo=status.git.in_repo,
+            git_uncommitted=status.git.uncommitted,
+            git_ahead=status.git.ahead,
+            git_behind=status.git.behind,
+            git_status=status.git.status.value,
+            init_needs_update=status.init.needs_update,
+            init_status=status.init.status.value,
         )
 
         if json_output:

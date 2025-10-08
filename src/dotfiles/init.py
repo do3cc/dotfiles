@@ -1,11 +1,12 @@
 # pyright: strict
+from subprocess import CalledProcessError, TimeoutExpired, CompletedProcess
 from dataclasses import dataclass, field
 from datetime import datetime
 import os
 from os.path import abspath, exists, expanduser
+from .process_helper import run_command_with_error_handling
 from pathlib import Path
 import socket
-import subprocess
 import sys
 import time
 import traceback
@@ -101,70 +102,13 @@ class Linux:
         env_specific = env_configs.get(environment, EnvironmentConfig())
         return env_specific.merge_with(base)
 
-    def run_command_with_error_handling(
-        self,
-        command: list[str],
-        logger: LoggingHelpers,
-        output: ConsoleOutput,
-        description: str = "Command",
-        timeout: int = 300,
-        **kwargs: Any,
-    ) -> subprocess.CompletedProcess[str]:
-        """Run a subprocess command with comprehensive error handling and logging"""
-        logger = logger.bind(description=description, command=command, timeout=timeout)
-        logger.log_info("command_starting")
-
-        try:
-            result = subprocess.run(
-                command,
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                **kwargs,
-            )
-
-            # Use the new comprehensive subprocess logging
-            logger.log_subprocess_result(description, command, result)
-            return result
-
-        except subprocess.TimeoutExpired as e:
-            logger.log_exception(e, "command timed out")
-            output.error(f"ERROR: {description} timed out after {timeout} seconds")
-            output.status(f"Command: {' '.join(command)}")
-            raise
-        except subprocess.CalledProcessError as e:
-            logger.log_exception(
-                e,
-                "command_failed",
-                description=description,
-                command=command,
-                returncode=e.returncode,
-                stdout=e.stdout,
-                stderr=e.stderr,
-            )
-            output.error(f"ERROR: {description} failed: {e}")
-            output.status(f"Command: {' '.join(command)}")
-            if e.stdout:
-                output.info(f"STDOUT:\n{e.stdout}", emoji="📄")
-            if e.stderr:
-                output.info(f"STDERR:\n{e.stderr}", emoji="📄")
-            raise
-        except Exception as e:
-            logger.log_exception(
-                e, f"Unexpected error running {description}", command=command
-            )
-            output.error(f"ERROR: Unexpected error running {description}: {e}")
-            output.status(f"Command: {' '.join(command)}")
-            raise
-
     def check_systemd_service_status(
         self, service: str, logger: LoggingHelpers, output: ConsoleOutput
-    ):
+    ) -> tuple[bool, bool]:
         """Check if a systemd service is enabled and active"""
         try:
             # Check if service is enabled
-            enabled_result = self.run_command_with_error_handling(
+            enabled_result = run_command_with_error_handling(
                 ["systemctl", "is-enabled", service],
                 logger,
                 output,
@@ -175,7 +119,7 @@ class Linux:
             )
 
             # Check if service is active
-            active_result = self.run_command_with_error_handling(
+            active_result = run_command_with_error_handling(
                 ["systemctl", "is-active", service],
                 logger,
                 output,
@@ -186,7 +130,8 @@ class Linux:
             )
 
             return is_enabled, is_active
-        except Exception:
+        except Exception as e:
+            logger.log_exception(e, "systemd_service_check_failed", service=service)
             # If systemctl check fails, assume service needs setup
             return False, False
 
@@ -211,18 +156,18 @@ class Linux:
                     output.info(f"Expected: {nvm_script}")
                     raise FileNotFoundError(f"NVM script not found: {nvm_script}")
 
-                self.run_command_with_error_handling(
+                run_command_with_error_handling(
                     ["/usr/bin/bash", nvm_script], logger, output
                 )
                 logger.log_progress("nvm_installed_successfully")
                 output.success("NVM installed successfully")
 
-            except subprocess.TimeoutExpired as e:
+            except TimeoutExpired as e:
                 logger.log_exception(e, "nvm_installation_timeout", timeout=300)
                 output.error("NVM installation timed out (network issues?)")
                 output.info("Try: Check internet connection and run again")
                 raise
-            except subprocess.CalledProcessError as e:
+            except CalledProcessError as e:
                 logger.log_exception(
                     e,
                     "nvm_installation_failed",
@@ -263,15 +208,15 @@ class Linux:
                     output.info(f"Expected: {pyenv_script}")
                     raise FileNotFoundError(f"Pyenv script not found: {pyenv_script}")
 
-                self.run_command_with_error_handling(
+                run_command_with_error_handling(
                     ["/usr/bin/bash", pyenv_script], logger, output
                 )
                 output.success("Pyenv installed successfully", logger=logger)
-            except subprocess.TimeoutExpired:
+            except TimeoutExpired:
                 output.error("ERROR: Pyenv installation timed out", logger=logger)
                 output.info("Try: Check internet connection and run again")
                 raise
-            except subprocess.CalledProcessError as e:
+            except CalledProcessError as e:
                 output.error(
                     f"ERROR: Pyenv installation failed with exit code {e.returncode}",
                     logger=logger,
@@ -291,13 +236,13 @@ class Linux:
             output.status(
                 "Installing dotfiles package to ~/.local/bin...", logger=logger
             )
-            self.run_command_with_error_handling(
+            run_command_with_error_handling(
                 ["uv", "tool", "install", "--editable", "."], logger, output
             )
             output.success(
                 "Dotfiles package installed globally to ~/.local/bin", logger=logger
             )
-        except subprocess.CalledProcessError as e:
+        except CalledProcessError as e:
             logger.log_exception(
                 e,
                 "dotfiles_package_installation_failed",
@@ -312,7 +257,7 @@ class Linux:
                 "Try: Ensure uv is properly installed and configured", emoji="💡"
             )
             raise
-        except subprocess.TimeoutExpired as e:
+        except TimeoutExpired as e:
             logger.log_exception(e, "dotfiles_package_installation_timeout", timeout=60)
             output.error("Dotfiles package installation timed out")
             output.info("Try: Check internet connection and try again", emoji="💡")
@@ -378,7 +323,7 @@ class Linux:
                                 logger=logger,
                             )
                         else:
-                            logger.log_exception(e, "Failed to create symlink")
+                            logger.log_exception(e, "symlink_creation_failed")
                             output.error(
                                 f"Failed to create symlink for {config_dir_target}: {e}"
                             )
@@ -402,7 +347,7 @@ class Linux:
                                         logger=logger,
                                     )
                             except OSError as e:
-                                logger.log_exception(e, "Could not read symlink")
+                                logger.log_exception(e, "symlink_read_failed")
                                 output.warning(
                                     f"Could not read symlink for {config_dir_target}: {e}"
                                 )
@@ -419,7 +364,7 @@ class Linux:
                             logger=logger,
                         )
             except Exception as e:
-                logger.log_exception(e, "Unexpected error")
+                logger.log_exception(e, "config_linking_unexpected_error")
                 output.error(f"Unexpected error processing {config_dir_target}: {e}")
                 continue
 
@@ -452,7 +397,7 @@ class Linux:
 
             # Test if credential helper responds
             try:
-                self.run_command_with_error_handling(
+                run_command_with_error_handling(
                     [libsecret_path], logger, output, timeout=5, input=""
                 )
                 # libsecret helper should exit cleanly when given empty input
@@ -461,7 +406,7 @@ class Linux:
                     logger=logger,
                 )
                 return True
-            except subprocess.TimeoutExpired:
+            except TimeoutExpired:
                 output.warning("Git credential helper test timed out", logger=logger)
                 return False
             except Exception as e:
@@ -471,7 +416,7 @@ class Linux:
                 return False
 
         except Exception as e:
-            logger.log_exception(e, "Unexpected error")
+            logger.log_exception(e, "git_credential_helper_validation_failed")
             output.error(f"Failed to validate git credential helper: {e}")
             return False
 
@@ -489,7 +434,7 @@ class Linux:
                         f"Changing shell from {user_entry.pw_shell} to fish",
                         logger=logger,
                     )
-                    self.run_command_with_error_handling(
+                    run_command_with_error_handling(
                         ["chsh", "-s", "/usr/bin/fish"],
                         logger,
                         output,
@@ -501,7 +446,7 @@ class Linux:
             else:
                 output.success("Shell is already set to fish", logger=logger)
         except Exception as e:
-            logger.log_exception(e, "Unexpected error")
+            logger.log_exception(e, "shell_setup_failed")
             output.warning(f"Could not check/change shell: {e}")
 
     def link_accounts(self, logger: LoggingHelpers, output: ConsoleOutput):
@@ -512,7 +457,7 @@ class Linux:
             return
 
         try:
-            result = self.run_command_with_error_handling(
+            result = run_command_with_error_handling(
                 ["/usr/bin/gh", "auth", "status"],
                 logger,
                 output,
@@ -520,10 +465,10 @@ class Linux:
             )
             if "Logged in" not in result.stdout:
                 # Interactive command - don't capture output
-                self.run_command_with_error_handling(
+                run_command_with_error_handling(
                     ["/usr/bin/gh", "auth", "login"], logger, output, "Log in to github"
                 )
-                self.run_command_with_error_handling(
+                run_command_with_error_handling(
                     [
                         "gh",
                         "auth",
@@ -537,14 +482,14 @@ class Linux:
                     output,
                     "Refresh GitHub auth",
                 )
-        except subprocess.CalledProcessError:
+        except CalledProcessError:
             output.status(
                 "GitHub CLI not authenticated, running login...", logger=logger
             )
-            self.run_command_with_error_handling(
+            run_command_with_error_handling(
                 ["/usr/bin/gh", "auth", "login"], logger, output, "Log in to github"
             )
-            self.run_command_with_error_handling(
+            run_command_with_error_handling(
                 ["gh", "auth", "refresh", "-h", "github.com", "-s", "admin:public_key"],
                 logger,
                 output,
@@ -557,7 +502,7 @@ class Linux:
 
         if not exists(current_key):
             ssh_key_email = self.config.ssh_key_email
-            self.run_command_with_error_handling(
+            run_command_with_error_handling(
                 [
                     "ssh-keygen",
                     "-t",
@@ -573,7 +518,7 @@ class Linux:
                 output,
                 "Generate SSH key",
             )
-            self.run_command_with_error_handling(
+            run_command_with_error_handling(
                 ["ssh-add", current_key], logger, output, "Add SSH key to agent"
             )
 
@@ -587,11 +532,11 @@ class Linux:
                         logger=logger,
                     )
                 except OSError as e:
-                    logger.log_exception(e, "Unexpected error")
+                    logger.log_exception(e, "ssh_key_symlink_creation_failed")
                     output.error(f"Could not create SSH key symlink: {e}")
 
             key_name = f'"{socket.gethostname()} {self.environment}"'
-            self.run_command_with_error_handling(
+            run_command_with_error_handling(
                 ["/usr/bin/gh", "ssh-key", "add", f"{current_key}.pub", "-t", key_name],
                 logger,
                 output,
@@ -600,7 +545,7 @@ class Linux:
 
         if self.environment in ["private"]:
             try:
-                result = self.run_command_with_error_handling(
+                result = run_command_with_error_handling(
                     ["tailscale", "status"], logger, output, "Check Tailscale status"
                 )
                 logger = logger.bind(tailscale_status=result.stdout)
@@ -610,16 +555,16 @@ class Linux:
                         "Tailscale not connected, running setup...", logger=logger
                     )
                     # Use 'tailscale up' for locked tailnets instead of login
-                    self.run_command_with_error_handling(
+                    run_command_with_error_handling(
                         ["sudo", "tailscale", "up", "--operator=do3cc"], logger, output
                     )
                 else:
                     output.success("Tailscale is connected", logger=logger)
-            except subprocess.CalledProcessError:
+            except CalledProcessError:
                 output.status(
                     "Tailscale not available, running setup...", logger=logger
                 )
-                self.run_command_with_error_handling(
+                run_command_with_error_handling(
                     ["sudo", "tailscale", "up", "--operator=do3cc"], logger, output
                 )
 
@@ -719,7 +664,7 @@ class Arch(Linux):
             return [], []
 
         try:
-            result = self.run_command_with_error_handling(
+            result = run_command_with_error_handling(
                 ["pacman", "-Q"] + packages, logger, output
             )
 
@@ -734,7 +679,7 @@ class Arch(Linux):
             missing: list[str] = []
 
             for package in packages:
-                check_result = self.run_command_with_error_handling(
+                check_result = run_command_with_error_handling(
                     ["pacman", "-", package], logger, output
                 )
                 if check_result.returncode == 0:
@@ -753,7 +698,7 @@ class Arch(Linux):
             )
             return installed, missing
         except Exception as e:
-            logger.log_exception(e, "pacman package check failed")
+            logger.log_exception(e, "pacman_package_check_failed")
             # If pacman check fails, assume all packages need installation
             return [], packages
 
@@ -792,9 +737,9 @@ class Arch(Linux):
 
         try:
             manager = PacmanManager()
-            if manager.is_available():
+            if manager.is_available(logger=logger, output=output):
                 # Check for updates first
-                has_updates, count = manager.check_updates()
+                has_updates, count = manager.check_updates(logger=logger, output=output)
                 logger = logger.bind(has_updates=has_updates, count=count)
                 if has_updates:
                     output.status(
@@ -803,7 +748,7 @@ class Arch(Linux):
                         logger=logger,
                     )
                     # Perform the update
-                    result = manager.update(dry_run=False)
+                    result = manager.update(logger=logger, output=output, dry_run=False)
 
                     if result.status.value == "success":
                         output.success("System update completed successfully")
@@ -833,7 +778,7 @@ class Arch(Linux):
             output.info(
                 "Try: Run 'sudo pacman -Syu' manually to check for issues", emoji="💡"
             )
-            logger.log_exception(e, "system update failed")
+            logger.log_exception(e, "pacman_system_update_failed")
             raise
 
     def install_dependencies(self, logger: LoggingHelpers, output: ConsoleOutput):
@@ -842,7 +787,7 @@ class Arch(Linux):
         # Perform system update if needed
         self.update_system(logger, output)
 
-        def pacman(*args: str, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        def pacman(*args: str, **kwargs: Any) -> CompletedProcess[str]:
             """
             Execute pacman commands with real-time output, error handling, and retry logic.
 
@@ -871,7 +816,7 @@ class Arch(Linux):
                     #
                     # Timeout reduced from 1800s (30min) to 600s (10min) for consistency with APT
                     # and faster failure detection in CI environments.
-                    result = self.run_command_with_error_handling(
+                    result = run_command_with_error_handling(
                         ["sudo", "pacman"] + list(args),
                         pacman_logger,
                         output,
@@ -879,7 +824,7 @@ class Arch(Linux):
                         **kwargs,
                     )
                     return result
-                except subprocess.TimeoutExpired:
+                except TimeoutExpired:
                     output.error(
                         f"Package installation timed out (attempt {attempt + 1}/{max_retries})",
                         logger=pacman_logger,
@@ -895,7 +840,7 @@ class Arch(Linux):
                         "Retrying in 10 seconds...", emoji="🔄", logger=logger
                     )
                     time.sleep(10)
-                except subprocess.CalledProcessError as e:
+                except CalledProcessError as e:
                     output.error(f"Package installation failed: {e}", logger=logger)
                     output.info(f"Command: sudo pacman {' '.join(args)}", emoji="🔍")
                     if e.stdout:
@@ -944,17 +889,18 @@ class Arch(Linux):
                     f"Installing {len(missing)} base development tools: {', '.join(missing)}"
                 )
                 pacman("-S", "--needed", "--noconfirm", *missing)
-                output.success("Base development tools installed")
+                output.success("Base development tools installed", logger=logger)
                 self.restart_required = True
             else:
                 output.success("All base development tools already installed")
-                # XXX
 
             # Create projects directory safely
             projects_dir = expand("~/projects")
+            logger = logger.bind(projects_dir=projects_dir)
             try:
                 ensure_path(projects_dir)
             except OSError as e:
+                logger.log_exception(e, "projects_directory_creation_failed")
                 output.error(f"Cannot create projects directory: {e}")
                 output.info("Try: Check home directory permissions", emoji="💡")
                 raise
@@ -962,23 +908,23 @@ class Arch(Linux):
             # Check if yay is already installed system-wide
             yay_installed = False
             try:
-                self.run_command_with_error_handling(
-                    ["yay", "--version"], logger, output
-                )
+                run_command_with_error_handling(["yay", "--version"], logger, output)
                 yay_installed = True
                 output.success("Yay AUR helper already installed")
-            except (subprocess.CalledProcessError, FileNotFoundError):
+            except (CalledProcessError, FileNotFoundError):
                 yay_installed = False
+            logger = logger.bind(yay_installed=yay_installed)
 
             # Install yay if not available
             if not yay_installed:
                 yay_dir = expand("~/projects/yay-bin")
+                logger = logger.bind(yay_dir=yay_dir)
                 if not exists(yay_dir):
                     try:
-                        output.status("Cloning yay AUR helper...")
+                        output.status("Cloning yay AUR helper...", logger=logger)
                         # Use streaming subprocess for git clone to show progress
                         # Git clone can take time depending on network speed
-                        self.run_command_with_error_handling(
+                        run_command_with_error_handling(
                             [
                                 "git",
                                 "clone",
@@ -991,19 +937,21 @@ class Arch(Linux):
                         )
 
                         output.status(
-                            "Building yay (this will prompt for sudo password)..."
+                            "Building yay (this will prompt for sudo password)...",
+                            logger=logger,
                         )
                         # Use streaming subprocess for makepkg to show build progress
                         # Compilation can take 5-10 minutes and users need to see progress
-                        self.run_command_with_error_handling(
+                        run_command_with_error_handling(
                             ["makepkg", "-si", "--needed", "--noconfirm"],
                             logger,
                             output,
                             cwd=yay_dir,
                         )
-                        output.success("Yay AUR helper installed")
+                        output.success("Yay AUR helper installed", logger=logger)
 
-                    except Exception:
+                    except Exception as e:
+                        logger.log_exception(e, "pacman_package_check_failed")
                         output.info(
                             "Try: Check internet connection and build dependencies",
                             emoji="💡",
@@ -1014,74 +962,99 @@ class Arch(Linux):
 
             # Check and install main packages
             all_packages = self.config.packages
-            output.status(f"Checking {len(all_packages)} pacman packages...")
+            logger = logger.bind(all_packages=all_packages)
+            output.status(
+                f"Checking {len(all_packages)} pacman packages...", logger=logger
+            )
 
             installed, missing = self.check_packages_installed(
                 all_packages, logger, output
             )
 
             if installed:
-                output.success(f"Already installed: {len(installed)} packages")
+                output.success(
+                    f"Already installed: {len(installed)} packages", logger=logger
+                )
 
             if missing:
-                output.status(f"Installing {len(missing)} missing pacman packages...")
+                output.status(
+                    f"Installing {len(missing)} missing pacman packages...",
+                    logger=logger,
+                )
                 try:
-                    pacman("-S", "--needed", "--noconfirm", *missing)
-                    output.success("All missing pacman packages installed successfully")
+                    pacman("-S", "--needed", "--noconfirm", *missing, logger=logger)
+                    output.success(
+                        "All missing pacman packages installed successfully",
+                        logger=logger,
+                    )
                     self.restart_required = True
-                except subprocess.CalledProcessError as e:
+                except CalledProcessError as e:
+                    logger.log_exception(e, "pacman_packages_installation_failed")
                     output.error("Some pacman packages failed to install")
                     output.info(
                         "Try: Check package names and update system", emoji="💡"
                     )
                     raise e
             else:
-                output.success("All pacman packages already installed")
+                output.success("All pacman packages already installed", logger=logger)
 
             # Check and install AUR packages
             aur_packages = self.config.aur_packages
             if aur_packages and yay_installed:
-                output.status(f"Checking {len(aur_packages)} AUR packages...")
+                output.status(
+                    f"Checking {len(aur_packages)} AUR packages...", logger=logger
+                )
                 installed_aur, missing_aur = self.check_packages_installed(
                     aur_packages, logger, output
                 )
 
                 if installed_aur:
                     output.success(
-                        f"Already installed: {len(installed_aur)} AUR packages"
+                        f"Already installed: {len(installed_aur)} AUR packages",
+                        logger=logger,
                     )
 
                 if missing_aur:
                     output.status(
-                        f"Installing {len(missing_aur)} missing AUR packages..."
+                        f"Installing {len(missing_aur)} missing AUR packages...",
+                        logger=logger,
                     )
                     try:
-                        self.run_command_with_error_handling(
+                        run_command_with_error_handling(
                             ["yay", "-S", "--needed", "--noconfirm"] + missing_aur,
                             logger,
                             output,
                             timeout=1800,
                         )
                         output.success(
-                            "All missing AUR packages installed successfully"
+                            "All missing AUR packages installed successfully",
+                            logger=logger,
                         )
-                    except subprocess.TimeoutExpired:
+                    except TimeoutExpired as e:
+                        logger.log_exception(e, "aur_installation_timeout")
                         output.error("AUR package installation timed out")
                         raise
-                    except subprocess.CalledProcessError as e:
+                    except CalledProcessError as e:
+                        logger.log_exception(e, "aur_packages_installation_failed")
                         output.error("Some AUR packages failed to install")
                         if e.stderr:
                             output.info(f"Error details: {e.stderr}", emoji="💡")
                         raise
                 else:
-                    output.success("All AUR packages already installed")
+                    output.success("All AUR packages already installed", logger=logger)
             elif aur_packages and not yay_installed:
-                output.warning("AUR packages requested but yay not available")
+                output.warning(
+                    "AUR packages requested but yay not available", logger=logger
+                )
 
             # Check and enable systemd services
             services_to_enable = self.config.systemd_services
+            logger = logger.bind(services_to_enable=services_to_enable)
             if services_to_enable:
-                output.status(f"Checking {len(services_to_enable)} systemd services...")
+                output.status(
+                    f"Checking {len(services_to_enable)} systemd services...",
+                    logger=logger,
+                )
 
             for service in services_to_enable:
                 try:
@@ -1090,43 +1063,56 @@ class Arch(Linux):
                     )
 
                     if is_enabled and is_active:
-                        output.success(f"Service already enabled and active: {service}")
+                        output.success(
+                            f"Service already enabled and active: {service}",
+                            logger=logger,
+                        )
                         continue
                     elif is_enabled and not is_active:
                         output.status(
-                            f"Starting already enabled service: {service}", emoji="🔄"
+                            f"Starting already enabled service: {service}",
+                            emoji="🔄",
+                            logger=logger,
                         )
-                        self.run_command_with_error_handling(
+                        run_command_with_error_handling(
                             ["systemctl", "start", service], logger, output
                         )
-                        output.success(f"Started service: {service}")
+                        output.success(f"Started service: {service}", logger=logger)
                     else:
                         output.status(
-                            f"Enabling and starting service: {service}", emoji="🔄"
+                            f"Enabling and starting service: {service}",
+                            emoji="🔄",
+                            logger=logger,
                         )
-                        self.run_command_with_error_handling(
+                        run_command_with_error_handling(
                             ["systemctl", "enable", "--now", service], logger, output
                         )
-                        output.success(f"Enabled and started service: {service}")
+                        output.success(
+                            f"Enabled and started service: {service}", logger=logger
+                        )
 
-                except subprocess.CalledProcessError as e:
+                except CalledProcessError as e:
                     # In containers, systemd services often fail - this is expected
                     if (
                         "chroot" in e.stderr.lower()
                         or "failed to connect to bus" in e.stderr.lower()
                         or "not available" in e.stderr.lower()
                     ):
+                        logger.log_exception(e, "service_enable_in_container_failed")
                         output.warning(
                             f"Cannot enable {service} in container environment"
                         )
                     else:
+                        logger.log_exception(e, "service_enable_failed")
                         output.error(f"Failed to enable service {service}: {e.stderr}")
                         # Don't raise here - continue with other services
 
-        except KeyboardInterrupt:
+        except KeyboardInterrupt as e:
+            logger.log_exception(e, "installation_interrupted_by_user")
             output.error("Installation interrupted by user")
             raise
         except Exception as e:
+            logger.log_exception(e, "package_installation_fatal_error")
             output.error(f"FATAL ERROR during package installation: {e}")
             output.info("Try: Check logs above for specific error details", emoji="💡")
             raise
@@ -1146,9 +1132,10 @@ class Debian(Linux):
         try:
             installed: list[str] = []
             missing: list[str] = []
+            logger = logger.bind(installed=installed, missing=missing)
 
             for package in packages:
-                result = self.run_command_with_error_handling(
+                result = run_command_with_error_handling(
                     ["dpkg", "-l", package], logger, console, "dpkg command"
                 )
                 # dpkg -l returns 0 and shows 'ii' status for installed packages
@@ -1158,11 +1145,12 @@ class Debian(Linux):
                     missing.append(package)
 
             return installed, missing
-        except Exception:
+        except Exception as e:
+            logger.log_exception(e, "dpkg_check_failed", packages=packages)
             # If dpkg check fails, assume all packages need installation
             return [], packages
 
-    def _is_running_in_container(self):
+    def _is_running_in_container(self, logger: LoggingHelpers):
         """
         Detect if we're running inside a container (Docker, Podman, etc.)
 
@@ -1211,7 +1199,8 @@ class Debian(Linux):
                 return True
 
             return False
-        except Exception:
+        except Exception as e:
+            logger.log_exception(e, "container_detection_failed")
             # If we can't determine container status (permissions, missing files, etc.),
             # assume we're NOT in a container. This is safer for real user systems
             # where we don't want to accidentally modify timezone settings.
@@ -1269,15 +1258,16 @@ class Debian(Linux):
         #
         # Safety: Only runs in no-remote mode (--no-remote flag) or detected containers,
         # never on real user systems where timezone might be intentionally set.
-        if self.no_remote_mode or self._is_running_in_container():
+        if self.no_remote_mode or self._is_running_in_container(logger):
             try:
                 output.status(
-                    "Pre-configuring timezone to UTC to prevent interactive prompts..."
+                    "Pre-configuring timezone to UTC to prevent interactive prompts...",
+                    logger=logger,
                 )
 
                 # Step 1: Create symlink from /etc/localtime to UTC timezone data
                 # This is the primary way Linux systems determine the current timezone
-                self.run_command_with_error_handling(
+                run_command_with_error_handling(
                     ["sudo", "ln", "-fs", "/usr/share/zoneinfo/UTC", "/etc/localtime"],
                     logger,
                     output,
@@ -1287,7 +1277,7 @@ class Debian(Linux):
 
                 # Step 2: Set the timezone name in /etc/timezone for consistency
                 # Some tools and packages read this file to determine the timezone name
-                self.run_command_with_error_handling(
+                run_command_with_error_handling(
                     ["sudo", "sh", "-c", "echo 'UTC' > /etc/timezone"],
                     logger,
                     output,
@@ -1295,8 +1285,9 @@ class Debian(Linux):
                     timeout=30,
                 )
 
-                output.success("Timezone pre-configured to UTC")
+                output.success("Timezone pre-configured to UTC", logger=logger)
             except Exception as e:
+                logger.log_exception(e, "timezone_preconfiguration_failed")
                 output.warning(f"Could not pre-configure timezone: {e}")
                 output.info(
                     "This may cause interactive prompts during package installation",
@@ -1304,10 +1295,13 @@ class Debian(Linux):
                 )
         else:
             output.success(
-                "Skipping timezone pre-configuration (running on real system)"
+                "Skipping timezone pre-configuration (running on real system)",
+                logger=logger,
             )
 
-        def apt_get(*args: str, **kwargs: Any):
+        def apt_get(
+            *args: str, logger: LoggingHelpers, output: ConsoleOutput, **kwargs: Any
+        ):
             """
             Execute APT commands with real-time output, error handling, and retry logic.
 
@@ -1324,6 +1318,7 @@ class Debian(Linux):
             max_retries = 3
             for attempt in range(max_retries):
                 try:
+                    logger = logger.bind(retry_attempt=attempt)
                     # Set up non-interactive environment to prevent prompts
                     #
                     # Problem: sudo often drops environment variables for security.
@@ -1342,7 +1337,7 @@ class Debian(Linux):
                     #
                     # Timeout reduced from 1800s (30min) to 600s (10min) for faster failure detection
                     # while still allowing time for large package downloads.
-                    result = self.run_command_with_error_handling(
+                    result = run_command_with_error_handling(
                         ["sudo", "apt-get"] + list(args),
                         logger,
                         output,
@@ -1351,7 +1346,8 @@ class Debian(Linux):
                         **kwargs,
                     )
                     return result
-                except subprocess.TimeoutExpired:
+                except TimeoutExpired as e:
+                    logger.log_exception(e, "apt_get_timeout")
                     output.error(
                         f"APT operation timed out (attempt {attempt + 1}/{max_retries})"
                     )
@@ -1363,7 +1359,8 @@ class Debian(Linux):
                         raise
                     output.status("Retrying in 10 seconds...", emoji="🔄")
                     time.sleep(10)
-                except subprocess.CalledProcessError as e:
+                except CalledProcessError as e:
+                    logger.log_exception(e, "apt_update_failed")
                     if "unable to lock" in e.stderr.lower():
                         output.error("APT database is locked")
                         output.info(
@@ -1390,37 +1387,52 @@ class Debian(Linux):
 
         try:
             # Update package databases
-            output.status("Updating package databases...")
-            apt_get("update")
-            output.success("Package databases updated")
+            output.status("Updating package databases...", logger=logger)
+            apt_get("update", output=output, logger=logger)
+            output.success("Package databases updated", logger=logger)
 
             # Upgrade existing packages
             output.status("Upgrading existing packages...")
             try:
-                apt_get("upgrade", "--assume-yes")
-                output.success("System packages upgraded")
-            except subprocess.CalledProcessError as _:
-                output.warning("Some packages failed to upgrade")
+                apt_get("upgrade", "--assume-yes", output=output, logger=logger)
+                output.success("System packages upgraded", logger=logger)
+            except CalledProcessError as _:
+                output.warning("Some packages failed to upgrade", logger=logger)
                 output.info(
                     "This is often non-critical, continuing with installation...",
                     emoji="💡",
                 )
 
             # Check and install main packages
-            output.status(f"Checking {len(self.apt_packages)} APT packages...")
+            output.status(
+                f"Checking {len(self.apt_packages)} APT packages...", logger=logger
+            )
             (installed, missing) = self.check_packages_installed(
                 self.apt_packages, logger, output
             )
 
             if installed:
-                output.success(f"Already installed: {len(installed)} packages")
+                output.success(
+                    f"Already installed: {len(installed)} packages", logger=logger
+                )
 
             if missing:
-                output.status(f"Installing {len(missing)} missing APT packages...")
+                output.status(
+                    f"Installing {len(missing)} missing APT packages...", logger=logger
+                )
                 try:
-                    apt_get("install", "--assume-yes", *missing)
-                    output.success("All missing APT packages installed successfully")
-                except subprocess.CalledProcessError as _:
+                    apt_get(
+                        "install",
+                        "--assume-yes",
+                        *missing,
+                        logger=logger,
+                        output=output,
+                    )
+                    output.success(
+                        "All missing APT packages installed successfully", logger=logger
+                    )
+                except CalledProcessError as e:
+                    logger.log_exception(e, "apt_packages_installation_failed")
                     output.error("Some APT packages failed to install")
                     output.info(
                         "Try: Check package names and fix any dependency conflicts",
@@ -1428,29 +1440,33 @@ class Debian(Linux):
                     )
                     raise
             else:
-                output.success("All APT packages already installed")
+                output.success("All APT packages already installed", logger=logger)
 
             # Update apt-file database
-            output.status("Updating apt-file database...")
+            output.status("Updating apt-file database...", logger=logger)
             try:
-                self.run_command_with_error_handling(
+                run_command_with_error_handling(
                     ["sudo", "apt-file", "update"], logger, output, timeout=600
                 )
-                output.success("Apt-file database updated")
-            except subprocess.CalledProcessError as _:
+                output.success("Apt-file database updated", logger=logger)
+            except CalledProcessError as e:
+                logger.log_exception(e, "apt_file_update_failed")
                 output.warning("apt-file update failed")
                 output.info("This is non-critical, continuing...", emoji="💡")
-            except subprocess.TimeoutExpired:
+            except TimeoutExpired as e:
+                logger.log_exception(e, "apt_file_timeout")
                 output.warning("apt-file update timed out")
                 output.info("This is non-critical, continuing...", emoji="💡")
 
             # Download and install latest Neovim AppImage
             nvim_appimage = expand("./nvim.appimage")
+            logger = logger.bind(nvim_appimage=nvim_appimage)
             if not exists(nvim_appimage):
-                output.status("Downloading latest Neovim AppImage...")
+                output.status("Downloading latest Neovim AppImage...", logger=logger)
                 max_retries = 3
                 for attempt in range(max_retries):
                     try:
+                        logger = logger.bind(retry_attempt=attempt)
                         # Download with timeout
                         request = urllib.request.Request(
                             "https://github.com/neovim/neovim/releases/latest/download/nvim.appimage",
@@ -1466,10 +1482,13 @@ class Debian(Linux):
                                         break
                                     f.write(chunk)
 
-                        output.success("Neovim AppImage downloaded successfully")
+                        output.success(
+                            "Neovim AppImage downloaded successfully", logger=logger
+                        )
                         break
 
                     except urllib.error.URLError as e:
+                        logger.log_exception(e, "neovim_download_network_error")
                         output.error(
                             f"Failed to download Neovim (attempt {attempt + 1}/{max_retries}): {e}"
                         )
@@ -1482,48 +1501,59 @@ class Debian(Linux):
                         output.status("Retrying in 5 seconds...", emoji="🔄")
                         time.sleep(5)
                     except Exception as e:
+                        logger.log_exception(e, "neovim_download_unexpected_error")
                         output.error(f"Unexpected error downloading Neovim: {e}")
                         raise
 
                 # Make AppImage executable
                 try:
                     os.chmod(nvim_appimage, 0o755)
-                    output.success("Neovim AppImage made executable")
+                    output.success("Neovim AppImage made executable", logger=logger)
                 except OSError as e:
-                    output.error(f"Failed to make Neovim executable: {e}")
+                    output.error(
+                        f"Failed to make Neovim executable: {e}", logger=logger
+                    )
                     raise
 
                 # Create ~/bin directory
                 bin_dir = expand("~/bin")
+                logger = logger.bind()
                 try:
                     ensure_path(bin_dir)
-                    output.success("~/bin directory created")
+                    output.success("~/bin directory created", logger=logger)
                 except OSError as e:
+                    logger.log_exception(e, "neovim_appimage_permissions_failed")
                     output.error(f"Cannot create ~/bin directory: {e}")
                     output.info("Try: Check home directory permissions", emoji="💡")
                     raise
 
                 # Create symlink to nvim
                 nvim_symlink = expand("~/bin/nvim")
+                logger = logger.bind(nvim_symlink=nvim_symlink)
                 if not exists(nvim_symlink):
                     try:
                         os.symlink(nvim_appimage, nvim_symlink)
-                        output.success("Neovim symlink created in ~/bin/nvim")
+                        output.success(
+                            "Neovim symlink created in ~/bin/nvim", logger=logger
+                        )
                     except OSError as e:
+                        logger.log_exception(e, "neovim_appimage_permissions_failed")
                         output.error(f"Failed to create Neovim symlink: {e}")
                         output.info(
                             "Try: Check ~/bin directory permissions", emoji="💡"
                         )
                         raise
                 else:
-                    output.success("Neovim symlink already exists")
+                    output.success("Neovim symlink already exists", logger=logger)
             else:
-                output.success("Neovim AppImage already exists")
+                output.success("Neovim AppImage already exists", logger=logger)
 
-        except KeyboardInterrupt:
+        except KeyboardInterrupt as e:
+            logger.log_exception(e, "installation_interrupted_by_user")
             output.error("Installation interrupted by user")
             raise
         except Exception as e:
+            logger.log_exception(e, "package_installation_fatal_error")
             output.error(f"FATAL ERROR during package installation: {e}")
             output.info("Try: Check logs above for specific error details", emoji="💡")
             raise
@@ -1539,38 +1569,43 @@ class Debian(Linux):
 
         try:
             manager = DebianSystemManager()
-            if manager.is_available():
-                output.status("Updating system packages...")
-                result = manager.update(dry_run=False)
+            if manager.is_available(logger=logger, output=output):
+                output.status("Updating system packages...", logger=logger)
+                result = manager.update(logger=logger, output=output, dry_run=False)
+                logger = logger.bind(
+                    result_status=result.status.value, result_message=result.message
+                )
 
                 if result.status.value == "success":
-                    output.success("System packages updated successfully")
+                    output.success(
+                        "System packages updated successfully", logger=logger
+                    )
                     logger.log_progress("system update completed successfully")
                 else:
                     output.warning(
-                        f"System update completed with status: {result.status.value}"
+                        f"System update completed with status: {result.status.value}",
+                        logger=logger,
                     )
                     output.info(f"Message: {result.message}")
-                    logger.log_warning(
-                        "system update completed with warnings",
-                        result_status=result.status.value,
-                        result_message=result.message,
-                    )
             else:
                 output.warning(
-                    "APT package manager not available, skipping system updates"
+                    "APT package manager not available, skipping system updates",
+                    logger=logger,
                 )
                 logger.log_warning("apt not available for system updates")
         except Exception as e:
+            logger.log_exception(e, "system_update_failed")
             output.error(f"ERROR during system update: {e}")
-            logger.log_exception(e, "system update failed")
             raise
 
 
-def detect_operating_system(environment: str = "minimal", no_remote_mode: bool = False):
+def detect_operating_system(
+    logger: LoggingHelpers, environment: str = "minimal", no_remote_mode: bool = False
+):
     """Detect and return the appropriate operating system class"""
     with open("/etc/os-release") as release_file:
         content = release_file.read()
+        logger = logger.bind(release_data=content)
         if 'NAME="Arch Linux"' in content:
             return Arch(environment=environment, no_remote_mode=no_remote_mode)
         elif 'NAME="CachyOS Linux"' in content:
@@ -1580,6 +1615,7 @@ def detect_operating_system(environment: str = "minimal", no_remote_mode: bool =
         elif "ID=debian" in content or "ID_LIKE=debian" in content:
             return Debian(environment=environment, no_remote_mode=no_remote_mode)
         else:
+            logger.log_error("Unknown OS")
             raise NotImplementedError(f"Unknown operating system, found {content}")
 
 
@@ -1661,6 +1697,7 @@ def main(no_remote: bool, quiet: bool, verbose: bool):
     try:
         # Get environment from environment variable
         environment = os.environ.get("DOTFILES_ENVIRONMENT")
+        logger = logger.bind(environment=environment)
         if not environment:
             output.error(
                 "DOTFILES_ENVIRONMENT environment variable is not set", logger=logger
@@ -1684,8 +1721,6 @@ def main(no_remote: bool, quiet: bool, verbose: bool):
             output.info(f"Must be one of: {', '.join(valid_environments)}")
             return 1
 
-        # Set up logging context
-        logger = logger.bind(environment=environment, no_remote_mode=no_remote)
         logger.log_info(
             "environment_validated", environment=environment, no_remote_mode=no_remote
         )
@@ -1697,9 +1732,10 @@ def main(no_remote: bool, quiet: bool, verbose: bool):
 
         try:
             operating_system = detect_operating_system(
-                environment=environment, no_remote_mode=no_remote
+                logger, environment=environment, no_remote_mode=no_remote
             )
-        except FileNotFoundError:
+        except FileNotFoundError as e:
+            logger.log_exception(e, "os_detection_file_missing")
             output.error(
                 "Cannot detect operating system (/etc/os-release not found)",
                 logger=logger,
@@ -1707,7 +1743,7 @@ def main(no_remote: bool, quiet: bool, verbose: bool):
             output.info("This script only supports Linux distributions")
             return 1
         except NotImplementedError as e:
-            logger.log_exception(e, str(e))
+            logger.log_exception(e, "os_not_supported")
             output.error(str(e))
             output.info(
                 "This script currently supports Arch Linux, Garuda Linux, and Debian-based systems"
@@ -1786,7 +1822,7 @@ def main(no_remote: bool, quiet: bool, verbose: bool):
         return 0
 
     except Exception as e:
-        logger.log_exception(e, "UNEXPECTED_ERROR")
+        logger.log_exception(e, "init_script_unexpected_error")
         output.error(f"UNEXPECTED ERROR: {e}")
         if verbose:
             output.info("DETAILED ERROR INFORMATION:")

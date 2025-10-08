@@ -77,21 +77,6 @@ def setup_logging(script_name: str) -> "LoggingHelpers":
     return LoggingHelpers(logger)
 
 
-def log_unused_variables(
-    logger: structlog.BoundLogger, **variables: dict[str, str]
-) -> None:
-    """
-    Helper to log variables that might be unused in code but useful for debugging.
-
-    This satisfies linters while preserving potentially useful information.
-
-    Args:
-        logger: The structlog logger instance
-        **variables: Key-value pairs of variables to log as context
-    """
-    logger.debug("unused_variables_context", **variables)
-
-
 class LoggingHelpers:
     """
     Helper class for common logging operations that takes a logger instance.
@@ -160,7 +145,7 @@ class LoggingHelpers:
         debug_log.log_debug("Subprocess output")
 
     def log_exception(
-        self, exception: Exception, context_msg: str, **context: Any
+        self, exception: BaseException, context_msg: str, **context: Any
     ) -> None:
         """
         Log exception with full context and traceback.
