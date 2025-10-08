@@ -25,6 +25,12 @@ repos:
         entry: ruff format
         language: system
         files: \.py$
+      - id: pyright
+        name: pyright
+        entry: pyright
+        language: system
+        files: \.py$
+        pass_filenames: false
       - id: stylua
         name: stylua
         entry: stylua

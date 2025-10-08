@@ -1,53 +1,25 @@
 #!/usr/bin/env -S uv run python
+# pyright: strict
 """
 swman - Software Manager Orchestrator
 
 A unified interface to manage updates across multiple package managers
 and tools. Designed to work with any system, not just dotfiles.
-
-KEY IMPROVEMENT: Now shows full package manager output instead of hiding it.
-All package update operations (pacman, yay, uv tools, lazy.nvim, fisher)
-display real-time progress so users can see what packages are being updated.
 """
 
-import subprocess
+from subprocess import SubprocessError, TimeoutExpired, CalledProcessError
+from abc import ABC, abstractmethod
 import sys
 import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import click
-from .logging_config import setup_logging, bind_context
+
+from dotfiles.process_helper import run_command_with_error_handling
+from .logging_config import LoggingHelpers, setup_logging
 from .output_formatting import ConsoleOutput
-
-
-def run_with_streaming_output(
-    command: List[str], timeout: int = 600
-) -> subprocess.CompletedProcess:
-    """
-    Execute command with real-time output streaming for package managers.
-
-    This function shows full package manager output to users instead of hiding it,
-    while still capturing stderr for error handling and maintaining return codes.
-
-    Args:
-        command: Command to execute as list of strings
-        timeout: Timeout in seconds (default 600 = 10 minutes)
-
-    Returns:
-        CompletedProcess with returncode and stderr (stdout flows to terminal)
-
-    Note: This follows the same pattern used in init.py for APT/pacman streaming.
-    """
-    return subprocess.run(
-        command,
-        check=False,  # Don't raise exception, let caller handle return codes
-        stderr=subprocess.PIPE,  # Capture stderr for error analysis
-        text=True,
-        timeout=timeout,
-    )
 
 
 class ManagerType(Enum):
@@ -65,212 +37,447 @@ class UpdateStatus(Enum):
 
 
 @dataclass
-class ManagerResult:
+class UpdateResult:
     name: str
     status: UpdateStatus
     message: str
     duration: float
-    updates_available: int = 0
-    updates_applied: int = 0
 
 
-class PackageManager:
-    def __init__(self, name: str, manager_type: ManagerType):
-        self.name = name
-        self.type = manager_type
-        self.logger = setup_logging("swman")
+class PackageManager(ABC):
+    name: str
+    type: ManagerType
 
-    def is_available(self) -> bool:
+    def __init__(self, name: str, manager_type: ManagerType) -> None:
+        self.name: str = name
+        self.type: ManagerType = manager_type
+
+    @abstractmethod
+    def is_available(self, logger: LoggingHelpers, output: ConsoleOutput) -> bool:
         """Check if this package manager is available on the system."""
         raise NotImplementedError
 
-    def check_updates(self) -> Tuple[bool, int]:
+    @abstractmethod
+    def check_updates(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> tuple[bool, int]:
         """Check for available updates. Returns (has_updates, count)."""
         raise NotImplementedError
 
-    def update(self, dry_run: bool = False) -> ManagerResult:
+    @abstractmethod
+    def update(
+        self,
+        logger: LoggingHelpers,
+        output: ConsoleOutput,
+        dry_run: bool = False,
+    ) -> UpdateResult:
         """Perform the update operation."""
         raise NotImplementedError
 
+    @staticmethod
+    def _command_exists(
+        command: str, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> bool:
+        try:
+            run_command_with_error_handling(
+                ["which", command],
+                logger=logger,
+                output=output,
+                description=f"Does command {command} exist?",
+            )
+            return True
+        except CalledProcessError:
+            return False
+
+    def bind_log(self, logger: LoggingHelpers):
+        return logger.bind(
+            package_manager_name=self.name, package_manager_type=self.type
+        )
+
 
 class PacmanManager(PackageManager):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("pacman", ManagerType.SYSTEM)
 
-    def is_available(self) -> bool:
-        return self._command_exists("pacman")
+    def is_available(self, logger: LoggingHelpers, output: ConsoleOutput) -> bool:
+        is_available = self._command_exists("pacman", logger, output)
+        logger = self.bind_log(logger)
+        logger.log_info("manager_availability_check", is_available=is_available)
+        return is_available
 
-    def check_updates(self) -> Tuple[bool, int]:
+    def check_updates(self, logger: LoggingHelpers, output: ConsoleOutput):
+        logger = self.bind_log(logger)
         try:
-            result = subprocess.run(
-                ["checkupdates"], capture_output=True, text=True, timeout=30
+            result = run_command_with_error_handling(
+                ["checkupdates"],
+                logger=logger,
+                output=output,
+                description="Pacman check for updates",
+                timeout=30,
             )
+            logger = logger.bind(returncode=result.returncode, stderr=result.stderr)
             if result.returncode == 0:
                 count = (
                     len(result.stdout.strip().split("\n"))
                     if result.stdout.strip()
                     else 0
                 )
+                logger = logger.bind(updates_count=count)
+                logger.log_info("update_check_completed")
                 return count > 0, count
+            logger.log_error("update_check_failed")
             return False, 0
-        except (subprocess.SubprocessError, FileNotFoundError):
+        except (SubprocessError, FileNotFoundError) as e:
+            logger.log_exception(e, "unexpected_exception")
             return False, 0
 
-    def update(self, dry_run: bool = False) -> ManagerResult:
+    def update(
+        self, logger: LoggingHelpers, output: ConsoleOutput, dry_run: bool = False
+    ) -> UpdateResult:
+        logger = self.bind_log(logger)
         start_time = time.time()
 
         if dry_run:
-            has_updates, count = self.check_updates()
-            return ManagerResult(
+            has_updates, count = self.check_updates(logger, output)
+            logger = logger.bind(has_updates=has_updates, count=count)
+            logger.log_info("update_simulated")
+            return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.SUCCESS,
                 message=f"Would update {count} packages",
                 duration=time.time() - start_time,
-                updates_available=count,
             )
 
         try:
             # Use streaming output to show real-time pacman progress
-            result = run_with_streaming_output(
-                ["sudo", "pacman", "-Syu", "--noconfirm"], timeout=600
+            result = run_command_with_error_handling(
+                ["sudo", "pacman", "-Syu", "--noconfirm"],
+                logger=logger,
+                output=output,
+                description="Pacman update command",
+                timeout=600,
+            )
+            duration = time.time() - start_time
+            logger = logger.bind(
+                duration=duration, returncode=result.returncode, stderr=result.stderr
             )
 
             if result.returncode == 0:
                 # Parse output to count actual updates
-                return ManagerResult(
+                logger.log_info("update_completed")
+                return UpdateResult(
                     name=self.name,
                     status=UpdateStatus.SUCCESS,
                     message="System packages updated successfully",
                     duration=time.time() - start_time,
                 )
             else:
-                return ManagerResult(
+                logger.log_error("update_failed")
+                return UpdateResult(
                     name=self.name,
                     status=UpdateStatus.FAILED,
                     message=f"Update failed: {result.stderr}",
                     duration=time.time() - start_time,
                 )
-        except subprocess.TimeoutExpired:
-            return ManagerResult(
+        except TimeoutExpired as e:
+            logger.log_exception(e, "update_timeout")
+            return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.FAILED,
                 message="Update timed out",
                 duration=time.time() - start_time,
             )
         except Exception as e:
-            return ManagerResult(
+            logger.log_exception(e, "unexpected_exception")
+            return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.FAILED,
                 message=f"Unexpected error: {e}",
                 duration=time.time() - start_time,
             )
 
-    @staticmethod
-    def _command_exists(command: str) -> bool:
-        try:
-            subprocess.run(["which", command], capture_output=True, check=True)
-            return True
-        except subprocess.CalledProcessError:
-            return False
-
 
 class YayManager(PackageManager):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("yay", ManagerType.SYSTEM)
 
-    def is_available(self) -> bool:
-        return self._command_exists("yay")
+    def is_available(self, logger: LoggingHelpers, output: ConsoleOutput) -> bool:
+        logger = self.bind_log(logger)
+        is_available = self._command_exists("yay", logger, output)
+        logger.log_info("manager_availability_check", is_available=is_available)
+        return is_available
 
-    def check_updates(self) -> Tuple[bool, int]:
+    def check_updates(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> tuple[bool, int]:
+        logger = self.bind_log(logger)
         try:
-            result = subprocess.run(
-                ["yay", "-Qu"], capture_output=True, text=True, timeout=60
+            result = run_command_with_error_handling(
+                ["yay", "-Qu"],
+                logger,
+                output,
+                description="Yay check for updates",
+                timeout=60,
             )
+            logger = logger.bind(returncode=result.returncode, stderr=result.stderr)
             if result.returncode == 0:
                 count = (
                     len(result.stdout.strip().split("\n"))
                     if result.stdout.strip()
                     else 0
                 )
+                logger = logger.bind(updates_count=count)
+                logger.log_info("update_check_completed")
                 return count > 0, count
+            logger.log_error("update_check_failed")
             return False, 0
-        except (subprocess.SubprocessError, FileNotFoundError):
+        except (SubprocessError, FileNotFoundError) as e:
+            logger.log_exception(e, "unexpected_exception")
             return False, 0
 
-    def update(self, dry_run: bool = False) -> ManagerResult:
+    def update(
+        self, logger: LoggingHelpers, output: ConsoleOutput, dry_run: bool = False
+    ) -> UpdateResult:
+        logger = self.bind_log(logger)
         start_time = time.time()
 
         if dry_run:
-            has_updates, count = self.check_updates()
-            return ManagerResult(
+            has_updates, count = self.check_updates(logger, output)
+            logger = logger.bind(has_updates=has_updates, count=count)
+            logger.log_info("update_simulated")
+            return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.SUCCESS,
                 message=f"Would update {count} AUR packages",
                 duration=time.time() - start_time,
-                updates_available=count,
             )
 
         try:
             # Use streaming output to show real-time yay/AUR progress
-            result = run_with_streaming_output(
+            timeout = 1800
+
+            result = run_command_with_error_handling(
                 ["yay", "-Syu", "--noconfirm"],
-                timeout=1800,  # 30 minutes for AUR builds
+                logger,
+                output,
+                description="Perform update with yay",
+                timeout=timeout,
+            )
+            duration = time.time() - start_time
+            logger = logger.bind(
+                returncode=result.returncode,
+                stderr=result.stderr,
+                duration=duration,
+                timeout=timeout,
             )
 
             if result.returncode == 0:
-                return ManagerResult(
+                logger.log_info("update_completed")
+                return UpdateResult(
                     name=self.name,
                     status=UpdateStatus.SUCCESS,
                     message="AUR packages updated successfully",
-                    duration=time.time() - start_time,
+                    duration=duration,
                 )
             else:
-                return ManagerResult(
+                logger.log_error("update_failed")
+                return UpdateResult(
                     name=self.name,
                     status=UpdateStatus.FAILED,
                     message=f"AUR update failed: {result.stderr}",
-                    duration=time.time() - start_time,
+                    duration=duration,
                 )
-        except subprocess.TimeoutExpired:
-            return ManagerResult(
+        except TimeoutExpired as e:
+            logger.log_exception(e, "update_timeout")
+            return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.FAILED,
                 message="AUR update timed out",
                 duration=time.time() - start_time,
             )
         except Exception as e:
-            return ManagerResult(
+            logger.log_exception(e, "unexpected_exception")
+            return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.FAILED,
                 message=f"Unexpected error: {e}",
                 duration=time.time() - start_time,
             )
 
-    @staticmethod
-    def _command_exists(command: str) -> bool:
+
+class DebianSystemManager(PackageManager):
+    """System package manager for Debian/Ubuntu systems using apt"""
+
+    def __init__(self) -> None:
+        super().__init__("apt", ManagerType.SYSTEM)
+
+    def is_available(self, logger: LoggingHelpers, output: ConsoleOutput) -> bool:
+        logger = self.bind_log(logger)
+        is_available = self._command_exists("apt", logger, output)
+        logger.log_info("manager_availability_check", is_available=is_available)
+        return is_available
+
+    def check_updates(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> tuple[bool, int]:
+        """Check for available updates using apt list --upgradable"""
+        logger = self.bind_log(logger)
         try:
-            subprocess.run(["which", command], capture_output=True, check=True)
-            return True
-        except subprocess.CalledProcessError:
-            return False
+            # First update the package list
+            result = run_command_with_error_handling(
+                ["sudo", "apt", "update"],
+                logger,
+                output,
+                description="Update apt cache",
+                timeout=60,
+            )
+            logger = logger.bind(returncode=result.returncode, stderr=result.stderr)
+            if result.returncode != 0:
+                logger.log_error("cache_update_failed")
+                return False, 0
+
+            # Check for upgradable packages
+
+            result = run_command_with_error_handling(
+                ["apt", "list", "--upgradable"],
+                logger,
+                output,
+                description="Get packages that can be updated",
+                timeout=30,
+            )
+            logger = logger.bind(returncode=result.returncode, stderr=result.stderr)
+            if result.returncode == 0:
+                # Count lines excluding header
+                lines = result.stdout.strip().split("\n")
+                count = len([line for line in lines if "/" in line]) if lines else 0
+                logger = logger.bind(updates_count=count)
+                logger.log_info("update_check_completed")
+                return count > 0, count
+            logger.log_error("update_check_failed")
+            return False, 0
+        except (SubprocessError, FileNotFoundError) as e:
+            logger.log_exception(e, "unexpected_exception")
+            return False, 0
+
+    def update(
+        self, logger: LoggingHelpers, output: ConsoleOutput, dry_run: bool = False
+    ) -> UpdateResult:
+        """Perform system updates using apt"""
+        logger = self.bind_log(logger)
+        start_time = time.time()
+        logger = logger.bind(start_time=start_time, dry_run=dry_run)
+        logger.log_info("update_started")
+
+        if dry_run:
+            has_updates, count = self.check_updates(logger, output)
+            logger = logger.bind(has_updates=has_updates, count=count)
+            logger.log_info("update_simulated")
+            return UpdateResult(
+                name=self.name,
+                status=UpdateStatus.SUCCESS,
+                message=f"Would update {count} packages",
+                duration=time.time() - start_time,
+            )
+
+        try:
+            # First update package lists
+
+            timeout = 300
+            result = run_command_with_error_handling(
+                ["sudo", "apt", "update"],
+                logger,
+                output,
+                description="Run apt update",
+                timeout=timeout,
+            )
+            duration = time.time() - start_time
+            logger = logger.bind(
+                returncode=result.returncode,
+                stderr=result.stderr,
+                timeout=timeout,
+                duration=duration,
+            )
+            if result.returncode != 0:
+                logger.log_error("cache_update_failed")
+                return UpdateResult(
+                    name=self.name,
+                    status=UpdateStatus.FAILED,
+                    message=f"Package list update failed: {result.stderr}",
+                    duration=duration,
+                )
+
+            # Then upgrade packages with streaming output
+
+            result = run_command_with_error_handling(
+                ["sudo", "apt", "upgrade", "-y"],
+                logger,
+                output,
+                description="Apt upgrade command",
+            )
+            duration = time.time() - start_time
+            logger = logger.bind(
+                returncode=result.returncode,
+                stderr=result.stderr,
+                timeout=timeout,
+                duration=duration,
+            )
+
+            if result.returncode == 0:
+                logger.log_info("update_completed")
+                return UpdateResult(
+                    name=self.name,
+                    status=UpdateStatus.SUCCESS,
+                    message="System packages updated successfully",
+                    duration=duration,
+                )
+            else:
+                logger.log_error("update_failed")
+                return UpdateResult(
+                    name=self.name,
+                    status=UpdateStatus.FAILED,
+                    message=f"Update failed: {result.stderr}",
+                    duration=duration,
+                )
+        except TimeoutExpired as e:
+            logger.log_exception(e, "update_timeout")
+            return UpdateResult(
+                name=self.name,
+                status=UpdateStatus.FAILED,
+                message="Update timed out",
+                duration=time.time() - start_time,
+            )
+        except Exception as e:
+            logger.log_exception(e, "unexpected_exception")
+            return UpdateResult(
+                name=self.name,
+                status=UpdateStatus.FAILED,
+                message=f"Unexpected error: {e}",
+                duration=time.time() - start_time,
+            )
 
 
 class UvToolsManager(PackageManager):
     def __init__(self):
         super().__init__("uv-tools", ManagerType.TOOL)
 
-    def is_available(self) -> bool:
-        return self._command_exists("uv")
+    def is_available(self, logger: LoggingHelpers, output: ConsoleOutput) -> bool:
+        logger = self.bind_log(logger)
+        is_available = self._command_exists("uv", logger, output)
+        logger.log_info("manager_availability_check", is_available=is_available)
+        return is_available
 
-    def check_updates(self) -> Tuple[bool, int]:
+    def check_updates(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> tuple[bool, int]:
+        logger = self.bind_log(logger)
         # UV doesn't have a direct "check updates" command yet
         # We'd need to parse `uv tool list` and check each tool
         # Return cannot_determine status instead of false positive
         result = (False, -1)  # -1 indicates "cannot determine"
+        del output
 
-        self.logger.log_info(
+        logger.log_info(
             "manager_check_result",
-            manager=self.name,
             can_check=False,
             has_updates=result[0],
             count=result[1],
@@ -279,11 +486,15 @@ class UvToolsManager(PackageManager):
 
         return result
 
-    def update(self, dry_run: bool = False) -> ManagerResult:
+    def update(
+        self, logger: LoggingHelpers, output: ConsoleOutput, dry_run: bool = False
+    ) -> UpdateResult:
+        logger = self.bind_log(logger)
         start_time = time.time()
 
         if dry_run:
-            return ManagerResult(
+            logger.log_info("update_simulated")
+            return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.SUCCESS,
                 message="Would upgrade all uv tools",
@@ -292,57 +503,71 @@ class UvToolsManager(PackageManager):
 
         try:
             # Use streaming output to show real-time UV tool upgrade progress
-            result = run_with_streaming_output(
-                ["uv", "tool", "upgrade", "--all"], timeout=300
+            result = run_command_with_error_handling(
+                ["uv", "tool", "upgrade", "--all"],
+                logger=logger,
+                output=output,
+                description="Upgrade all uv tools",
+                timeout=300,
             )
+            duration = time.time() - start_time
 
+            logger = logger.bind(
+                returncode=result.returncode, stderr=result.stderr, duration=duration
+            )
             if result.returncode == 0:
-                return ManagerResult(
+                logger.log_info("update_completed")
+                return UpdateResult(
                     name=self.name,
                     status=UpdateStatus.SUCCESS,
                     message="UV tools updated successfully",
-                    duration=time.time() - start_time,
+                    duration=duration,
                 )
             else:
-                return ManagerResult(
+                logger.log_error("update_failed")
+                return UpdateResult(
                     name=self.name,
                     status=UpdateStatus.FAILED,
                     message=f"UV tools update failed: {result.stderr}",
                     duration=time.time() - start_time,
                 )
         except Exception as e:
-            return ManagerResult(
+            logger.log_exception(e, "unexpected_exception")
+            return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.FAILED,
                 message=f"Unexpected error: {e}",
                 duration=time.time() - start_time,
             )
 
-    @staticmethod
-    def _command_exists(command: str) -> bool:
-        try:
-            subprocess.run(["which", command], capture_output=True, check=True)
-            return True
-        except subprocess.CalledProcessError:
-            return False
-
 
 class LazyNvimManager(PackageManager):
     def __init__(self):
         super().__init__("lazy.nvim", ManagerType.PLUGIN)
 
-    def is_available(self) -> bool:
+    def is_available(self, logger: LoggingHelpers, output: ConsoleOutput) -> bool:
+        logger = self.bind_log(logger)
+        is_command_available = self._command_exists("nvim", logger, output)
         lazy_path = Path.home() / ".local/share/nvim/lazy/lazy.nvim"
-        return lazy_path.exists() and self._command_exists("nvim")
+        logger.log_info(
+            "manager_availability_check",
+            is_available=is_command_available,
+            lazy_path=str(lazy_path),
+            lazy_path_exists=lazy_path.exists(),
+        )
+        return lazy_path.exists() and is_command_available
 
-    def check_updates(self) -> Tuple[bool, int]:
+    def check_updates(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> tuple[bool, int]:
         # Lazy.nvim doesn't provide headless read-only update checking
         # Return cannot_determine status instead of false positive
+        logger = self.bind_log(logger)
+        del output
         result = (False, -1)  # -1 indicates "cannot determine"
 
-        self.logger.log_info(
+        logger.log_info(
             "manager_check_result",
-            manager=self.name,
             can_check=False,
             has_updates=result[0],
             count=result[1],
@@ -351,11 +576,15 @@ class LazyNvimManager(PackageManager):
 
         return result
 
-    def update(self, dry_run: bool = False) -> ManagerResult:
+    def update(
+        self, logger: LoggingHelpers, output: ConsoleOutput, dry_run: bool = False
+    ) -> UpdateResult:
+        logger = self.bind_log(logger)
         start_time = time.time()
 
         if dry_run:
-            return ManagerResult(
+            logger.log_info("update_simulated")
+            return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.SUCCESS,
                 message="Would update Neovim plugins",
@@ -364,51 +593,59 @@ class LazyNvimManager(PackageManager):
 
         try:
             # Use streaming output to show real-time Neovim plugin updates
-            _ = run_with_streaming_output(
-                ["nvim", "--headless", "+Lazy! sync", "+qa"], timeout=300
+
+            result = run_command_with_error_handling(
+                ["nvim", "--headless", "+Lazy! sync", "+qa"],
+                logger,
+                output,
+                description="update nvim",
             )
 
-            return ManagerResult(
+            logger = logger.bind(returncode=result.returncode, stderr=result.stderr)
+            logger.log_info("update_completed")
+            return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.SUCCESS,
                 message="Neovim plugins updated",
                 duration=time.time() - start_time,
             )
         except Exception as e:
-            return ManagerResult(
+            logger.log_exception(e, "unexpected_exception")
+            return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.FAILED,
                 message=f"Neovim plugin update failed: {e}",
                 duration=time.time() - start_time,
             )
 
-    @staticmethod
-    def _command_exists(command: str) -> bool:
-        try:
-            subprocess.run(["which", command], capture_output=True, check=True)
-            return True
-        except subprocess.CalledProcessError:
-            return False
-
 
 class FisherManager(PackageManager):
     def __init__(self):
         super().__init__("fisher", ManagerType.PLUGIN)
 
-    def is_available(self) -> bool:
-        return (
-            self._command_exists("fish")
-            and Path.home().joinpath(".config/fish/functions/fisher.fish").exists()
+    def is_available(self, logger: LoggingHelpers, output: ConsoleOutput) -> bool:
+        logger = self.bind_log(logger)
+        is_command_available = self._command_exists("fish", logger, output)
+        path = Path.home().joinpath(".config/fish/functions/fisher.fish")
+        logger.log_info(
+            "manager_availability_check",
+            is_available=is_command_available,
+            path=str(path),
+            path_exists=path.exists(),
         )
+        return is_command_available and path.exists()
 
-    def check_updates(self) -> Tuple[bool, int]:
+    def check_updates(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> tuple[bool, int]:
         # Fisher doesn't provide update checking without installation
         # Return cannot_determine status instead of false positive
+        logger = self.bind_log(logger)
+        del output
         result = (False, -1)  # -1 indicates "cannot determine"
 
-        self.logger.log_info(
+        logger.log_info(
             "manager_check_result",
-            manager=self.name,
             can_check=False,
             has_updates=result[0],
             count=result[1],
@@ -417,11 +654,15 @@ class FisherManager(PackageManager):
 
         return result
 
-    def update(self, dry_run: bool = False) -> ManagerResult:
+    def update(
+        self, logger: LoggingHelpers, output: ConsoleOutput, dry_run: bool = False
+    ) -> UpdateResult:
+        logger = self.bind_log(logger)
         start_time = time.time()
 
         if dry_run:
-            return ManagerResult(
+            logger.log_info("update_simulated")
+            return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.SUCCESS,
                 message="Would update Fish plugins",
@@ -430,34 +671,50 @@ class FisherManager(PackageManager):
 
         try:
             # Use streaming output to show real-time Fish plugin updates
-            _ = run_with_streaming_output(["fish", "-c", "fisher update"], timeout=120)
 
-            return ManagerResult(
+            result = run_command_with_error_handling(
+                ["fish", "-c", "fisher update"],
+                logger,
+                output,
+                description="Update Fish plugins",
+                timeout=120,
+            )
+            duration = time.time() - start_time
+
+            logger = logger.bind(
+                returncode=result.returncode, stderr=result.stderr, duration=duration
+            )
+            logger.log_info("update_completed")
+            return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.SUCCESS,
                 message="Fish plugins updated",
-                duration=time.time() - start_time,
+                duration=duration,
             )
         except Exception as e:
-            return ManagerResult(
+            logger.log_exception(e, "unexpected_exception")
+            return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.FAILED,
                 message=f"Fish plugin update failed: {e}",
                 duration=time.time() - start_time,
             )
 
-    @staticmethod
-    def _command_exists(command: str) -> bool:
-        try:
-            subprocess.run(["which", command], capture_output=True, check=True)
-            return True
-        except subprocess.CalledProcessError:
-            return False
-
 
 class SoftwareManagerOrchestrator:
+    """
+    Orchestrates updates across multiple package managers and plugin systems.
+
+    Provides a unified interface to check for updates and perform updates across
+    system package managers (pacman, yay, apt), development tools (uv), and
+    plugins (lazy.nvim, fisher).
+
+    The orchestrator automatically detects which package managers are available
+    on the system and only operates on those that are present.
+    """
+
     def __init__(self):
-        self.managers: List[PackageManager] = [
+        self.managers: list[PackageManager] = [
             PacmanManager(),
             YayManager(),
             UvToolsManager(),
@@ -465,37 +722,45 @@ class SoftwareManagerOrchestrator:
             FisherManager(),
         ]
 
-    def get_available_managers(self) -> List[PackageManager]:
-        return [mgr for mgr in self.managers if mgr.is_available()]
+    def get_available_managers(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> list[PackageManager]:
+        return [mgr for mgr in self.managers if mgr.is_available(logger, output)]
 
-    def check_all(self) -> Dict[str, Tuple[bool, int]]:
+    def check_all(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> dict[str, tuple[bool, int]]:
         """Check all managers for updates."""
-        results = {}
-        for manager in self.get_available_managers():
+        results: dict[str, tuple[bool, int]] = {}
+        for manager in self.get_available_managers(logger, output):
+            logger = logger.bind(manager=manager.name)
             try:
-                results[manager.name] = manager.check_updates()
+                results[manager.name] = manager.check_updates(logger, output)
             except Exception as e:
-                # Log error instead of print - this gets logged to structured logs
-                logger = setup_logging("swman")
-                logger.log_error(
-                    f"Error checking {manager.name}", error=str(e), manager=manager.name
-                )
+                logger.log_exception(e, "Error checking for updates")
                 results[manager.name] = (False, 0)
         return results
 
     def update_by_type(
-        self, manager_type: ManagerType, dry_run: bool = False
-    ) -> List[ManagerResult]:
+        self,
+        manager_type: ManagerType,
+        logger: LoggingHelpers,
+        output: ConsoleOutput,
+        dry_run: bool = False,
+    ) -> list[UpdateResult]:
         """Update all managers of a specific type."""
-        results = []
-        for manager in self.get_available_managers():
+        results: list[UpdateResult] = []
+        for manager in self.get_available_managers(logger, output):
+            logger = logger.bind(manager=manager.name)
             if manager.type == manager_type:
                 try:
-                    result = manager.update(dry_run)
+                    result = manager.update(logger, output, dry_run)
                     results.append(result)
+                    logger = logger.bind(results=results)
                 except Exception as e:
+                    logger.log_exception(e, "Unexpected exception")
                     results.append(
-                        ManagerResult(
+                        UpdateResult(
                             name=manager.name,
                             status=UpdateStatus.FAILED,
                             message=f"Unexpected error: {e}",
@@ -504,16 +769,19 @@ class SoftwareManagerOrchestrator:
                     )
         return results
 
-    def update_all(self, dry_run: bool = False) -> List[ManagerResult]:
+    def update_all(
+        self, logger: LoggingHelpers, output: ConsoleOutput, dry_run: bool = False
+    ) -> list[UpdateResult]:
         """Update all available managers."""
-        results = []
-        for manager in self.get_available_managers():
+        results: list[UpdateResult] = []
+        for manager in self.get_available_managers(logger, output):
+            logger = logger.bind(manager=manager.name)
             try:
-                result = manager.update(dry_run)
+                result = manager.update(logger=logger, output=output, dry_run=dry_run)
                 results.append(result)
             except Exception as e:
                 results.append(
-                    ManagerResult(
+                    UpdateResult(
                         name=manager.name,
                         status=UpdateStatus.FAILED,
                         message=f"Unexpected error: {e}",
@@ -524,21 +792,21 @@ class SoftwareManagerOrchestrator:
 
 
 def print_status_table(
-    check_results: Dict[str, Tuple[bool, int]], output: ConsoleOutput
-):
+    check_results: dict[str, tuple[bool, int]], output: ConsoleOutput
+) -> None:
     """Print a nice status table using Rich."""
-    rows = []
-    for name, (has_updates, count) in check_results.items():
+    rows: list[list[str]] = []
+    for manager_name, (has_updates, count) in check_results.items():
         status = "Updates Available" if has_updates else "Up to Date"
         updates_str = str(count) if count > 0 else "-"
-        rows.append([name, status, updates_str])
+        rows.append([manager_name, status, updates_str])
 
     output.table("Software Manager Status", ["Manager", "Status", "Updates"], rows)
 
 
-def print_results_summary(results: List[ManagerResult], output: ConsoleOutput):
+def print_results_summary(results: list[UpdateResult], output: ConsoleOutput) -> None:
     """Print update results summary using Rich."""
-    rows = []
+    rows: list[list[str]] = []
     for result in results:
         status_icon = {
             UpdateStatus.SUCCESS: "✅",
@@ -574,12 +842,30 @@ def print_results_summary(results: List[ManagerResult], output: ConsoleOutput):
 @click.option("--quiet", is_flag=True, help="Suppress non-essential output")
 @click.option("--verbose", is_flag=True, help="Show detailed output")
 def main(
-    check, system, tools, plugins, update_all, dry_run, json_output, quiet, verbose
-):
+    check: bool,
+    system: bool,
+    tools: bool,
+    plugins: bool,
+    update_all: bool,
+    dry_run: bool,
+    json_output: bool,
+    quiet: bool,
+    verbose: bool,
+) -> int:
     """Software Manager Orchestrator - Unified package manager updates"""
 
-    # Initialize logging and console output
-    logger = setup_logging("swman")
+    # Initialize logging and console output with CLI context
+    logger = setup_logging("swman").bind(
+        verbose=verbose,
+        quiet=quiet,
+        dry_run=dry_run,
+        json_output=json_output,
+        check=check,
+        system=system,
+        tools=tools,
+        plugins=plugins,
+        update_all=update_all,
+    )
     output = ConsoleOutput(verbose=verbose, quiet=quiet)
     logger.log_info("swman_started")
 
@@ -592,15 +878,16 @@ def main(
     orchestrator = SoftwareManagerOrchestrator()
 
     if check:
-        logger.log_info("check_operation_started")
+        check_log = logger.bind(operation="check")
+        check_log.log_info("operation_started")
         output.status("Checking for updates...")
-        check_results = orchestrator.check_all()
-        # check_results is Dict[str, Tuple[bool, int]] where tuple is (success, updates_count)
+        check_results = orchestrator.check_all(logger=logger, output=output)
+        # check_results is dict[str, tuple[bool, int]] where tuple is (success, updates_count)
         total_updates = sum(
             r[1] for r in check_results.values() if r[0]
         )  # r[1] is updates_count, r[0] is success
-        logger.log_info(
-            "check_operation_completed",
+        check_log.log_info(
+            "operation_completed",
             total_managers=len(check_results),
             managers_with_updates=sum(
                 1 for r in check_results.values() if r[0] and r[1] > 0
@@ -614,40 +901,32 @@ def main(
             print_status_table(check_results, output)
         return 0
 
-    results = []
+    results: list[UpdateResult] = []
 
     # Set up operation context
-    operation_types = []
-    if system:
-        operation_types.append("system")
-    if tools:
-        operation_types.append("tools")
-    if plugins:
-        operation_types.append("plugins")
+    operation_types: list[ManagerType] = []
     if update_all:
-        operation_types.append("all")
+        operation_types = [ManagerType.SYSTEM, ManagerType.TOOL, ManagerType.PLUGIN]
+    else:
+        if system:
+            operation_types.append(ManagerType.SYSTEM)
+        if tools:
+            operation_types.append(ManagerType.TOOL)
+        if plugins:
+            operation_types.append(ManagerType.PLUGIN)
 
-    bind_context(operation_types=operation_types, dry_run=dry_run)
+    logger = logger.bind(operation_types=operation_types, dry_run=dry_run)
 
-    if system:
-        logger.log_info("system_update_started")
-        output.status("Updating system packages...", "🔄")
-        results.extend(orchestrator.update_by_type(ManagerType.SYSTEM, dry_run))
-
-    if tools:
-        logger.log_info("tools_update_started")
-        output.status("Updating development tools...", "🔧")
-        results.extend(orchestrator.update_by_type(ManagerType.TOOL, dry_run))
-
-    if plugins:
-        logger.log_info("plugins_update_started")
-        output.status("Updating plugins...", "🔌")
-        results.extend(orchestrator.update_by_type(ManagerType.PLUGIN, dry_run))
-
-    if update_all:
-        logger.log_info("all_update_started")
-        output.status("Updating everything...", "🚀")
-        results.extend(orchestrator.update_all(dry_run))
+    # Execute operations
+    for op_type in operation_types:
+        op_log = logger.bind(op_type=op_type.name)
+        op_log.log_info("op_type_started")
+        output.status(f"Updating {op_type.name}")
+        op_results = orchestrator.update_by_type(
+            op_type, logger=logger, output=output, dry_run=dry_run
+        )
+        results.extend(op_results)
+        op_log.log_info("operation_completed", result_count=len(op_results))
 
     if json_output:
         output.json(
@@ -657,8 +936,6 @@ def main(
                     "status": r.status.value,
                     "message": r.message,
                     "duration": r.duration,
-                    "updates_available": r.updates_available,
-                    "updates_applied": r.updates_applied,
                 }
                 for r in results
             ]

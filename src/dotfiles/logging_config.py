@@ -1,3 +1,4 @@
+# pyright: strict
 """
 Shared logging configuration for all dotfiles Python tools.
 
@@ -7,10 +8,13 @@ Logs go to files only - use output_formatting module for user interaction.
 
 import logging
 import os
+import subprocess
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import structlog
+
+from typing import Any
 
 
 def setup_logging(script_name: str) -> "LoggingHelpers":
@@ -70,42 +74,6 @@ def setup_logging(script_name: str) -> "LoggingHelpers":
     return LoggingHelpers(logger)
 
 
-def bind_context(**kwargs) -> None:
-    """
-    Bind key-value pairs to the global logging context.
-
-    Useful for setting operation-wide context like environment, user, etc.
-    """
-    structlog.contextvars.bind_contextvars(**kwargs)
-
-
-def unbind_context(*keys) -> None:
-    """
-    Remove specific keys from the global logging context.
-    """
-    structlog.contextvars.unbind_contextvars(*keys)
-
-
-def clear_context() -> None:
-    """
-    Clear all variables from the global logging context.
-    """
-    structlog.contextvars.clear_contextvars()
-
-
-def log_unused_variables(logger: structlog.BoundLogger, **variables) -> None:
-    """
-    Helper to log variables that might be unused in code but useful for debugging.
-
-    This satisfies linters while preserving potentially useful information.
-
-    Args:
-        logger: The structlog logger instance
-        **variables: Key-value pairs of variables to log as context
-    """
-    logger.debug("unused_variables_context", **variables)
-
-
 class LoggingHelpers:
     """
     Helper class for common logging operations that takes a logger instance.
@@ -113,27 +81,36 @@ class LoggingHelpers:
     Follows Hynek's principle of explicit dependency injection instead of global state.
     """
 
+    logger: structlog.BoundLogger
+
     def __init__(self, logger: structlog.BoundLogger):
         self.logger = logger
 
-    def log_error(self, message: str, **context) -> None:
+    def bind(self, **kwargs: object) -> "LoggingHelpers":
+        return LoggingHelpers(self.logger.bind(**kwargs))
+
+    def log_error(self, message: str, **context: object) -> None:
         """Log error with context."""
         self.logger.error(message, **context)
 
-    def log_warning(self, message: str, **context) -> None:
+    def log_warning(self, message: str, **context: object) -> None:
         """Log warning with context."""
         self.logger.warning(message, **context)
 
-    def log_info(self, message: str, **context) -> None:
+    def log_info(self, message: str, **context: object) -> None:
         """Log info with context."""
         self.logger.info(message, **context)
 
-    def log_progress(self, message: str, **context) -> None:
+    def log_progress(self, message: str, **context: object) -> None:
         """Log progress/status information."""
         self.logger.info("progress", message=message, **context)
 
     def log_subprocess_result(
-        self, description: str, command: list, result, **context
+        self,
+        description: str,
+        command: list[str],
+        result: subprocess.CompletedProcess[str],
+        **context: dict[str, Any],
     ) -> None:
         """
         Log comprehensive subprocess execution details.
@@ -151,28 +128,22 @@ class LoggingHelpers:
             "returncode": result.returncode,
             **context,
         }
+        logger = self.logger.bind(**base_data)
 
         if result.returncode == 0:
-            self.logger.info("subprocess_success", **base_data)
+            logger.info("subprocess_success")
         else:
-            self.logger.error("subprocess_failed", **base_data)
+            logger.error("subprocess_failed")
 
         # Always log stdout/stderr for debugging regardless of success
-        if result.stdout:
-            self.logger.debug(
-                "subprocess_stdout",
-                description=description,
-                stdout=result.stdout.strip(),
-            )
+        debug_log = logger.bind(
+            stdout=result.stdout.strip(), stderr=result.stderr.strip()
+        )
+        debug_log.log_debug("Subprocess output")
 
-        if result.stderr:
-            self.logger.debug(
-                "subprocess_stderr",
-                description=description,
-                stderr=result.stderr.strip(),
-            )
-
-    def log_exception(self, exception: Exception, context_msg: str, **context) -> None:
+    def log_exception(
+        self, exception: BaseException, context_msg: str, **context: object
+    ) -> None:
         """
         Log exception with full context and traceback.
 
@@ -184,13 +155,12 @@ class LoggingHelpers:
         self.logger.error(
             "exception_occurred",
             context=context_msg,
-            exception_type=type(exception).__name__,
-            exception_message=str(exception),
+            exc_info=exception,
             **context,
         )
 
     def log_file_operation(
-        self, operation: str, path: str, success: bool, **context
+        self, operation: str, path: str, success: bool, **context: dict[str, object]
     ) -> None:
         """
         Log file system operations.
@@ -207,7 +177,12 @@ class LoggingHelpers:
         )
 
     def log_package_operation(
-        self, manager: str, operation: str, packages: list, success: bool, **context
+        self,
+        manager: str,
+        operation: str,
+        packages: list[str],
+        success: bool,
+        **context: dict[str, object],
     ) -> None:
         """
         Log package manager operations.

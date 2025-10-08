@@ -1,9 +1,12 @@
+# pyright: strict
 """
 Rich-based console output formatting for dotfiles Python tools.
 
 Provides consistent styling and formatting across all tools.
 Separated from logging to maintain single responsibility principle.
 """
+
+from __future__ import annotations
 
 from rich.console import Console
 from rich.progress import (
@@ -15,6 +18,10 @@ from rich.progress import (
 )
 from rich.table import Table
 from rich import print as rich_print
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .logging_config import LoggingHelpers
 
 
 # Global console instance for consistent styling
@@ -33,28 +40,43 @@ class ConsoleOutput:
         self.quiet = quiet
         self.console = console
 
-    def status(self, message: str, emoji: str = "🔍") -> None:
+    def status(
+        self, message: str, emoji: str = "🔍", logger: LoggingHelpers | None = None
+    ) -> None:
         """Display a status message with emoji."""
+        logger.log_info(message) if logger else None
         if not self.quiet:
             self.console.print(f"{emoji} {message}")
 
-    def success(self, message: str, emoji: str = "✅") -> None:
+    def success(
+        self, message: str, emoji: str = "✅", logger: LoggingHelpers | None = None
+    ) -> None:
         """Display a success message."""
+        logger.log_info(message) if logger else None
         if not self.quiet:
             self.console.print(f"{emoji} {message}", style="green")
 
-    def error(self, message: str, emoji: str = "❌") -> None:
+    def error(
+        self, message: str, emoji: str = "❌", logger: LoggingHelpers | None = None
+    ) -> None:
         """Display an error message."""
+        logger.log_error(message) if logger else None
         if not self.quiet:
             self.console.print(f"{emoji} {message}", style="red")
 
-    def warning(self, message: str, emoji: str = "⚠️") -> None:
+    def warning(
+        self, message: str, emoji: str = "⚠️", logger: LoggingHelpers | None = None
+    ) -> None:
         """Display a warning message."""
+        logger.log_warning(message) if logger else None
         if not self.quiet:
             self.console.print(f"{emoji} {message}", style="yellow")
 
-    def info(self, message: str, emoji: str = "💡") -> None:
+    def info(
+        self, message: str, emoji: str = "💡", logger: LoggingHelpers | None = None
+    ) -> None:
         """Display an info message."""
+        logger.log_info(message) if logger else None
         if not self.quiet and self.verbose:
             self.console.print(f"{emoji} {message}", style="blue")
 
@@ -64,7 +86,13 @@ class ConsoleOutput:
             self.console.print(f"\n{emoji} {title}", style="bold cyan")
             self.console.print("=" * (len(title) + 3))
 
-    def table(self, title: str, columns: list, rows: list, emoji: str = "📋") -> None:
+    def table(
+        self,
+        title: str,
+        columns: list[str],
+        rows: list[list[Any]],
+        emoji: str = "📋",
+    ) -> None:
         """Display a formatted table."""
         if not self.quiet:
             table = Table(title=f"{emoji} {title}")
@@ -88,7 +116,7 @@ class ConsoleOutput:
             disable=self.quiet,
         )
 
-    def json(self, data) -> None:
+    def json(self, data: Any) -> None:
         """Pretty print JSON data."""
         if not self.quiet:
             rich_print(data)

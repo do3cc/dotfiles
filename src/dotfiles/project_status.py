@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: strict
 """
 Project Status Tool for Dotfiles Repository
 
@@ -11,12 +12,13 @@ Provides comprehensive status overview including:
 
 import argparse
 import json
-import subprocess
 import sys
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from .logging_config import setup_logging, LoggingHelpers
+from .logging_config import setup_logging
+from .output_formatting import ConsoleOutput
+from .process_helper import run_command_with_error_handling
 
 
 @dataclass
@@ -71,15 +73,16 @@ class WorktreeInfo:
 class ProjectStatusChecker:
     """Main class for checking project status"""
 
-    def __init__(self):
-        self.logger = LoggingHelpers(setup_logging("project_status"))
+    def __init__(self, output: ConsoleOutput):
+        self.logger = setup_logging("project_status")
+        self.output = output
 
     def get_github_issues(self) -> List[IssueInfo]:
         """Fetch open GitHub issues"""
-        self.logger.log_info("fetching GitHub issues")
+        self.logger.log_info("github_issues_fetch_started")
 
         try:
-            result = subprocess.run(
+            result = run_command_with_error_handling(
                 [
                     "gh",
                     "issue",
@@ -87,23 +90,14 @@ class ProjectStatusChecker:
                     "--json",
                     "number,title,state,labels,assignees,url",
                 ],
-                capture_output=True,
-                text=True,
+                logger=self.logger,
+                output=self.output,
+                description="Fetch GitHub issues",
                 timeout=30,
             )
 
-            self.logger.log_subprocess_result(
-                "fetch GitHub issues", ["gh", "issue", "list"], result
-            )
-
-            if result.returncode != 0:
-                self.logger.log_error(
-                    "failed to fetch GitHub issues", error=result.stderr
-                )
-                return []
-
-            issues_data = json.loads(result.stdout)
-            issues = []
+            issues_data: List[Any] = json.loads(result.stdout)
+            issues: List[IssueInfo] = []
 
             for issue in issues_data:
                 assignee = None
@@ -123,19 +117,19 @@ class ProjectStatusChecker:
                     )
                 )
 
-            self.logger.log_info("fetched GitHub issues", count=len(issues))
+            self.logger.log_info("github_issues_fetch_completed", count=len(issues))
             return issues
 
         except Exception as e:
-            self.logger.log_error("error fetching GitHub issues", error=str(e))
+            self.logger.log_exception(e, "github_issues_fetch_failed")
             return []
 
     def get_github_prs(self) -> List[PRInfo]:
         """Fetch open GitHub pull requests"""
-        self.logger.log_info("fetching GitHub pull requests")
+        self.logger.log_info("github_prs_fetch_started")
 
         try:
-            result = subprocess.run(
+            result = run_command_with_error_handling(
                 [
                     "gh",
                     "pr",
@@ -143,21 +137,14 @@ class ProjectStatusChecker:
                     "--json",
                     "number,title,state,headRefName,baseRefName,isDraft,url",
                 ],
-                capture_output=True,
-                text=True,
+                logger=self.logger,
+                output=self.output,
+                description="Fetch GitHub PRs",
                 timeout=30,
             )
 
-            self.logger.log_subprocess_result(
-                "fetch GitHub PRs", ["gh", "pr", "list"], result
-            )
-
-            if result.returncode != 0:
-                self.logger.log_error("failed to fetch GitHub PRs", error=result.stderr)
-                return []
-
-            prs_data = json.loads(result.stdout)
-            prs = []
+            prs_data: List[Any] = json.loads(result.stdout)
+            prs: List[PRInfo] = []
 
             for pr in prs_data:
                 prs.append(
@@ -172,41 +159,37 @@ class ProjectStatusChecker:
                     )
                 )
 
-            self.logger.log_info("fetched GitHub PRs", count=len(prs))
+            self.logger.log_info("github_prs_fetch_completed", count=len(prs))
             return prs
 
         except Exception as e:
-            self.logger.log_error("error fetching GitHub PRs", error=str(e))
+            self.logger.log_exception(e, "github_prs_fetch_failed")
             return []
 
     def get_local_branches(self) -> List[BranchInfo]:
         """Get information about local branches"""
-        self.logger.log_info("analyzing local branches")
+        self.logger.log_info("local_branches_analysis_started")
 
         try:
             # Get branch info with tracking information
-            result = subprocess.run(
+            result = run_command_with_error_handling(
                 [
                     "git",
                     "for-each-ref",
                     "--format=%(refname:short)|%(objectname:short)|%(committerdate:iso)|%(upstream:trackshort)",
                     "refs/heads/",
                 ],
-                capture_output=True,
-                text=True,
+                logger=self.logger,
+                output=self.output,
+                description="Get branch info",
+                timeout=30,
             )
 
-            self.logger.log_subprocess_result(
-                "get branch info", ["git", "for-each-ref"], result
-            )
-
-            if result.returncode != 0:
-                self.logger.log_error("failed to get branch info", error=result.stderr)
-                return []
-
-            branches = []
+            branches: List[BranchInfo] = []
             worktrees = self.get_worktrees()
-            worktree_branches = {wt.branch: wt for wt in worktrees}
+            worktree_branches: Dict[str, WorktreeInfo] = {
+                wt.branch: wt for wt in worktrees
+            }
 
             for line in result.stdout.strip().split("\n"):
                 if not line:
@@ -247,36 +230,30 @@ class ProjectStatusChecker:
                     )
                 )
 
-            self.logger.log_info("analyzed local branches", count=len(branches))
+            self.logger.log_info(
+                "local_branches_analysis_completed", count=len(branches)
+            )
             return branches
 
         except Exception as e:
-            self.logger.log_error("error analyzing branches", error=str(e))
+            self.logger.log_exception(e, "local_branches_analysis_failed")
             return []
 
     def get_worktrees(self) -> List[WorktreeInfo]:
         """Get information about git worktrees"""
-        self.logger.log_info("analyzing worktrees")
+        self.logger.log_info("worktrees_analysis_started")
 
         try:
-            result = subprocess.run(
+            result = run_command_with_error_handling(
                 ["git", "worktree", "list", "--porcelain"],
-                capture_output=True,
-                text=True,
+                logger=self.logger,
+                output=self.output,
+                description="Get worktree info",
+                timeout=30,
             )
 
-            self.logger.log_subprocess_result(
-                "get worktree info", ["git", "worktree", "list"], result
-            )
-
-            if result.returncode != 0:
-                self.logger.log_error(
-                    "failed to get worktree info", error=result.stderr
-                )
-                return []
-
-            worktrees = []
-            current_worktree = {}
+            worktrees: List[WorktreeInfo] = []
+            current_worktree: Dict[str, Any] = {}
 
             for line in result.stdout.strip().split("\n"):
                 if not line:
@@ -300,41 +277,42 @@ class ProjectStatusChecker:
             if current_worktree:
                 worktrees.append(self._process_worktree_info(current_worktree))
 
-            self.logger.log_info("analyzed worktrees", count=len(worktrees))
+            self.logger.log_info("worktrees_analysis_completed", count=len(worktrees))
             return worktrees
 
         except Exception as e:
-            self.logger.log_error("error analyzing worktrees", error=str(e))
+            self.logger.log_exception(e, "worktrees_analysis_failed")
             return []
 
-    def _process_worktree_info(self, wt_data: Dict) -> WorktreeInfo:
+    def _process_worktree_info(self, wt_data: Dict[str, Any]) -> WorktreeInfo:
         """Process raw worktree data into WorktreeInfo object"""
-        path = wt_data.get("path", "")
-        branch = wt_data.get("branch", "detached")
-        commit = wt_data.get("commit", "unknown")
+        path: str = wt_data.get("path", "")
+        branch: str = wt_data.get("branch", "detached")
+        commit: str = wt_data.get("commit", "unknown")
 
         # Determine type category from path
-        type_category = "main"
+        type_category: str = "main"
         if "worktrees/" in path:
-            path_parts = path.split("worktrees/")
+            path_parts: List[str] = path.split("worktrees/")
             if len(path_parts) > 1:
-                remaining = path_parts[1]
+                remaining: str = path_parts[1]
                 if "/" in remaining:
                     type_category = remaining.split("/")[0]
 
         # Check for uncommitted changes
-        has_uncommitted = False
+        has_uncommitted: bool = False
         try:
             if not wt_data.get("bare", False):
-                result = subprocess.run(
+                result = run_command_with_error_handling(
                     ["git", "-C", path, "status", "--porcelain"],
-                    capture_output=True,
-                    text=True,
+                    logger=self.logger,
+                    output=self.output,
+                    description=f"Check worktree status for {path}",
                     timeout=10,
                 )
                 has_uncommitted = bool(result.stdout.strip())
-        except Exception:
-            pass  # Ignore errors checking status
+        except Exception as e:
+            self.logger.log_exception(e, "worktree_status_check_failed", path=path)
 
         return WorktreeInfo(
             path=path,
@@ -368,7 +346,7 @@ class ProjectStatusChecker:
     ) -> str:
         """Format as human-readable text report"""
 
-        lines = []
+        lines: List[str] = []
         lines.append("🔍 DOTFILES PROJECT STATUS")
         lines.append("=" * 50)
         lines.append("")
@@ -408,7 +386,7 @@ class ProjectStatusChecker:
         organized_worktrees = [wt for wt in worktrees if wt.type_category != "main"]
         if organized_worktrees:
             # Group by type
-            by_type = {}
+            by_type: Dict[str, List[WorktreeInfo]] = {}
             for wt in organized_worktrees:
                 if wt.type_category not in by_type:
                     by_type[wt.type_category] = []
@@ -417,11 +395,11 @@ class ProjectStatusChecker:
             for wt_type, wt_list in by_type.items():
                 lines.append(f"  {wt_type.upper()}:")
                 for wt in wt_list:
-                    wt_name = wt.path.split("/")[-1]
-                    status_indicators = []
+                    wt_name: str = wt.path.split("/")[-1]
+                    status_indicators: List[str] = []
                     if wt.has_uncommitted:
                         status_indicators.append("*modified*")
-                    status_str = (
+                    status_str: str = (
                         f" [{', '.join(status_indicators)}]"
                         if status_indicators
                         else ""
@@ -443,7 +421,7 @@ class ProjectStatusChecker:
         lines.append("-" * 21)
         if active_branches:
             for branch in active_branches:
-                indicators = []
+                indicators: List[str] = []
                 if branch.ahead > 0:
                     indicators.append(f"+{branch.ahead}")
                 if branch.behind > 0:
@@ -451,7 +429,7 @@ class ProjectStatusChecker:
                 if branch.has_worktree:
                     indicators.append("worktree")
 
-                indicator_str = f" [{', '.join(indicators)}]" if indicators else ""
+                indicator_str: str = f" [{', '.join(indicators)}]" if indicators else ""
                 lines.append(f"  {branch.name} @ {branch.commit}{indicator_str}")
         else:
             lines.append("  No active branches")
@@ -465,7 +443,7 @@ class ProjectStatusChecker:
         lines.append(f"  • {len(organized_worktrees)} active worktrees")
         lines.append(f"  • {len(active_branches)} active branches")
 
-        work_in_progress = len([wt for wt in worktrees if wt.has_uncommitted])
+        work_in_progress: int = len([wt for wt in worktrees if wt.has_uncommitted])
         if work_in_progress > 0:
             lines.append(
                 f"  • ⚠️  {work_in_progress} worktrees with uncommitted changes"
@@ -482,7 +460,7 @@ class ProjectStatusChecker:
     ) -> str:
         """Format as JSON report"""
 
-        data = {
+        data: Dict[str, List[Dict[str, Any]]] = {
             "issues": [
                 {
                     "number": issue.number,
@@ -547,7 +525,8 @@ def main():
 
     args = parser.parse_args()
 
-    checker = ProjectStatusChecker()
+    output = ConsoleOutput()
+    checker = ProjectStatusChecker(output)
 
     # Gather all status information
     issues = [] if args.no_github else checker.get_github_issues()
