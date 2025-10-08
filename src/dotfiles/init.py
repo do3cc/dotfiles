@@ -3,7 +3,6 @@ from subprocess import CalledProcessError, TimeoutExpired, CompletedProcess
 from dataclasses import dataclass, field
 from datetime import datetime
 import os
-from os.path import abspath, exists, expanduser
 from .process_helper import run_command_with_error_handling
 from pathlib import Path
 import socket
@@ -25,14 +24,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-
-def expand(path: str) -> str:
-    return abspath(expanduser(path))
-
-
-def ensure_path(path: str) -> None:
-    if not exists(expand(path)):
-        os.makedirs(expand(path))
+VALID_ENVIRONMENTS = ["minimal", "work", "private"]
 
 
 @dataclass
@@ -64,11 +56,17 @@ class EnvironmentConfig:
 
 
 class Linux:
-    def __init__(self, environment: str = "minimal", no_remote_mode: bool = False):
+    def __init__(
+        self,
+        environment: str = "minimal",
+        no_remote_mode: bool = False,
+        homedir: Path = Path("~").expanduser(),
+    ):
         self.environment = environment
         self.no_remote_mode = no_remote_mode
         # Single source of truth for this environment's configuration
         self.config = self._build_environment_config(environment)
+        self.homedir = homedir
 
     def _get_base_config(self) -> EnvironmentConfig:
         """Get base configuration for Linux systems."""
@@ -140,24 +138,24 @@ class Linux:
         logger.log_progress("starting_dependency_installation")
 
         # Install NVM
-        nvm_path = expand("~/.local/share/nvm")
+        nvm_path = self.homedir / "/.local/share/nvm"
         logger = logger.bind(nvm_path=nvm_path)
         logger.log_info("checking_nvm_installation")
 
-        if not exists(nvm_path):
+        if not nvm_path.exists():
             nvm_script = "doesnotexist"
             try:
                 output.status("Installing NVM...", logger=logger)
-                nvm_script = expand("./install_scripts/install_nvm.sh")
+                nvm_script = self.homedir / "./install_scripts/install_nvm.sh"
                 logger = logger.bind(nvm_script_path=nvm_script)
 
-                if not exists(nvm_script):
+                if not nvm_script.exists():
                     output.error("NVM installation script not found", logger=logger)
                     output.info(f"Expected: {nvm_script}")
                     raise FileNotFoundError(f"NVM script not found: {nvm_script}")
 
                 run_command_with_error_handling(
-                    ["/usr/bin/bash", nvm_script], logger, output
+                    ["/usr/bin/bash", str(nvm_script)], logger, output
                 )
                 logger.log_progress("nvm_installed_successfully")
                 output.success("NVM installed successfully")
@@ -195,13 +193,13 @@ class Linux:
             output.success("NVM already installed")
 
         # Install Pyenv
-        pyenv_path = expand("~/.config/pyenv")
-        if not exists(pyenv_path):
+        pyenv_path = self.homedir / "~/.config/pyenv"
+        if not pyenv_path.exists():
             try:
                 output.status("Installing Pyenv...")
-                pyenv_script = expand("./install_scripts/install_pyenv.sh")
+                pyenv_script = self.homedir / "./install_scripts/install_pyenv.sh"
                 logger = logger.bind(pyenv_script=pyenv_script)
-                if not exists(pyenv_script):
+                if not pyenv_script.exists():
                     output.error(
                         "ERROR: Pyenv installation script not found", logger=logger
                     )
@@ -209,7 +207,7 @@ class Linux:
                     raise FileNotFoundError(f"Pyenv script not found: {pyenv_script}")
 
                 run_command_with_error_handling(
-                    ["/usr/bin/bash", pyenv_script], logger, output
+                    ["/usr/bin/bash", str(pyenv_script)], logger, output
                 )
                 output.success("Pyenv installed successfully", logger=logger)
             except TimeoutExpired:
@@ -271,9 +269,9 @@ class Linux:
     def link_configs(self, logger: LoggingHelpers, output: ConsoleOutput):
         """Create symlinks with comprehensive error handling"""
         # Ensure ~/.config exists
-        config_base_dir = expand("~/.config")
+        config_base_dir = self.homedir / ".config"
         try:
-            ensure_path(config_base_dir)
+            config_base_dir.mkdir(parents=True)
         except OSError as e:
             output.error(
                 f"ERROR: Cannot create {config_base_dir} directory: {e}", logger=logger
@@ -282,13 +280,13 @@ class Linux:
             raise
 
         for config_dir_src, config_dir_target in self.config.config_dirs:
-            target_path = expand(f"~/.config/{config_dir_target}")
-            source_path = expand(f"./{config_dir_src}")
+            target_path = self.homedir / f".config/{config_dir_target}"
+            source_path = self.homedir / "./{config_dir_src}"
             logger = logger.bind(target_path=target_path, source_path=source_path)
 
             try:
                 # Verify source exists
-                if not exists(source_path):
+                if not source_path.exists():
                     output.error(
                         f"Source directory {source_path} does not exist", logger=logger
                     )
@@ -297,7 +295,7 @@ class Linux:
                     )
                     continue
 
-                if not exists(target_path):
+                if not target_path.exists():
                     try:
                         os.symlink(source_path, target_path)
                         output.success(f"Linked {config_dir_target}", logger=logger)
@@ -374,9 +372,9 @@ class Linux:
         """Validate that git credential helper is properly configured"""
         try:
             # Check if libsecret binary exists
-            libsecret_path = "/usr/lib/git-core/git-credential-libsecret"
+            libsecret_path = Path("/usr/lib/git-core/git-credential-libsecret")
             logger = logger.bind(libsecret_path=libsecret_path)
-            if not exists(libsecret_path):
+            if not libsecret_path.exists():
                 output.warning(
                     f"WARNING: git-credential-libsecret not found at {libsecret_path}",
                     logger=logger,
@@ -398,7 +396,7 @@ class Linux:
             # Test if credential helper responds
             try:
                 run_command_with_error_handling(
-                    [libsecret_path], logger, output, timeout=5, input=""
+                    [str(libsecret_path)], logger, output, timeout=5, input=""
                 )
                 # libsecret helper should exit cleanly when given empty input
                 output.success(
@@ -498,9 +496,9 @@ class Linux:
 
         # Use permanent SSH key based on hostname and environment
         key_suffix = f"{socket.gethostname()}_{self.environment}"
-        current_key = expand(f"~/.ssh/id_ed25519_{key_suffix}")
+        current_key = self.homedir / f".ssh/id_ed25519_{key_suffix}"
 
-        if not exists(current_key):
+        if not current_key.exists():
             ssh_key_email = self.config.ssh_key_email
             run_command_with_error_handling(
                 [
@@ -510,7 +508,7 @@ class Linux:
                     "-C",
                     f"'Patrick Gerken {socket.gethostname()} {ssh_key_email} {self.environment}'",
                     "-f",
-                    current_key,
+                    str(current_key),
                     "-N",
                     "",  # No passphrase
                 ],
@@ -519,12 +517,12 @@ class Linux:
                 "Generate SSH key",
             )
             run_command_with_error_handling(
-                ["ssh-add", current_key], logger, output, "Add SSH key to agent"
+                ["ssh-add", str(current_key)], logger, output, "Add SSH key to agent"
             )
 
             # Create default SSH key symlink for automatic loading
-            default_key_link = expand("~/.ssh/id_ed25519_default")
-            if not exists(default_key_link):
+            default_key_link = self.homedir / ".ssh/id_ed25519_default"
+            if not default_key_link.exists():
                 try:
                     os.symlink(current_key, default_key_link)
                     output.success(
@@ -895,10 +893,10 @@ class Arch(Linux):
                 output.success("All base development tools already installed")
 
             # Create projects directory safely
-            projects_dir = expand("~/projects")
+            projects_dir = self.homedir / "projects"
             logger = logger.bind(projects_dir=projects_dir)
             try:
-                ensure_path(projects_dir)
+                projects_dir.mkdir(parents=True)
             except OSError as e:
                 logger.log_exception(e, "projects_directory_creation_failed")
                 output.error(f"Cannot create projects directory: {e}")
@@ -917,9 +915,9 @@ class Arch(Linux):
 
             # Install yay if not available
             if not yay_installed:
-                yay_dir = expand("~/projects/yay-bin")
+                yay_dir = self.homedir / "projects/yay-bin"
                 logger = logger.bind(yay_dir=yay_dir)
-                if not exists(yay_dir):
+                if not yay_dir.exists():
                     try:
                         output.status("Cloning yay AUR helper...", logger=logger)
                         # Use streaming subprocess for git clone to show progress
@@ -929,7 +927,7 @@ class Arch(Linux):
                                 "git",
                                 "clone",
                                 "https://aur.archlinux.org/yay-bin.git",
-                                yay_dir,
+                                str(yay_dir),
                             ],
                             logger,
                             output,
@@ -1172,17 +1170,19 @@ class Debian(Linux):
             # Check for container-specific files/indicators
             # These files are created by container runtimes and are reliable indicators
             container_indicators = [
-                "/.dockerenv",  # Docker creates this file in all containers
-                "/run/.containerenv",  # Podman creates this file in all containers
+                Path("/.dockerenv"),  # Docker creates this file in all containers
+                Path(
+                    "/run/.containerenv"
+                ),  # Podman creates this file in all containers
             ]
 
             for indicator in container_indicators:
-                if exists(indicator):
+                if indicator.exists():
                     return True
 
             # Check /proc/1/cgroup for container runtime signatures
             # Container runtimes modify the cgroup hierarchy for process 1 (init)
-            if exists("/proc/1/cgroup"):
+            if Path("/proc/1/cgroup").exists():
                 with open("/proc/1/cgroup", "r") as f:
                     content = f.read()
                     # Look for container runtime signatures in the cgroup path
@@ -1195,7 +1195,7 @@ class Debian(Linux):
 
             # Check if running in virtualized environment that might need timezone setup
             # Some virtualization systems also benefit from timezone pre-configuration
-            if exists("/proc/vz"):  # OpenVZ/Virtuozzo container system
+            if Path("/proc/vz").exists():  # OpenVZ/Virtuozzo container system
                 return True
 
             return False
@@ -1459,9 +1459,9 @@ class Debian(Linux):
                 output.info("This is non-critical, continuing...", emoji="💡")
 
             # Download and install latest Neovim AppImage
-            nvim_appimage = expand("./nvim.appimage")
+            nvim_appimage = self.homedir / "./nvim.appimage"
             logger = logger.bind(nvim_appimage=nvim_appimage)
-            if not exists(nvim_appimage):
+            if not nvim_appimage.exists():
                 output.status("Downloading latest Neovim AppImage...", logger=logger)
                 max_retries = 3
                 for attempt in range(max_retries):
@@ -1516,10 +1516,10 @@ class Debian(Linux):
                     raise
 
                 # Create ~/bin directory
-                bin_dir = expand("~/bin")
+                bin_dir = self.homedir / "bin"
                 logger = logger.bind()
                 try:
-                    ensure_path(bin_dir)
+                    bin_dir.mkdir(parents=True)
                     output.success("~/bin directory created", logger=logger)
                 except OSError as e:
                     logger.log_exception(e, "neovim_appimage_permissions_failed")
@@ -1528,9 +1528,9 @@ class Debian(Linux):
                     raise
 
                 # Create symlink to nvim
-                nvim_symlink = expand("~/bin/nvim")
+                nvim_symlink = self.homedir / "bin/nvim"
                 logger = logger.bind(nvim_symlink=nvim_symlink)
-                if not exists(nvim_symlink):
+                if not nvim_symlink.exists():
                     try:
                         os.symlink(nvim_appimage, nvim_symlink)
                         output.success(
@@ -1715,10 +1715,9 @@ def main(no_remote: bool, quiet: bool, verbose: bool):
             return 1
 
         # Validate environment value
-        valid_environments = ["minimal", "work", "private"]
-        if environment not in valid_environments:
+        if environment not in VALID_ENVIRONMENTS:
             output.error(f"Invalid DOTFILES_ENVIRONMENT '{environment}'", logger=logger)
-            output.info(f"Must be one of: {', '.join(valid_environments)}")
+            output.info(f"Must be one of: {', '.join(VALID_ENVIRONMENTS)}")
             return 1
 
         logger.log_info(
