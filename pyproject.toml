@@ -26,4 +26,12 @@ packages = ["src/dotfiles"]
 dev = [
     "pyright>=1.1.405",
 ]
-# Trigger PR update
+test = [
+    "faker>=37.11.0",
+    "hypothesis>=6.140.3",
+    "pytest>=8.4.2",
+]
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+    
