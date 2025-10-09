@@ -102,6 +102,10 @@ class LoggingHelpers:
         """Log info with context."""
         self.logger.info(message, **context)
 
+    def log_debug(self, message: str, **context: object) -> None:
+        """Log debug with context."""
+        self.logger.debug(message, **context)
+
     def log_progress(self, message: str, **context: object) -> None:
         """Log progress/status information."""
         self.logger.info("progress", message=message, **context)
@@ -140,7 +144,7 @@ class LoggingHelpers:
         debug_log = logger.bind(
             stdout=result.stdout.strip(), stderr=result.stderr.strip()
         )
-        debug_log.log_debug("Subprocess output")
+        debug_log.debug("Subprocess output")
 
     def log_exception(
         self, exception: BaseException, context_msg: str, **context: object
