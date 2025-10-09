@@ -3,21 +3,10 @@ import subprocess
 from unittest.mock import MagicMock
 from hypothesis import given, strategies, settings as h_settings, HealthCheck
 import random
-from contextlib import nullcontext
 import faker
 import pytest
 
 m_faker = faker.Faker()
-
-
-@pytest.fixture
-def logger():
-    return MagicMock()
-
-
-@pytest.fixture
-def output():
-    return None
 
 
 @pytest.mark.parametrize(
@@ -66,13 +55,19 @@ def test_environmentconfig_merge_duplicatehandling(attribute: str, faker):
 
     final_config = env_config_a.merge_with(env_config_b)
     # After adding a duplicate, merged list should deduplicate
-    # packages_a has duplicate from packages_b, so total unique = len(set(a+b))
-    assert len(set(packages_b + packages_a)) == len(final_config.packages)
-    assert len(set(aur_packages_b + aur_packages_a)) == len(final_config.aur_packages)
-    assert len(set(config_dirs_b + config_dirs_a)) == len(final_config.config_dirs)
-    assert len(set(systemd_services_b + systemd_services_a)) == len(
-        final_config.systemd_services
-    )
+    # The tested attribute has a duplicate, so total unique = len(set(a+b))
+    if attribute == "packages":
+        assert len(set(packages_b + packages_a)) == len(final_config.packages)
+    elif attribute == "aur_packages":
+        assert len(set(aur_packages_b + aur_packages_a)) == len(
+            final_config.aur_packages
+        )
+    elif attribute == "config_dirs":
+        assert len(set(config_dirs_b + config_dirs_a)) == len(final_config.config_dirs)
+    elif attribute == "systemd_services":
+        assert len(set(systemd_services_b + systemd_services_a)) == len(
+            final_config.systemd_services
+        )
 
 
 def test_environmentconfig_merge(faker: faker.Faker):
@@ -113,16 +108,20 @@ def test_help():
 
 
 @pytest.mark.parametrize(
-    "environment,no_remote_mode,expectation",
+    "environment,no_remote_mode,should_succeed",
     (
-        ("illegal", False, pytest.raises(AttributeError)),
-        ("minimal", False, nullcontext(True)),
-        ("minimal", True, nullcontext(True)),
+        ("illegal", False, False),
+        ("minimal", False, True),
+        ("minimal", True, True),
     ),
 )
-def test_LinuxInit(environment, no_remote_mode, expectation):
-    with expectation as e:
-        assert e == isinstance(init.Linux(environment, no_remote_mode), init.Linux)
+def test_LinuxInit(environment, no_remote_mode, should_succeed):
+    if should_succeed:
+        obj = init.Linux(environment, no_remote_mode)
+        assert isinstance(obj, init.Linux)
+    else:
+        with pytest.raises(AttributeError):
+            init.Linux(environment, no_remote_mode)
 
 
 def test_Linux_getBaseConfig():
@@ -145,7 +144,6 @@ def test_getEnvironmentConfigs():
     )
 )
 def test_buildEnvironmentConfig(environments):
-    breakpoint()
     a = init.Linux(environments[0], False)
     b = init.Linux(environments[1], False)
     assert str(a) != str(b)
@@ -173,6 +171,25 @@ def test_checkSystemdServiceStatusNetworkFail(
         obj.check_systemd_service_status(service_name, logger, output)
 
 
+@pytest.mark.parametrize(
+    "service_name,enabled,active",
+    [
+        ("sshd.service", ("enabled", True), ("active", True)),
+        ("sshd.service", ("disabled", False), ("active", True)),
+        ("sshd.service", ("enabled", True), ("inactive", False)),
+        ("sshd.service", ("disabled", False), ("inactive", False)),
+        (
+            "sshd.service",
+            (subprocess.CalledProcessError(1, ""), False),
+            ("active", True),
+        ),
+        (
+            "sshd.service",
+            ("enabled", True),
+            (subprocess.CalledProcessError(1, ""), False),
+        ),
+    ],
+)
 def test_checkSystemdServiceStatus(
     service_name,
     enabled,
@@ -188,11 +205,11 @@ def test_checkSystemdServiceStatus(
         retval.returncode = 0
         if args[0][1] == "is-enabled":
             if isinstance(enabled[0], Exception):
-                raise enabled[0]()
+                raise enabled[0]
             retval.stdout = enabled[0]
         elif args[0][1] == "is-active":
             if isinstance(active[0], Exception):
-                raise active[0]()
+                raise active[0]
             retval.stdout = active[0]
         return retval
 

@@ -17,7 +17,9 @@ import structlog
 from typing import Any
 
 
-def setup_logging(script_name: str) -> "LoggingHelpers":
+def setup_logging(
+    script_name: str, log_dir: Path = Path().home() / ".cache/dotfiles/logs"
+) -> "LoggingHelpers":
     """
     Configure structured logging and return ready-to-use LoggingHelpers instance.
 
@@ -28,7 +30,6 @@ def setup_logging(script_name: str) -> "LoggingHelpers":
         LoggingHelpers instance ready for use
     """
     # Ensure log directory exists
-    log_dir = Path.home() / ".cache/dotfiles/logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
     log_file = log_dir / "dotfiles.log"

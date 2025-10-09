@@ -574,6 +574,121 @@ When developing new features:
 
 The compilation test is fast (~10 seconds) and catches import errors, syntax issues, and CLI interface problems immediately.
 
+### Running Pytest Tests
+
+The test suite includes three types of tests, each serving a different purpose:
+
+#### Test Types
+
+1. **Unit Tests** (default, no marker)
+   - Fast, isolated tests using mocks
+   - Verify interfaces and logic without I/O
+   - Run by default with `pytest`
+
+2. **Integration Tests** (`@pytest.mark.integration`)
+   - Test real I/O operations
+   - Execute actual commands, read/write files
+   - Slower but validate real behavior
+
+3. **Property-Based Tests** (`@pytest.mark.property`)
+   - Use hypothesis to generate test inputs
+   - Find edge cases automatically
+   - Validate behavior across many scenarios
+
+#### Running Tests by Type
+
+```bash
+# Run all tests (unit, integration, property)
+uv run pytest tests/
+
+# Run only unit tests (exclude integration and property)
+uv run pytest tests/ -m "not integration and not property"
+
+# Run only integration tests
+uv run pytest tests/ -m integration
+
+# Run only property-based tests
+uv run pytest tests/ -m property
+
+# Run tests for a specific module
+uv run pytest tests/test_process_helper.py
+
+# Run with verbose output
+uv run pytest tests/ -v
+
+# Run with coverage report
+uv run pytest tests/ --cov=dotfiles --cov-report=term-missing
+```
+
+#### Quick Test Commands
+
+```bash
+# Fast feedback loop (unit tests only, ~1 second)
+uv run pytest tests/ -m "not integration and not property" -q
+
+# Full test suite with all types (~6 seconds)
+uv run pytest tests/
+
+# Specific test function
+uv run pytest tests/test_process_helper.py::test_real_command_execution -v
+```
+
+### Pytest Testing Guidelines
+
+When writing pytest tests for this repository, follow these conventions:
+
+#### Naming & Style
+
+- **Match production naming**: Call instances `logger`, not `logging_helpers`. Internal/wrapped loggers should be `unwrapped_logger`
+- **Add explanatory comments**: For obscure parameters (like `whitelist_categories`), explain what they do
+- **Mark all new/changed tests**: Add `# TODO REVIEW` comment to every test function you create or modify
+
+#### Organization
+
+- **Use conftest.py for shared fixtures**: Generic, reusable fixtures go there (like `temp_home` instead of specific log dirs)
+- **Keep tests in the main test file**: Don't create separate batch files - implement directly in the real test file
+- **Batch implementation for review**: Implement in batches, provide line numbers for each batch
+
+#### Testing Approach
+
+- **Balance test types**:
+  - Unit tests with mocks (for interface verification)
+  - Integration tests with real I/O (for behavior verification)
+  - Property-based tests with hypothesis (for edge cases)
+- **Don't over-mock**: MagicMock auto-generates attributes - don't manually define everything
+- **Ensure stability**: Force flushes, use proper test isolation, make tests reliable
+
+#### Hypothesis/Property-Based Testing
+
+- **Use pytest integration**: Use `@given` decorator directly on test functions
+- **Suppress health checks when needed**: For function-scoped fixtures with hypothesis
+- **Add comments for complex strategies**: Explain what character categories or strategies generate
+
+#### Example Test Structure
+
+```python
+@pytest.mark.integration  # TODO REVIEW
+def test_full_logging_workflow(temp_home):
+    """Test complete logging workflow from setup to logging."""
+    # Test implementation...
+    pass
+
+@pytest.mark.property  # TODO REVIEW
+@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+@given(event_name=st.text(
+    alphabet=st.characters(
+        # whitelist_categories filters by Unicode character categories:
+        # "Ll" = Lowercase letters, "Nd" = Decimal numbers
+        whitelist_categories=("Ll", "Nd"),
+        whitelist_characters="_",
+    )
+))
+def test_with_generated_inputs(logger, event_name):
+    """Property-based test with hypothesis."""
+    # Test implementation...
+    pass
+```
+
 ### CI Caching Architecture
 
 The repository implements comprehensive caching for GitHub Actions CI to dramatically reduce build times:

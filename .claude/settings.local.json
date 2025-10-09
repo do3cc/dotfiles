@@ -39,7 +39,8 @@
       "Read(//home/do3cc/.config/**)",
       "Read(//home/do3cc/.cargo/**)",
       "Read(//home/do3cc/projects/**)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(while read file)"
     ],
     "deny": []
   }
