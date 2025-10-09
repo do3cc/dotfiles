@@ -59,6 +59,7 @@ wt-clean                      # Cleanup and maintenance
 # Navigation and creation
 wt-new feature issue-25 branch-name    # Create new organized worktree
 wt-goto issue-25                       # Quick navigation to matching worktree
+wt-root                                # Navigate back to project root from worktree
 wt-remove issue-25                     # Safely remove worktree after checks
 ```
 
