@@ -33,14 +33,19 @@ Add `complexity` label if missing (NEVER change existing complexity labels):
 
 ## 2. Plan Status Assessment
 
-Determine if the issue has an implementation plan:
+Determine if the issue has an implementation plan **IN THE BRANCH** (not in the issue itself):
 
-1. **Check for branch**: Use `gh api` to see if there's a branch for this issue (e.g., `issue-53-plan`, `issue-54-...`)
-2. **Check for plan file**: If branch exists, check if it contains a plan file (usually `docs/issue-<number>-plan.md` or similar)
+1. **Check for branch**: Use `gh api repos/:owner/:repo/branches` to see if there's a branch for this issue (e.g., `issue-53-plan`, `issue-54-...`)
+2. **Check for plan file IN THE BRANCH**: If branch exists, use `gh api` or `git ls-tree` to check if the branch contains a plan markdown file:
+   - Look for files matching `*issue-<number>*plan*.md` pattern
+   - Common locations: root directory, `docs/`, or worktree root
+   - **IMPORTANT**: Only check files in the branch, NOT in the issue description/body
 3. **Label accordingly**:
-   - Add `has-plan` if branch exists with plan file
-   - Add `needs-plan` if no branch or no plan file exists
+   - Add `has-plan` if branch exists AND contains a plan markdown file
+   - Add `needs-plan` if no branch exists OR branch exists but has no plan file
 4. **Remove opposite label** (if has-plan, remove needs-plan and vice versa)
+
+**Example check**: `gh api repos/:owner/:repo/git/trees/<branch-sha> --jq '.tree[].path' | grep -i 'issue.*plan.*\.md'`
 
 ## 3. Worktree and Branch Sync
 
