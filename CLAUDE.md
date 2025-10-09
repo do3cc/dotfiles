@@ -456,3 +456,37 @@ The project includes custom slash commands for quick project status analysis:
 ```
 
 These commands leverage the `dotfiles-status` tool and provide Claude with structured prompts for consistent, actionable project analysis.
+
+### Issue Management Commands
+
+**`/evaluate-issues`** - Comprehensive GitHub issue evaluation and management:
+
+This command performs a complete audit of all open GitHub issues:
+
+**Complexity Labeling:**
+
+- Adds missing `complexity` labels (easy/medium/hard) based on issue scope
+- Never changes existing complexity labels, only adds when missing
+- Uses consistent criteria: easy (simple changes), medium (moderate refactoring), hard (architectural changes)
+
+**Plan Status Tracking:**
+
+- Checks if issue has a branch with implementation plan
+- Labels with `has-plan` if plan file exists in branch
+- Labels with `needs-plan` if no branch or plan file found
+- Automatically removes conflicting labels
+
+**Worktree Management:**
+
+- Ensures local worktrees exist for all branches
+- Creates missing worktrees in appropriate `worktrees/<type>/` directories
+- Checks branch sync status against origin/main
+- Reports branches that need rebasing (does not auto-rebase)
+
+**Output:**
+
+- Summary table showing issue status, complexity, plan status, branch sync
+- Actionable recommendations for next steps
+- Identifies blocking issues or missing plans
+
+**Usage:** Simply run `/evaluate-issues` to audit all open issues and ensure proper project organization.
