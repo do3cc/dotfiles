@@ -13,24 +13,12 @@ import time
 
 
 # ==============================================================================
-# CheckStatus Enum Tests
-# ==============================================================================
-
-
-# TODO: REVIEW
-def test_check_status_values():
-    """CheckStatus enum should have expected values."""
-    assert CheckStatus.SUCCESS.value == "success"
-    assert CheckStatus.UNAVAILABLE.value == "unavailable"
-    assert CheckStatus.FAILED.value == "failed"
-
-
-# ==============================================================================
 # UpdateCheckResult Tests
 # ==============================================================================
 
 
 # TODO: REVIEW
+# XXX Group these tests by using parametrize
 def test_update_check_result_defaults():
     """UpdateCheckResult should have default values."""
     result = UpdateCheckResult(name="pacman")
@@ -70,6 +58,7 @@ def test_update_check_result_to_json():
 
 
 # TODO: REVIEW
+# XXX Why do we have from_dict and to_dict even? Can we remove this safely?
 def test_update_check_result_from_dict():
     """from_dict() should create UpdateCheckResult from dictionary."""
     data = {"name": "yay", "has_updates": True, "count": 15}
@@ -80,7 +69,6 @@ def test_update_check_result_from_dict():
     assert result.count == 15
 
 
-# TODO: REVIEW
 def test_update_check_result_from_json():
     """from_json() should deserialize from JSON string."""
     json_str = '{"name": "apt", "has_updates": true, "count": 7}'
@@ -91,7 +79,6 @@ def test_update_check_result_from_json():
     assert result.count == 7
 
 
-# TODO: REVIEW
 def test_update_check_result_roundtrip():
     """Serialization and deserialization should be lossless."""
     original = UpdateCheckResult(name="test", has_updates=True, count=42)
@@ -109,6 +96,7 @@ def test_update_check_result_roundtrip():
 
 
 # TODO: REVIEW
+# Use parametrize to reduce some tests.
 def test_update_check_cache_defaults():
     """UpdateCheckCache should have default values."""
     cache = UpdateCheckCache()
@@ -133,6 +121,7 @@ def test_update_check_cache_with_packages():
 
 
 # TODO: REVIEW
+# Do we need to dict function
 def test_update_check_cache_to_dict():
     """to_dict() should convert UpdateCheckCache to dictionary."""
     packages = [UpdateCheckResult(name="apt", has_updates=False, count=0)]
@@ -151,7 +140,6 @@ def test_update_check_cache_to_dict():
     assert data["packages"][0]["name"] == "apt"
 
 
-# TODO: REVIEW
 def test_update_check_cache_to_json():
     """to_json() should serialize to JSON string."""
     cache = UpdateCheckCache(total_updates=5, last_check=999)
@@ -163,6 +151,7 @@ def test_update_check_cache_to_json():
 
 
 # TODO: REVIEW
+# XXX Do we even need this function
 def test_update_check_cache_from_dict():
     """from_dict() should create UpdateCheckCache from dictionary."""
     data = {
@@ -183,7 +172,6 @@ def test_update_check_cache_from_dict():
     assert cache.status == CheckStatus.SUCCESS
 
 
-# TODO: REVIEW
 def test_update_check_cache_from_json():
     """from_json() should deserialize from JSON string."""
     json_str = '{"packages": [], "total_updates": 0, "last_check": 111, "status": "unavailable"}'
@@ -195,7 +183,6 @@ def test_update_check_cache_from_json():
     assert cache.status == CheckStatus.UNAVAILABLE
 
 
-# TODO: REVIEW
 def test_update_check_cache_roundtrip():
     """Serialization and deserialization should be lossless."""
     packages = [
@@ -221,6 +208,7 @@ def test_update_check_cache_roundtrip():
 
 
 # TODO: REVIEW
+# XXX Use parametrize for the next few tests that essential do the same tests with different inputs
 def test_git_status_defaults():
     """GitStatus should have default values."""
     status = GitStatus()
@@ -256,6 +244,7 @@ def test_git_status_with_changes():
 
 
 # TODO: REVIEW
+# XXX Do we need the to_dict functionality?
 def test_git_status_to_dict():
     """to_dict() should convert GitStatus to dictionary."""
     status = GitStatus(
@@ -271,7 +260,6 @@ def test_git_status_to_dict():
     assert data["behind"] == 0
 
 
-# TODO: REVIEW
 def test_git_status_to_json():
     """to_json() should serialize to JSON string."""
     status = GitStatus(branch="develop", uncommitted=2)
@@ -283,6 +271,7 @@ def test_git_status_to_json():
 
 
 # TODO: REVIEW
+# XXX Do we even need this function
 def test_git_status_from_dict():
     """from_dict() should create GitStatus from dictionary."""
     data = {
@@ -305,7 +294,6 @@ def test_git_status_from_dict():
     assert status.branch == "main"
 
 
-# TODO: REVIEW
 def test_git_status_from_json():
     """from_json() should deserialize from JSON string."""
     json_str = '{"enabled": false, "in_repo": false, "branch": "detached", "uncommitted": 0, "ahead": 0, "behind": 0, "last_check": 0, "status": "unavailable"}'
@@ -315,7 +303,6 @@ def test_git_status_from_json():
     assert status.status == CheckStatus.UNAVAILABLE
 
 
-# TODO: REVIEW
 def test_git_status_roundtrip():
     """Serialization and deserialization should be lossless."""
     original = GitStatus(
@@ -348,6 +335,7 @@ def test_git_status_roundtrip():
 
 
 # TODO: REVIEW
+# The next few tests do test the same thing with different inputs. Convert to parametrize
 def test_init_script_status_defaults():
     """InitScriptStatus should have default values."""
     status = InitScriptStatus()
@@ -375,13 +363,15 @@ def test_init_script_status_with_data():
 
 
 # TODO: REVIEW
+# XXX This is not the behavior that is sane! it should return something like max int.
+# This behavior forces code to check for 0 and treat this as a special case.
+# No need to treat maxint as special.
 def test_init_script_status_age_hours_zero_when_never_run():
     """age_hours should be 0 when last_run is 0."""
     status = InitScriptStatus(last_run=0)
     assert status.age_hours == 0.0
 
 
-# TODO: REVIEW
 def test_init_script_status_age_hours_calculation():
     """age_hours should calculate hours since last run."""
     # Set last_run to 2 hours ago
@@ -392,7 +382,6 @@ def test_init_script_status_age_hours_calculation():
     assert 1.9 <= status.age_hours <= 2.1
 
 
-# TODO: REVIEW
 def test_init_script_status_needs_update_false_when_recent():
     """needs_update should be False when last run was recent."""
     # Set last_run to 1 day ago (24 hours)
@@ -402,7 +391,6 @@ def test_init_script_status_needs_update_false_when_recent():
     assert status.needs_update is False
 
 
-# TODO: REVIEW
 def test_init_script_status_needs_update_true_when_old():
     """needs_update should be True when last run was >7 days ago."""
     # Set last_run to 8 days ago (192 hours)
@@ -412,7 +400,6 @@ def test_init_script_status_needs_update_true_when_old():
     assert status.needs_update is True
 
 
-# TODO: REVIEW
 def test_init_script_status_needs_update_boundary():
     """needs_update should trigger at exactly 168 hours (7 days)."""
     # Test just under 168 hours (should not need update)
@@ -420,13 +407,13 @@ def test_init_script_status_needs_update_boundary():
     status1 = InitScriptStatus(last_run=just_under)
     assert status1.needs_update is False
 
-    # Test just over 168 hours (should need update)
     just_over = int(time.time() - (168 * 3600 + 60))
     status2 = InitScriptStatus(last_run=just_over)
     assert status2.needs_update is True
 
 
 # TODO: REVIEW
+# Do we even need the todict method?
 def test_init_script_status_to_dict():
     """to_dict() should convert InitScriptStatus to dictionary."""
     status = InitScriptStatus(
@@ -441,7 +428,6 @@ def test_init_script_status_to_dict():
     assert data["status"] == "success"
 
 
-# TODO: REVIEW
 def test_init_script_status_to_json():
     """to_json() should serialize to JSON string."""
     status = InitScriptStatus(enabled=True, last_run=555)
@@ -453,6 +439,7 @@ def test_init_script_status_to_json():
 
 
 # TODO: REVIEW
+# Do we even need from_dict
 def test_init_script_status_from_dict():
     """from_dict() should create InitScriptStatus from dictionary."""
     data = {
@@ -471,7 +458,6 @@ def test_init_script_status_from_dict():
     assert status.in_dotfiles is True
 
 
-# TODO: REVIEW
 def test_init_script_status_from_json():
     """from_json() should deserialize from JSON string."""
     json_str = '{"enabled": false, "last_check": 0, "last_run": 0, "status": "unavailable", "in_dotfiles": false}'
@@ -481,7 +467,6 @@ def test_init_script_status_from_json():
     assert status.status == CheckStatus.UNAVAILABLE
 
 
-# TODO: REVIEW
 def test_init_script_status_roundtrip():
     """Serialization and deserialization should be lossless."""
     original = InitScriptStatus(
@@ -507,7 +492,6 @@ def test_init_script_status_roundtrip():
 # ==============================================================================
 
 
-# TODO: REVIEW
 def test_system_status_initialization():
     """SystemStatus should store complete system state."""
     from pathlib import Path
@@ -529,7 +513,6 @@ def test_system_status_initialization():
     assert status.init.enabled is True
 
 
-# TODO: REVIEW
 def test_system_status_fields_are_dataclasses():
     """SystemStatus should contain the expected dataclass instances."""
     from pathlib import Path
@@ -546,3 +529,8 @@ def test_system_status_fields_are_dataclasses():
     assert isinstance(status.git, GitStatus)
     assert isinstance(status.init, InitScriptStatus)
     assert isinstance(status.package_cache_path, Path)
+
+
+# XXX Where are hypothesis tests?
+# What about integration tests? Maybe configured that they must be called explicit and we put them in docker containers?
+# Where are the methods tested?

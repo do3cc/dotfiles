@@ -1,56 +1,10 @@
 """Tests for swman.py - Software Manager Orchestrator."""
 
 import pytest
-from dotfiles.swman import ManagerType, UpdateStatus, UpdateResult
+from dotfiles.swman import UpdateStatus, UpdateResult
 
-
-# ==============================================================================
-# ManagerType Enum Tests
-# ==============================================================================
-
-
-# TODO: REVIEW
-def test_manager_type_values():
-    """ManagerType enum should have expected values."""
-    assert ManagerType.SYSTEM.value == "system"
-    assert ManagerType.LANGUAGE.value == "language"
-    assert ManagerType.PLUGIN.value == "plugin"
-    assert ManagerType.TOOL.value == "tool"
-
-
-# ==============================================================================
-# UpdateStatus Enum Tests
-# ==============================================================================
-
-
-# TODO: REVIEW
-def test_update_status_values():
-    """UpdateStatus enum should have expected values."""
-    assert UpdateStatus.SUCCESS.value == "success"
-    assert UpdateStatus.FAILED.value == "failed"
-    assert UpdateStatus.SKIPPED.value == "skipped"
-    assert UpdateStatus.NOT_AVAILABLE.value == "not_available"
-
-
-# ==============================================================================
-# UpdateResult Dataclass Tests
-# ==============================================================================
-
-
-# TODO: REVIEW
-def test_update_result_initialization():
-    """UpdateResult should store update operation results."""
-    result = UpdateResult(
-        name="pacman",
-        status=UpdateStatus.SUCCESS,
-        message="Updated 5 packages",
-        duration=12.5,
-    )
-
-    assert result.name == "pacman"
-    assert result.status == UpdateStatus.SUCCESS
-    assert result.message == "Updated 5 packages"
-    assert result.duration == 12.5
+# XXX This is terrible test coverage, none of the methods that actually do something are tested!
+# XXX Is there an easy way to mark tests so that they are not executed during a normal pytest run, but are run when a specific flag is set? I think we should do integration tests, but in the docker containers only.
 
 
 # TODO: REVIEW
@@ -104,6 +58,7 @@ def test_update_result_status_handling(
     )
 
     # Check expected status
+    # XXX what type of test is this? a small mistake would make this test not test anything, how do you even come up with this idea?
     if "status" in expected_checks:
         assert result.status == expected_checks["status"]
 
@@ -125,6 +80,7 @@ def test_update_result_status_handling(
 
 
 # TODO: REVIEW
+# XXX: Consolidate these simple UpdateResult tests into a single test parametrized with parametrize
 def test_update_result_with_zero_duration():
     """UpdateResult should allow zero duration for quick operations."""
     result = UpdateResult(
