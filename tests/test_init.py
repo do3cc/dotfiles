@@ -149,7 +149,6 @@ def test_buildEnvironmentConfig(environments):
     assert str(a) != str(b)
 
 
-# XXX it is actualy always impossible to have a return code != 0, please check the way we call run!
 @h_settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(
     service_name=strategies.text(),
@@ -160,6 +159,12 @@ def test_checkSystemdServiceStatusNetworkFail(
     output,
     monkeypatch,
 ):
+    """Test that TimeoutExpired exceptions propagate from systemctl commands.
+
+    Note: This test verifies exception propagation. The implementation was fixed to
+    remove redundant returncode == 0 checks since run_command_with_error_handling
+    uses check=True, making returncode always 0 when it returns successfully.
+    """
     obj = init.Linux("minimal", False)
 
     def mockrun():

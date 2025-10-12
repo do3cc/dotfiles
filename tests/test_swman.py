@@ -1,13 +1,23 @@
-"""Tests for swman.py - Software Manager Orchestrator."""
+"""Tests for swman.py - Software Manager Orchestrator.
+
+NOTE ON TEST COVERAGE:
+Currently only testing data structures (UpdateResult, UpdateStatus). The actual manager
+implementations (PacmanManager, YayManager, etc.) are not unit tested here because they
+require real system commands (pacman, yay, apt, etc.).
+
+INTEGRATION TESTING STRATEGY:
+The managers are tested via integration tests in Docker containers (see Makefile targets:
+test-arch, test-debian, test-ubuntu). Use @pytest.mark.integration for tests that need
+real commands.
+
+To run only unit tests: pytest -m "not integration"
+To run integration tests: pytest -m integration
+"""
 
 import pytest
 from dotfiles.swman import UpdateStatus, UpdateResult
 
-# XXX This is terrible test coverage, none of the methods that actually do something are tested!
-# XXX Is there an easy way to mark tests so that they are not executed during a normal pytest run, but are run when a specific flag is set? I think we should do integration tests, but in the docker containers only.
 
-
-# TODO: REVIEW
 @pytest.mark.parametrize(
     "name,status,message,duration,expected_checks",
     [
@@ -27,7 +37,7 @@ from dotfiles.swman import UpdateStatus, UpdateResult
             30.0,
             {"status": UpdateStatus.FAILED, "message": "Connection timeout"},
         ),
-        # Skipped status
+        # Skipped status with small duration
         (
             "lazy.nvim",
             UpdateStatus.SKIPPED,
@@ -43,8 +53,49 @@ from dotfiles.swman import UpdateStatus, UpdateResult
             0.0,
             {"status": UpdateStatus.NOT_AVAILABLE, "name": "fisher"},
         ),
+        # Zero duration (quick operations)
+        (
+            "test",
+            UpdateStatus.SKIPPED,
+            "Skipped",
+            0.0,
+            {"duration": 0.0},
+        ),
+        # Long duration (system updates)
+        (
+            "system-update",
+            UpdateStatus.SUCCESS,
+            "Updated",
+            300.5,
+            {"duration": 300.5, "status": UpdateStatus.SUCCESS},
+        ),
+        # Empty message
+        (
+            "test",
+            UpdateStatus.SUCCESS,
+            "",
+            0.5,
+            {"message": "", "status": UpdateStatus.SUCCESS},
+        ),
+        # Multiline message
+        (
+            "pacman",
+            UpdateStatus.SUCCESS,
+            "Update completed successfully.\nDownloaded 5 packages.\nTotal size: 100MB.",
+            60.0,
+            {"message_contains": "Downloaded 5 packages", "duration": 60.0},
+        ),
     ],
-    ids=["success", "failed", "skipped", "not_available"],
+    ids=[
+        "success",
+        "failed",
+        "skipped",
+        "not_available",
+        "zero_duration",
+        "long_duration",
+        "empty_message",
+        "multiline_message",
+    ],
 )
 def test_update_result_status_handling(
     name, status, message, duration, expected_checks
@@ -57,55 +108,32 @@ def test_update_result_status_handling(
         duration=duration,
     )
 
-    # Check expected status
-    # XXX what type of test is this? a small mistake would make this test not test anything, how do you even come up with this idea?
+    # Dynamic test assertions based on expected_checks dict
+    # This pattern allows different test cases to verify different aspects of UpdateResult
+    # without duplicating test logic. Each parametrized case specifies which fields to check.
+
     if "status" in expected_checks:
         assert result.status == expected_checks["status"]
 
-    # Check exact message match
     if "message" in expected_checks:
         assert result.message == expected_checks["message"]
 
-    # Check message contains substring
     if "message_contains" in expected_checks:
         assert expected_checks["message_contains"] in result.message
 
-    # Check duration
     if "duration" in expected_checks:
         assert result.duration == expected_checks["duration"]
 
-    # Check name
     if "name" in expected_checks:
         assert result.name == expected_checks["name"]
 
 
-# TODO: REVIEW
-# XXX: Consolidate these simple UpdateResult tests into a single test parametrized with parametrize
-def test_update_result_with_zero_duration():
-    """UpdateResult should allow zero duration for quick operations."""
-    result = UpdateResult(
-        name="test", status=UpdateStatus.SKIPPED, message="Skipped", duration=0.0
-    )
-
-    assert result.duration == 0.0
-
-
-# TODO: REVIEW
-def test_update_result_with_long_duration():
-    """UpdateResult should handle long-running operations."""
-    result = UpdateResult(
-        name="system-update",
-        status=UpdateStatus.SUCCESS,
-        message="Updated",
-        duration=300.5,
-    )
-
-    assert result.duration == 300.5
-
-
-# TODO: REVIEW
 def test_update_result_fields_are_correct_types():
-    """UpdateResult fields should have expected types."""
+    """UpdateResult fields should have expected types.
+
+    This test verifies type constraints on dataclass fields.
+    Cannot be parametrized with other tests since it checks types, not values.
+    """
     result = UpdateResult(
         name="test", status=UpdateStatus.SUCCESS, message="Done", duration=1.0
     )
@@ -114,28 +142,3 @@ def test_update_result_fields_are_correct_types():
     assert isinstance(result.status, UpdateStatus)
     assert isinstance(result.message, str)
     assert isinstance(result.duration, (int, float))
-
-
-# TODO: REVIEW
-def test_update_result_with_empty_message():
-    """UpdateResult should handle empty message strings."""
-    result = UpdateResult(
-        name="test", status=UpdateStatus.SUCCESS, message="", duration=0.5
-    )
-
-    assert result.message == ""
-
-
-# TODO: REVIEW
-def test_update_result_with_multiline_message():
-    """UpdateResult should handle multiline messages."""
-    message = """Update completed successfully.
-Downloaded 5 packages.
-Total size: 100MB."""
-
-    result = UpdateResult(
-        name="pacman", status=UpdateStatus.SUCCESS, message=message, duration=60.0
-    )
-
-    assert "\n" in result.message
-    assert "Downloaded 5 packages" in result.message

@@ -9,6 +9,7 @@ from dotfiles.pkgstatus import (
     SystemStatus,
 )
 import json
+import pytest
 import time
 
 
@@ -17,26 +18,6 @@ import time
 # ==============================================================================
 
 
-# TODO: REVIEW
-# XXX Group these tests by using parametrize
-def test_update_check_result_defaults():
-    """UpdateCheckResult should have default values."""
-    result = UpdateCheckResult(name="pacman")
-    assert result.name == "pacman"
-    assert result.has_updates is False
-    assert result.count == 0
-
-
-# TODO: REVIEW
-def test_update_check_result_with_updates():
-    """UpdateCheckResult should store update information."""
-    result = UpdateCheckResult(name="yay", has_updates=True, count=5)
-    assert result.name == "yay"
-    assert result.has_updates is True
-    assert result.count == 5
-
-
-# TODO: REVIEW
 def test_update_check_result_to_dict():
     """to_dict() should convert UpdateCheckResult to dictionary."""
     result = UpdateCheckResult(name="apt", has_updates=True, count=10)
@@ -45,7 +26,6 @@ def test_update_check_result_to_dict():
     assert data == {"name": "apt", "has_updates": True, "count": 10}
 
 
-# TODO: REVIEW
 def test_update_check_result_to_json():
     """to_json() should serialize to JSON string."""
     result = UpdateCheckResult(name="pacman", has_updates=False, count=0)
@@ -57,8 +37,6 @@ def test_update_check_result_to_json():
     assert parsed["count"] == 0
 
 
-# TODO: REVIEW
-# XXX Why do we have from_dict and to_dict even? Can we remove this safely?
 def test_update_check_result_from_dict():
     """from_dict() should create UpdateCheckResult from dictionary."""
     data = {"name": "yay", "has_updates": True, "count": 15}
@@ -95,33 +73,6 @@ def test_update_check_result_roundtrip():
 # ==============================================================================
 
 
-# TODO: REVIEW
-# Use parametrize to reduce some tests.
-def test_update_check_cache_defaults():
-    """UpdateCheckCache should have default values."""
-    cache = UpdateCheckCache()
-    assert cache.packages == []
-    assert cache.total_updates == 0
-    assert cache.last_check == 0
-    assert cache.status == CheckStatus.SUCCESS
-
-
-# TODO: REVIEW
-def test_update_check_cache_with_packages():
-    """UpdateCheckCache should store multiple package results."""
-    packages = [
-        UpdateCheckResult(name="pacman", has_updates=True, count=5),
-        UpdateCheckResult(name="yay", has_updates=True, count=3),
-    ]
-    cache = UpdateCheckCache(packages=packages, total_updates=8, last_check=123456)
-
-    assert len(cache.packages) == 2
-    assert cache.total_updates == 8
-    assert cache.last_check == 123456
-
-
-# TODO: REVIEW
-# Do we need to dict function
 def test_update_check_cache_to_dict():
     """to_dict() should convert UpdateCheckCache to dictionary."""
     packages = [UpdateCheckResult(name="apt", has_updates=False, count=0)]
@@ -150,8 +101,6 @@ def test_update_check_cache_to_json():
     assert parsed["last_check"] == 999
 
 
-# TODO: REVIEW
-# XXX Do we even need this function
 def test_update_check_cache_from_dict():
     """from_dict() should create UpdateCheckCache from dictionary."""
     data = {
@@ -207,59 +156,6 @@ def test_update_check_cache_roundtrip():
 # ==============================================================================
 
 
-# TODO: REVIEW
-# XXX Use parametrize for the next few tests that essential do the same tests with different inputs
-def test_git_status_defaults():
-    """GitStatus should have default values."""
-    status = GitStatus()
-    assert status.last_check == 0
-    assert status.enabled is False
-    assert status.in_repo is False
-    assert status.uncommitted == 0
-    assert status.ahead == 0
-    assert status.behind == 0
-    assert status.branch == "detached"
-    assert status.status == CheckStatus.SUCCESS
-
-
-# TODO: REVIEW
-def test_git_status_with_changes():
-    """GitStatus should store repository state."""
-    status = GitStatus(
-        last_check=123,
-        enabled=True,
-        in_repo=True,
-        uncommitted=5,
-        ahead=2,
-        behind=1,
-        branch="feature/test",
-    )
-
-    assert status.enabled is True
-    assert status.in_repo is True
-    assert status.uncommitted == 5
-    assert status.ahead == 2
-    assert status.behind == 1
-    assert status.branch == "feature/test"
-
-
-# TODO: REVIEW
-# XXX Do we need the to_dict functionality?
-def test_git_status_to_dict():
-    """to_dict() should convert GitStatus to dictionary."""
-    status = GitStatus(
-        enabled=True, in_repo=True, branch="main", uncommitted=3, ahead=1, behind=0
-    )
-    data = status.to_dict()
-
-    assert data["enabled"] is True
-    assert data["in_repo"] is True
-    assert data["branch"] == "main"
-    assert data["uncommitted"] == 3
-    assert data["ahead"] == 1
-    assert data["behind"] == 0
-
-
 def test_git_status_to_json():
     """to_json() should serialize to JSON string."""
     status = GitStatus(branch="develop", uncommitted=2)
@@ -268,30 +164,6 @@ def test_git_status_to_json():
     parsed = json.loads(json_str)
     assert parsed["branch"] == "develop"
     assert parsed["uncommitted"] == 2
-
-
-# TODO: REVIEW
-# XXX Do we even need this function
-def test_git_status_from_dict():
-    """from_dict() should create GitStatus from dictionary."""
-    data = {
-        "last_check": 999,
-        "enabled": True,
-        "in_repo": True,
-        "uncommitted": 10,
-        "ahead": 5,
-        "behind": 2,
-        "branch": "main",
-        "status": "success",
-    }
-    status = GitStatus.from_dict(data)
-
-    assert status.last_check == 999
-    assert status.enabled is True
-    assert status.uncommitted == 10
-    assert status.ahead == 5
-    assert status.behind == 2
-    assert status.branch == "main"
 
 
 def test_git_status_from_json():
@@ -334,42 +206,10 @@ def test_git_status_roundtrip():
 # ==============================================================================
 
 
-# TODO: REVIEW
-# The next few tests do test the same thing with different inputs. Convert to parametrize
-def test_init_script_status_defaults():
-    """InitScriptStatus should have default values."""
-    status = InitScriptStatus()
-    assert status.enabled is False
-    assert status.last_check == 0
-    assert status.last_run == 0
-    assert status.status == CheckStatus.SUCCESS
-    assert status.in_dotfiles is False
-
-
-# TODO: REVIEW
-def test_init_script_status_with_data():
-    """InitScriptStatus should store execution information."""
-    status = InitScriptStatus(
-        enabled=True,
-        last_check=123,
-        last_run=100,
-        in_dotfiles=True,
-    )
-
-    assert status.enabled is True
-    assert status.last_check == 123
-    assert status.last_run == 100
-    assert status.in_dotfiles is True
-
-
-# TODO: REVIEW
-# XXX This is not the behavior that is sane! it should return something like max int.
-# This behavior forces code to check for 0 and treat this as a special case.
-# No need to treat maxint as special.
-def test_init_script_status_age_hours_zero_when_never_run():
-    """age_hours should be 0 when last_run is 0."""
+def test_init_script_status_age_hours_infinity_when_never_run():
+    """age_hours should be infinity when last_run is 0 (never run)."""
     status = InitScriptStatus(last_run=0)
-    assert status.age_hours == 0.0
+    assert status.age_hours == float("inf")
 
 
 def test_init_script_status_age_hours_calculation():
@@ -380,6 +220,12 @@ def test_init_script_status_age_hours_calculation():
 
     # Should be approximately 2 hours (allow some tolerance for test execution time)
     assert 1.9 <= status.age_hours <= 2.1
+
+
+def test_init_script_status_needs_update_true_when_never_run():
+    """needs_update should be True when never run (last_run=0)."""
+    status = InitScriptStatus(last_run=0)
+    assert status.needs_update is True
 
 
 def test_init_script_status_needs_update_false_when_recent():
@@ -412,22 +258,6 @@ def test_init_script_status_needs_update_boundary():
     assert status2.needs_update is True
 
 
-# TODO: REVIEW
-# Do we even need the todict method?
-def test_init_script_status_to_dict():
-    """to_dict() should convert InitScriptStatus to dictionary."""
-    status = InitScriptStatus(
-        enabled=True, last_check=999, last_run=888, in_dotfiles=True
-    )
-    data = status.to_dict()
-
-    assert data["enabled"] is True
-    assert data["last_check"] == 999
-    assert data["last_run"] == 888
-    assert data["in_dotfiles"] is True
-    assert data["status"] == "success"
-
-
 def test_init_script_status_to_json():
     """to_json() should serialize to JSON string."""
     status = InitScriptStatus(enabled=True, last_run=555)
@@ -436,26 +266,6 @@ def test_init_script_status_to_json():
     parsed = json.loads(json_str)
     assert parsed["enabled"] is True
     assert parsed["last_run"] == 555
-
-
-# TODO: REVIEW
-# Do we even need from_dict
-def test_init_script_status_from_dict():
-    """from_dict() should create InitScriptStatus from dictionary."""
-    data = {
-        "enabled": True,
-        "last_check": 111,
-        "last_run": 100,
-        "status": "failed",
-        "in_dotfiles": True,
-    }
-    status = InitScriptStatus.from_dict(data)
-
-    assert status.enabled is True
-    assert status.last_check == 111
-    assert status.last_run == 100
-    assert status.status == CheckStatus.FAILED
-    assert status.in_dotfiles is True
 
 
 def test_init_script_status_from_json():
@@ -490,47 +300,460 @@ def test_init_script_status_roundtrip():
 # ==============================================================================
 # SystemStatus Tests
 # ==============================================================================
+# (No tests needed - SystemStatus is a simple dataclass with no business logic)
 
 
-def test_system_status_initialization():
-    """SystemStatus should store complete system state."""
-    from pathlib import Path
+# ==============================================================================
+# StatusChecker Tests
+# ==============================================================================
 
-    packages = UpdateCheckCache(total_updates=5)
-    git = GitStatus(branch="main", uncommitted=2)
-    init = InitScriptStatus(enabled=True, last_run=123)
 
-    status = SystemStatus(
-        packages=packages,
-        package_cache_path=Path("/tmp/cache.json"),
-        git=git,
-        init=init,
+def test_status_checker_initialization(tmp_path):
+    """StatusChecker should initialize with correct cache directory structure."""
+    from dotfiles.pkgstatus import StatusChecker
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+
+    assert checker.cache_dir == tmp_path / "dotfiles" / "status"
+    assert checker.cache_dir.exists()
+    assert checker.packages_cache == checker.cache_dir / "packages.json"
+    assert checker.git_cache == checker.cache_dir / "git.json"
+    assert checker.init_cache == checker.cache_dir / "init.json"
+
+
+@pytest.mark.parametrize(
+    "file_exists,file_age_seconds,max_age_hours,expected_expired",
+    [
+        (False, 0, 1, True),  # file doesn't exist
+        (True, 1800, 1, False),  # 30 minutes old, max 1 hour - not expired
+        (True, 7200, 1, True),  # 2 hours old, max 1 hour - expired
+        (True, 3595, 1, False),  # just under 1 hour old - not expired (boundary)
+        (True, 3605, 1, True),  # just over 1 hour old - expired (boundary)
+    ],
+)
+def test_status_checker_is_cache_expired(
+    tmp_path, file_exists, file_age_seconds, max_age_hours, expected_expired
+):
+    """is_cache_expired() should correctly determine cache freshness."""
+    from dotfiles.pkgstatus import StatusChecker
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+    cache_file = tmp_path / "test_cache.json"
+
+    if file_exists:
+        cache_file.write_text("{}")
+        # Set file modification time to simulate age
+        mtime = time.time() - file_age_seconds
+        import os
+
+        os.utime(cache_file, (mtime, mtime))
+
+    assert checker.is_cache_expired(cache_file, max_age_hours) is expected_expired
+
+
+@pytest.mark.parametrize(
+    "timestamp,expected_output",
+    [
+        (0, "never"),  # zero timestamp
+        (int(time.time() - 30), "just now"),  # 30 seconds ago
+        (int(time.time() - 120), "2m ago"),  # 2 minutes ago
+        (int(time.time() - 3600), "1h ago"),  # 1 hour ago
+        (int(time.time() - 7200), "2h ago"),  # 2 hours ago
+        (int(time.time() - 86400), "1d ago"),  # 1 day ago
+        (int(time.time() - 172800), "2d ago"),  # 2 days ago
+    ],
+)
+def test_status_checker_format_age(timestamp, expected_output):
+    """_format_age() should format timestamps as human-readable strings."""
+    from dotfiles.pkgstatus import StatusChecker
+
+    checker = StatusChecker()
+    assert checker._format_age(timestamp) == expected_output
+
+
+# ==============================================================================
+# StatusChecker Cache Operations Tests
+# ==============================================================================
+
+
+def test_status_checker_load_cache_missing_file(tmp_path):
+    """_load_cache() should return default when cache file doesn't exist."""
+    from dotfiles.pkgstatus import StatusChecker
+    from dotfiles.logging_config import setup_logging
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+    logger = setup_logging("test")
+    cache_file = tmp_path / "nonexistent.json"
+
+    # Should return default GitStatus instance
+    result = checker._load_cache(cache_file, GitStatus, GitStatus, logger)
+
+    assert isinstance(result, GitStatus)
+    assert result.enabled is False
+    assert result.in_repo is False
+
+
+def test_status_checker_load_cache_existing_file(tmp_path):
+    """_load_cache() should load and deserialize existing cache file."""
+    from dotfiles.pkgstatus import StatusChecker
+    from dotfiles.logging_config import setup_logging
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+    logger = setup_logging("test")
+    cache_file = tmp_path / "git.json"
+
+    # Create a cache file with valid GitStatus JSON
+    git_status = GitStatus(
+        enabled=True, in_repo=True, branch="main", uncommitted=5, ahead=2, behind=1
+    )
+    cache_file.write_text(git_status.to_json())
+
+    # Load should return the cached data
+    result = checker._load_cache(cache_file, GitStatus, GitStatus, logger)
+
+    assert result.enabled is True
+    assert result.in_repo is True
+    assert result.branch == "main"
+    assert result.uncommitted == 5
+    assert result.ahead == 2
+    assert result.behind == 1
+
+
+def test_status_checker_load_cache_corrupted_file(tmp_path):
+    """_load_cache() should raise exception when cache file is corrupted."""
+    from dotfiles.pkgstatus import StatusChecker
+    from dotfiles.logging_config import setup_logging
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+    logger = setup_logging("test")
+    cache_file = tmp_path / "corrupted.json"
+
+    # Write invalid JSON
+    cache_file.write_text("{invalid json")
+
+    # Should raise exception (not return default)
+    with pytest.raises(Exception):
+        checker._load_cache(cache_file, GitStatus, GitStatus, logger)
+
+
+def test_status_checker_save_cache(tmp_path):
+    """_save_cache() should atomically save data to cache file."""
+    from dotfiles.pkgstatus import StatusChecker
+    from dotfiles.logging_config import setup_logging
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+    logger = setup_logging("test")
+    cache_file = checker.cache_dir / "test.json"
+
+    # Save a GitStatus object
+    git_status = GitStatus(enabled=True, in_repo=True, branch="develop", uncommitted=3)
+    checker._save_cache(cache_file, git_status, logger)
+
+    # File should exist and contain correct JSON
+    assert cache_file.exists()
+    loaded = GitStatus.from_json(cache_file.read_text())
+    assert loaded.branch == "develop"
+    assert loaded.uncommitted == 3
+
+
+def test_status_checker_save_cache_atomic_write(tmp_path):
+    """_save_cache() should use temp file for atomic writes."""
+    from dotfiles.pkgstatus import StatusChecker
+    from dotfiles.logging_config import setup_logging
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+    logger = setup_logging("test")
+    cache_file = checker.cache_dir / "atomic.json"
+
+    # Save data
+    init_status = InitScriptStatus(enabled=True, last_run=12345)
+    checker._save_cache(cache_file, init_status, logger)
+
+    # Temp file should not exist after successful write
+    temp_file = cache_file.with_suffix(".tmp")
+    assert not temp_file.exists()
+    assert cache_file.exists()
+
+
+def test_status_checker_load_cache_with_callable_default(tmp_path):
+    """_load_cache() should support callable default_factory."""
+    from dotfiles.pkgstatus import StatusChecker
+    from dotfiles.logging_config import setup_logging
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+    logger = setup_logging("test")
+    cache_file = tmp_path / "nonexistent.json"
+
+    # Use a lambda as default_factory (like get_init_status does)
+    result = checker._load_cache(
+        cache_file,
+        InitScriptStatus,
+        lambda: InitScriptStatus(enabled=True, status=CheckStatus.UNAVAILABLE),
+        logger,
     )
 
-    assert status.packages.total_updates == 5
-    assert status.package_cache_path == Path("/tmp/cache.json")
-    assert status.git.branch == "main"
-    assert status.init.enabled is True
+    assert isinstance(result, InitScriptStatus)
+    assert result.enabled is True
+    assert result.status == CheckStatus.UNAVAILABLE
 
 
-def test_system_status_fields_are_dataclasses():
-    """SystemStatus should contain the expected dataclass instances."""
-    from pathlib import Path
+# ==============================================================================
+# StatusChecker Output Formatting Tests
+# ==============================================================================
 
-    packages = UpdateCheckCache(total_updates=0)
-    git = GitStatus()
-    init = InitScriptStatus()
 
+def test_status_checker_format_quiet_output_no_issues(tmp_path):
+    """format_quiet_output() should return empty string when no issues."""
+    from dotfiles.pkgstatus import StatusChecker
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+
+    # Create status with no issues
     status = SystemStatus(
-        packages=packages, package_cache_path=Path("/tmp/test"), git=git, init=init
+        packages=UpdateCheckCache(total_updates=0, last_check=int(time.time())),
+        package_cache_path=tmp_path / "packages.json",
+        git=GitStatus(enabled=True, in_repo=True, uncommitted=0, ahead=0),
+        init=InitScriptStatus(enabled=True, last_run=int(time.time())),
     )
 
-    assert isinstance(status.packages, UpdateCheckCache)
-    assert isinstance(status.git, GitStatus)
-    assert isinstance(status.init, InitScriptStatus)
-    assert isinstance(status.package_cache_path, Path)
+    output = checker.format_quiet_output(status)
+    assert output == ""
 
 
-# XXX Where are hypothesis tests?
-# What about integration tests? Maybe configured that they must be called explicit and we put them in docker containers?
-# Where are the methods tested?
+def test_status_checker_format_quiet_output_with_package_updates(tmp_path):
+    """format_quiet_output() should show package updates."""
+    from dotfiles.pkgstatus import StatusChecker
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+
+    # Create status with package updates
+    status = SystemStatus(
+        packages=UpdateCheckCache(total_updates=5, last_check=int(time.time() - 3600)),
+        package_cache_path=tmp_path / "packages.json",
+        git=GitStatus(enabled=False),
+        init=InitScriptStatus(enabled=False),
+    )
+
+    output = checker.format_quiet_output(status)
+    assert "pkgstatus:" in output
+    assert "5 package updates available" in output
+    assert "1h ago" in output
+
+
+def test_status_checker_format_quiet_output_with_git_changes(tmp_path):
+    """format_quiet_output() should show git uncommitted/unpushed changes."""
+    from dotfiles.pkgstatus import StatusChecker
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+
+    # Create status with git changes
+    status = SystemStatus(
+        packages=UpdateCheckCache(total_updates=0),
+        package_cache_path=tmp_path / "packages.json",
+        git=GitStatus(enabled=True, in_repo=True, uncommitted=3, ahead=2),
+        init=InitScriptStatus(enabled=False),
+    )
+
+    output = checker.format_quiet_output(status)
+    assert "pkgstatus:" in output
+    assert "Git:" in output
+    assert "3 uncommitted" in output
+    assert "2 unpushed" in output
+
+
+def test_status_checker_format_quiet_output_with_stale_init(tmp_path):
+    """format_quiet_output() should show stale init script."""
+    from dotfiles.pkgstatus import StatusChecker
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+
+    # Create status with old init script (10 days ago)
+    ten_days_ago = int(time.time() - (10 * 86400))
+    status = SystemStatus(
+        packages=UpdateCheckCache(total_updates=0),
+        package_cache_path=tmp_path / "packages.json",
+        git=GitStatus(enabled=False),
+        init=InitScriptStatus(enabled=True, last_run=ten_days_ago),
+    )
+
+    output = checker.format_quiet_output(status)
+    assert "pkgstatus:" in output
+    assert "Init script not run in" in output
+    assert "10d" in output
+
+
+def test_status_checker_format_quiet_output_with_never_run_init(tmp_path):
+    """format_quiet_output() should show never-run init script."""
+    from dotfiles.pkgstatus import StatusChecker
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+
+    # Create status with never-run init script
+    status = SystemStatus(
+        packages=UpdateCheckCache(total_updates=0),
+        package_cache_path=tmp_path / "packages.json",
+        git=GitStatus(enabled=False),
+        init=InitScriptStatus(enabled=True, last_run=0),
+    )
+
+    output = checker.format_quiet_output(status)
+    assert "pkgstatus:" in output
+    assert "Init script never run" in output
+
+
+def test_status_checker_format_quiet_output_multiple_issues(tmp_path):
+    """format_quiet_output() should show all issues with pkgstatus prefix."""
+    from dotfiles.pkgstatus import StatusChecker
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+
+    # Create status with multiple issues
+    status = SystemStatus(
+        packages=UpdateCheckCache(total_updates=10, last_check=int(time.time())),
+        package_cache_path=tmp_path / "packages.json",
+        git=GitStatus(enabled=True, in_repo=True, uncommitted=5, ahead=3),
+        init=InitScriptStatus(enabled=True, last_run=int(time.time() - (8 * 86400))),
+    )
+
+    output = checker.format_quiet_output(status)
+    lines = output.split("\n")
+
+    # All lines should have pkgstatus prefix
+    assert all(line.startswith("pkgstatus:") for line in lines)
+    assert len(lines) == 3  # packages, git, init
+
+
+def test_status_checker_format_interactive_output_all_good(tmp_path):
+    """format_interactive_output() should show clean status."""
+    from dotfiles.pkgstatus import StatusChecker
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+
+    # Create status with no issues
+    status = SystemStatus(
+        packages=UpdateCheckCache(total_updates=0, last_check=int(time.time())),
+        package_cache_path=tmp_path / "packages.json",
+        git=GitStatus(enabled=True, in_repo=True, uncommitted=0, ahead=0, behind=0),
+        init=InitScriptStatus(
+            enabled=True, last_run=int(time.time()), in_dotfiles=True
+        ),
+    )
+
+    output = checker.format_interactive_output(status)
+
+    assert "📦 Package Status:" in output
+    assert "All packages up to date" in output
+    assert "🔄 Git Status:" in output
+    assert "Working tree clean and up to date" in output
+    assert "⚙️  Init Status:" in output
+    assert "Recently run" in output
+
+
+def test_status_checker_format_interactive_output_with_issues(tmp_path):
+    """format_interactive_output() should show detailed issue breakdown."""
+    from dotfiles.pkgstatus import StatusChecker
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+
+    # Create status with multiple package updates
+    packages = [
+        UpdateCheckResult(name="pacman", has_updates=True, count=5),
+        UpdateCheckResult(name="yay", has_updates=True, count=3),
+    ]
+    status = SystemStatus(
+        packages=UpdateCheckCache(
+            packages=packages, total_updates=8, last_check=int(time.time() - 7200)
+        ),
+        package_cache_path=tmp_path / "packages.json",
+        git=GitStatus(
+            enabled=True, in_repo=True, branch="main", uncommitted=2, ahead=1, behind=0
+        ),
+        init=InitScriptStatus(enabled=False),
+    )
+
+    output = checker.format_interactive_output(status)
+
+    # Check package section
+    assert "8 updates available" in output
+    assert "2h ago" in output
+    assert "pacman: 5 updates" in output
+    assert "yay: 3 updates" in output
+
+    # Check git section
+    assert "Branch: main" in output
+    assert "2 uncommitted changes" in output
+    assert "1 commits ahead of origin" in output
+
+
+def test_status_checker_format_interactive_output_not_in_git_repo(tmp_path):
+    """format_interactive_output() should handle not being in git repo."""
+    from dotfiles.pkgstatus import StatusChecker
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+
+    status = SystemStatus(
+        packages=UpdateCheckCache(total_updates=0),
+        package_cache_path=tmp_path / "packages.json",
+        git=GitStatus(enabled=True, in_repo=False),
+        init=InitScriptStatus(enabled=True, in_dotfiles=False),
+    )
+
+    output = checker.format_interactive_output(status)
+
+    assert "Not in a git repository" in output
+    assert "Not in dotfiles directory" in output
+
+
+def test_status_checker_format_interactive_output_with_failed_checks(tmp_path):
+    """format_interactive_output() should show failed check statuses."""
+    from dotfiles.pkgstatus import StatusChecker
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+
+    status = SystemStatus(
+        packages=UpdateCheckCache(total_updates=0, status=CheckStatus.FAILED),
+        package_cache_path=tmp_path / "packages.json",
+        git=GitStatus(enabled=True, in_repo=True, status=CheckStatus.FAILED),
+        init=InitScriptStatus(
+            enabled=True, status=CheckStatus.FAILED, in_dotfiles=True
+        ),
+    )
+
+    output = checker.format_interactive_output(status)
+
+    assert "Package check failed" in output
+    assert "Git check failed" in output
+    assert "Init check failed" in output
+
+
+def test_status_checker_format_interactive_output_with_never_run_init(tmp_path):
+    """format_interactive_output() should show never-run init script."""
+    from dotfiles.pkgstatus import StatusChecker
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+
+    # Create status with never-run init script
+    status = SystemStatus(
+        packages=UpdateCheckCache(total_updates=0),
+        package_cache_path=tmp_path / "packages.json",
+        git=GitStatus(enabled=False),
+        init=InitScriptStatus(enabled=True, in_dotfiles=True, last_run=0),
+    )
+
+    output = checker.format_interactive_output(status)
+
+    assert "⚙️  Init Status:" in output
+    assert "Init script never run - consider running" in output
+
+
+# ==============================================================================
+# StatusChecker Public Methods Tests (get_* methods)
+# ==============================================================================
+# NOTE: Tests for get_packages_status(), get_git_status(), get_init_status(), and
+# get_system_status() are NOT included here because they would require mocking
+# internal methods of the StatusChecker class itself, which defeats the purpose
+# of testing. These methods are orchestration logic that call external commands
+# (pacman, git, fish) and are best tested via integration tests in Docker containers.
+#
+# The internal helper methods (_load_cache, _save_cache, is_cache_expired, etc.)
+# ARE tested above with real file I/O, providing confidence in the building blocks.

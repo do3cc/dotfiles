@@ -2,7 +2,7 @@
 
 from dotfiles.output_formatting import ConsoleOutput
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from rich.table import Table
 
 
@@ -22,6 +22,12 @@ def quiet_output():
 def non_verbose_output():
     """ConsoleOutput instance with verbose=False."""
     return ConsoleOutput(verbose=False, quiet=False)
+
+
+@pytest.fixture
+def logger():
+    """Mock logger for testing ConsoleOutput methods."""
+    return MagicMock()
 
 
 # ==============================================================================
@@ -199,7 +205,6 @@ def test_warning_logs_when_logger_provided(output, logger):
 # ==============================================================================
 
 
-# TODO: REVIEW
 def test_info_prints_blue_with_default_emoji(output):
     """info() should print blue message with bulb emoji."""
     with patch.object(output.console, "print") as mock_print:
@@ -207,7 +212,6 @@ def test_info_prints_blue_with_default_emoji(output):
         mock_print.assert_called_once_with("💡 Some information", style="blue")
 
 
-# TODO: REVIEW
 def test_info_with_custom_emoji(output):
     """info() should use custom emoji."""
     with patch.object(output.console, "print") as mock_print:

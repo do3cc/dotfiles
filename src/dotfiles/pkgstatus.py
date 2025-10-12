@@ -136,23 +136,23 @@ class GitStatus:
     branch: str = "detached"
     status: CheckStatus = CheckStatus.SUCCESS
 
-    def to_dict(self) -> dict[str, Any]:
-        return dict(
-            last_check=self.last_check,
-            enabled=self.enabled,
-            in_repo=self.in_repo,
-            uncommitted=self.uncommitted,
-            ahead=self.ahead,
-            behind=self.behind,
-            branch=self.branch,
-            status=self.status.value,
+    def to_json(self) -> str:
+        return json.dumps(
+            dict(
+                last_check=self.last_check,
+                enabled=self.enabled,
+                in_repo=self.in_repo,
+                uncommitted=self.uncommitted,
+                ahead=self.ahead,
+                behind=self.behind,
+                branch=self.branch,
+                status=self.status.value,
+            )
         )
 
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict())
-
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "GitStatus":
+    def from_json(cls, json_str: str) -> "GitStatus":
+        data = json.loads(json_str)
         return cls(
             last_check=data.get("last_check", 0),
             enabled=data.get("enabled", False),
@@ -163,10 +163,6 @@ class GitStatus:
             branch=data.get("branch", "detached"),
             status=CheckStatus(data.get("status", "success")),
         )
-
-    @classmethod
-    def from_json(cls, json_str: str) -> "GitStatus":
-        return cls.from_dict(json.loads(json_str))
 
 
 @dataclass
@@ -193,9 +189,13 @@ class InitScriptStatus:
 
     @property
     def age_hours(self) -> float:
-        """Hours since init script was last run."""
+        """Hours since init script was last run.
+
+        Returns float('inf') when never run (last_run=0), indicating infinite time ago.
+        This ensures needs_update correctly evaluates to True for never-run scripts.
+        """
         if self.last_run == 0:
-            return 0.0
+            return float("inf")
         return (time.time() - self.last_run) / 3600
 
     @property
@@ -203,20 +203,20 @@ class InitScriptStatus:
         """Whether init script should be run (>7 days since last run)."""
         return self.age_hours > 168
 
-    def to_dict(self) -> dict[str, Any]:
-        return dict(
-            enabled=self.enabled,
-            last_check=self.last_check,
-            last_run=self.last_run,
-            status=self.status.value,
-            in_dotfiles=self.in_dotfiles,
+    def to_json(self) -> str:
+        return json.dumps(
+            dict(
+                enabled=self.enabled,
+                last_check=self.last_check,
+                last_run=self.last_run,
+                status=self.status.value,
+                in_dotfiles=self.in_dotfiles,
+            )
         )
 
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict())
-
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "InitScriptStatus":
+    def from_json(cls, json_str: str) -> "InitScriptStatus":
+        data = json.loads(json_str)
         return cls(
             enabled=data.get("enabled", False),
             last_check=data.get("last_check", 0),
@@ -224,10 +224,6 @@ class InitScriptStatus:
             status=CheckStatus(data.get("status", "success")),
             in_dotfiles=data.get("in_dotfiles", False),
         )
-
-    @classmethod
-    def from_json(cls, json_str: str) -> "InitScriptStatus":
-        return cls.from_dict(json.loads(json_str))
 
 
 @dataclass
@@ -626,8 +622,11 @@ class StatusChecker:
         init_enabled = init_data.enabled
         needs_update = init_data.needs_update
         if init_enabled and needs_update:
-            age_hours = init_data.age_hours
-            messages.append(f"⚙️  Init script not run in {int(age_hours / 24)}d")
+            if init_data.last_run == 0:
+                messages.append("⚙️  Init script never run")
+            else:
+                age_hours = init_data.age_hours
+                messages.append(f"⚙️  Init script not run in {int(age_hours / 24)}d")
 
         # Add tool name prefix to all messages
         if messages:
@@ -696,10 +695,13 @@ class StatusChecker:
                 lines.append(f"   ❌ Init check {init_data.status.value}")
             elif init_data.in_dotfiles:
                 if init_data.needs_update:
-                    age_hours = init_data.age_hours
-                    lines.append(
-                        f"   ⚠️  Last run {int(age_hours / 24)}d ago - consider running"
-                    )
+                    if init_data.last_run == 0:
+                        lines.append("   ⚠️  Init script never run - consider running")
+                    else:
+                        age_hours = init_data.age_hours
+                        lines.append(
+                            f"   ⚠️  Last run {int(age_hours / 24)}d ago - consider running"
+                        )
                 else:
                     last_run = init_data.last_run
                     age_desc = self._format_age(last_run)

@@ -103,7 +103,12 @@ class Linux:
     def check_systemd_service_status(
         self, service: str, logger: LoggingHelpers, output: ConsoleOutput
     ) -> tuple[bool, bool]:
-        """Check if a systemd service is enabled and active"""
+        """Check if a systemd service is enabled and active
+
+        Note: run_command_with_error_handling uses check=True, so if returncode != 0,
+        it raises CalledProcessError. Therefore, if we reach the result, returncode is always 0.
+        We only need to check the stdout content.
+        """
         try:
             # Check if service is enabled
             enabled_result = run_command_with_error_handling(
@@ -112,9 +117,7 @@ class Linux:
                 output,
                 "systemctl is-enabled",
             )
-            is_enabled = (
-                enabled_result.returncode == 0 and "enabled" in enabled_result.stdout
-            )
+            is_enabled = "enabled" in enabled_result.stdout
 
             # Check if service is active
             active_result = run_command_with_error_handling(
@@ -123,12 +126,11 @@ class Linux:
                 output,
                 "systemctl is-active",
             )
-            is_active = (
-                active_result.returncode == 0 and "active" in active_result.stdout
-            )
+            is_active = "active" in active_result.stdout
 
             return is_enabled, is_active
-        except Exception as e:
+        except CalledProcessError as e:
+            # systemctl returns non-zero for disabled/inactive services
             logger.log_exception(e, "systemd_service_check_failed", service=service)
             # If systemctl check fails, assume service needs setup
             return False, False

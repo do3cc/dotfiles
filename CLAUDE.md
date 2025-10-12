@@ -327,6 +327,69 @@ The logging system provides comprehensive abstractions for production debugging:
 - **Unused variables**: Use `log_unused_variables(logger, **vars)` to capture variables that would otherwise trigger linter warnings
 - **Global logger**: All abstractions automatically use the global logger set by `setup_logging()`
 
+### Logger and Output Architecture Pattern
+
+**CRITICAL:** Logger and output instances must NEVER be stored as class instance variables. They must always be passed as function parameters.
+
+**Why this matters:**
+
+- `logger.bind()` returns a NEW logger instance with context attached
+- Context is automatically removed when a function exits its scope
+- Storing logger on `self` breaks this automatic context cleanup
+- This leads to context pollution where old context bleeds into new operations
+
+**Class Design Pattern:**
+
+```python
+# ❌ WRONG - Storing logger/output breaks context management
+class MyTool:
+    def __init__(self, logger: LoggingHelpers, output: ConsoleOutput):
+        self.logger = logger  # BAD!
+        self.output = output  # BAD!
+
+    def do_work(self):
+        self.logger.log_info("work_started")  # Context will leak!
+
+# ✅ CORRECT - Pass logger/output to every method
+class MyTool:
+    def __init__(self):
+        pass  # No logger/output storage
+
+    def do_work(self, logger: LoggingHelpers, output: ConsoleOutput):
+        logger = logger.bind(operation="work")  # Creates new logger
+        logger.log_info("work_started")
+        # Context automatically removed when function exits
+```
+
+**Method Signature Pattern:**
+
+Every method that needs logging or output should follow this signature:
+
+```python
+def method_name(
+    self,
+    # ... other parameters ...
+    logger: LoggingHelpers,
+    output: ConsoleOutput,
+) -> ReturnType:
+    """Docstring"""
+    logger = logger.bind(context_key="value")
+    # ... implementation ...
+```
+
+**Examples from codebase:**
+
+- ✅ `swman.py`: All manager methods use `is_available(self, logger, output)`
+- ✅ `init.py`: All methods like `install_dependencies(self, logger, output)`
+- ✅ `pkgstatus.py`: Methods like `_refresh_git_cache(self, logger, output)`
+
+**When to pass logger/output:**
+
+- Main entry point creates logger/output once
+- Pass them down the call chain to every method that needs them
+- Each method can bind additional context as needed
+- Context is automatically cleaned up at function boundaries
+
 ### Event-Based Logging Pattern
 
 All Python tools **MUST** use event-based logging with snake_case event identifiers instead of human-readable sentences. This pattern enables queryable, machine-parseable logs for production debugging and analytics.
@@ -650,6 +713,52 @@ When writing pytest tests for this repository, follow these conventions:
 - **Batch implementation for review**: Implement in batches, provide line numbers for each batch
 
 #### Testing Approach
+
+- **Test Priority Order** (most important to least):
+  1. **Core business logic first** - Classes and functions with actual logic, algorithms, state management
+  2. **Integration tests** - Verify real-world behavior with actual I/O
+  3. **Property-based tests** - Find edge cases in complex logic using hypothesis
+  4. **Data structures last** - Simple dataclasses are lowest priority
+- **When implementing tests in batches**: Always start with the most complex/risky code. Don't spend all your time on simple data structures.
+- **Don't test trivial dataclass attribute assignment**: Tests that only verify `__init__` stores arguments as attributes test Python's dataclass functionality, not your code. These provide no value and clutter test files.
+
+  ```python
+  # ❌ BAD - tests Python's dataclass functionality, not our code
+  def test_user_initialization():
+      user = User(name="Alice", age=30, email="alice@example.com")
+      assert user.name == "Alice"
+      assert user.age == 30
+      assert user.email == "alice@example.com"
+
+  # ✅ GOOD - tests actual behavior (computed properties, methods, business logic)
+  def test_user_is_adult():
+      user = User(name="Alice", age=30, email="alice@example.com")
+      assert user.is_adult is True  # Tests computed property logic
+
+  def test_user_serialization():
+      user = User(name="Alice", age=30)
+      data = user.to_dict()  # Tests method logic
+      assert data == {"name": "Alice", "age": 30}
+  ```
+
+- **Use `@pytest.mark.parametrize` for simple cases**: When multiple tests differ only in inputs/outputs, parametrize them instead of writing separate test functions
+
+  ```python
+  # ❌ BAD - separate functions for similar tests
+  def test_status_with_updates():
+      result = check_updates(count=5)
+      assert result.has_updates is True
+
+  def test_status_without_updates():
+      result = check_updates(count=0)
+      assert result.has_updates is False
+
+  # ✅ GOOD - parametrized
+  @pytest.mark.parametrize("count,expected", [(5, True), (0, False)])
+  def test_status_has_updates(count, expected):
+      result = check_updates(count=count)
+      assert result.has_updates is expected
+  ```
 
 - **Balance test types**:
   - Unit tests with mocks (for interface verification)
