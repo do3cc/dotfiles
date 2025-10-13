@@ -110,6 +110,41 @@ wt-goto issue-25                       # Quick navigation to matching worktree
 wt-remove issue-25                     # Safely remove worktree after checks
 ```
 
+#### Initializing Worktree Virtual Environment
+
+**CRITICAL:** After creating a new worktree, you MUST initialize its virtual environment. Each worktree needs its own `.venv` with all dependencies installed.
+
+```bash
+# After creating a worktree, navigate to it
+cd worktrees/feature/issue-X-description
+
+# Initialize the virtual environment with ALL dependency groups
+uv sync --all-groups
+
+# Verify installation
+.venv/bin/pytest tests/ -v
+```
+
+**Why this is needed:**
+
+- uv uses a **global cache** (`~/.cache/uv/`) with hard links for packages
+- Each worktree has its own `.venv`, but packages are **deduplicated** via hard links
+- Near-zero disk space overhead - same packages across multiple worktrees share storage
+- Complete isolation - each worktree can have different code versions installed
+
+**What gets installed:**
+
+- `uv sync` - Main project dependencies
+- `--all-groups` - Dev dependencies (pytest, hypothesis, faker, etc.)
+
+**Troubleshooting:**
+
+If tests fail with import errors:
+
+1. Check you ran `uv sync --all-groups` in the worktree directory
+2. Use `.venv/bin/pytest` directly (not system pytest)
+3. Clear stale `VIRTUAL_ENV` environment variable if needed
+
 #### Workflow Guidelines
 
 1. **Create purpose-specific worktrees** for different types of work
@@ -125,8 +160,10 @@ When working with worktrees:
 1. Always check `git worktree list` to understand current setup
 2. Create worktrees in appropriate purpose directories
 3. Use descriptive names that match the issue/PR being worked on
-4. Clean up worktrees after merging branches
-5. Prefer the organized structure over ad-hoc sibling directories
+4. **IMMEDIATELY run `uv sync --all-groups` after creating a worktree** - this is mandatory
+5. Verify tests work: `.venv/bin/pytest tests/ -v`
+6. Clean up worktrees after merging branches
+7. Prefer the organized structure over ad-hoc sibling directories
 
 ## Installation and Setup
 

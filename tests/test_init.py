@@ -30,10 +30,10 @@ def test_environmentconfig_merge_email(email_a: str, email_b: str, email_merge: 
     "attribute", ("packages", "aur_packages", "config_dirs", "systemd_services")
 )
 def test_environmentconfig_merge_duplicatehandling(attribute: str, faker):
-    packages_a = [faker.word() for _ in range(random.randint(1, 50))]
-    packages_b = [faker.word() for _ in range(random.randint(1, 50))]
-    aur_packages_a = [faker.word() for _ in range(random.randint(1, 50))]
-    aur_packages_b = [faker.word() for _ in range(random.randint(1, 50))]
+    packages_a = {faker.word() for _ in range(random.randint(1, 50))}
+    packages_b = {faker.word() for _ in range(random.randint(1, 50))}
+    aur_packages_a = {faker.word() for _ in range(random.randint(1, 50))}
+    aur_packages_b = {faker.word() for _ in range(random.randint(1, 50))}
     config_dirs_a = [(faker.word(), faker.word()) for _ in range(random.randint(1, 50))]
     config_dirs_b = [(faker.word(), faker.word()) for _ in range(random.randint(1, 50))]
     systemd_services_a = [faker.word() for _ in range(random.randint(1, 50))]
@@ -50,16 +50,17 @@ def test_environmentconfig_merge_duplicatehandling(attribute: str, faker):
         config_dirs=config_dirs_b,
         systemd_services=systemd_services_b,
     )
-    duplicate = getattr(env_config_b, attribute)[0]
-    getattr(env_config_a, attribute).append(duplicate)
+    duplicate = list(getattr(env_config_b, attribute))[0]
+    packages_b.__class__
+    getattr(env_config_a, attribute).union({duplicate})
 
     final_config = env_config_a.merge_with(env_config_b)
     # After adding a duplicate, merged list should deduplicate
     # The tested attribute has a duplicate, so total unique = len(set(a+b))
     if attribute == "packages":
-        assert len(set(packages_b + packages_a)) == len(final_config.packages)
+        assert len(packages_b.union(packages_a)) == len(final_config.packages)
     elif attribute == "aur_packages":
-        assert len(set(aur_packages_b + aur_packages_a)) == len(
+        assert len(aur_packages_b.union(aur_packages_a)) == len(
             final_config.aur_packages
         )
     elif attribute == "config_dirs":
@@ -71,10 +72,10 @@ def test_environmentconfig_merge_duplicatehandling(attribute: str, faker):
 
 
 def test_environmentconfig_merge(faker: faker.Faker):
-    packages_a = [faker.word() for _ in range(random.randint(1, 50))]
-    packages_b = [faker.word() for _ in range(random.randint(1, 50))]
-    aur_packages_a = [faker.word() for _ in range(random.randint(1, 50))]
-    aur_packages_b = [faker.word() for _ in range(random.randint(1, 50))]
+    packages_a = {faker.word() for _ in range(random.randint(1, 50))}
+    packages_b = {faker.word() for _ in range(random.randint(1, 50))}
+    aur_packages_a = {faker.word() for _ in range(random.randint(1, 50))}
+    aur_packages_b = {faker.word() for _ in range(random.randint(1, 50))}
     config_dirs_a = [(faker.word(), faker.word()) for _ in range(random.randint(1, 50))]
     config_dirs_b = [(faker.word(), faker.word()) for _ in range(random.randint(1, 50))]
     systemd_services_a = [faker.word() for _ in range(random.randint(1, 50))]
@@ -96,8 +97,8 @@ def test_environmentconfig_merge(faker: faker.Faker):
         ssh_key_email=email_b,
     )
     final_config = env_config_a.merge_with(env_config_b)
-    assert (packages_b + packages_a) == final_config.packages
-    assert (aur_packages_b + aur_packages_a) == final_config.aur_packages
+    assert packages_b.union(packages_a) == final_config.packages
+    assert aur_packages_b.union(aur_packages_a) == final_config.aur_packages
     assert (config_dirs_b + config_dirs_a) == final_config.config_dirs
     assert (systemd_services_b + systemd_services_a) == final_config.systemd_services
     assert (email_a) == final_config.ssh_key_email

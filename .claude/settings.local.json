@@ -40,7 +40,13 @@
       "Read(//home/do3cc/.cargo/**)",
       "Read(//home/do3cc/projects/**)",
       "Read(//tmp/**)",
-      "Bash(while read file)"
+      "Bash(while read file)",
+      "WebFetch(domain:claude.ai)",
+      "Bash(unset VIRTUAL_ENV)",
+      "WebFetch(domain:www.andreagrandi.it)",
+      "WebFetch(domain:docs.astral.sh)",
+      "Bash(.venv/bin/pytest tests/test_init.py::test_help -v)",
+      "Bash(.venv/bin/python:*)"
     ],
     "deny": []
   }
