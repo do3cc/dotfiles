@@ -1777,7 +1777,12 @@ For more information, see the README or CLAUDE.md files.
 )
 @click.option("--quiet", is_flag=True, help="Suppress non-essential output")
 @click.option("--verbose", is_flag=True, help="Show detailed output")
-def main(no_remote: bool, quiet: bool, verbose: bool):
+@click.option(
+    "--clear-cache",
+    is_flag=True,
+    help="Clear cached state (system update timestamp) before running",
+)
+def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
     """Install and configure dotfiles for Linux systems
 
     \\b
@@ -1794,11 +1799,25 @@ def main(no_remote: bool, quiet: bool, verbose: bool):
     """
     # Initialize logging and console output
     logger = setup_logging("init").bind(
-        verbose=verbose, quiet=quiet, no_remote_mode=no_remote
+        verbose=verbose, quiet=quiet, no_remote_mode=no_remote, clear_cache=clear_cache
     )
     output = ConsoleOutput(verbose=verbose, quiet=quiet)
 
     logger.log_info("init_script_started")
+
+    # Clear cache if requested (useful for testing)
+    if clear_cache:
+        cache_file = Path.home() / ".cache" / "dotfiles_last_update"
+        if cache_file.exists():
+            try:
+                cache_file.unlink()
+                output.status("Cleared cache: dotfiles_last_update", logger=logger)
+                logger.log_info("cache_cleared", cache_file=str(cache_file))
+            except OSError as e:
+                output.warning(f"Could not clear cache: {e}", logger=logger)
+                logger.log_exception(e, "cache_clear_failed")
+        else:
+            output.status("No cache to clear", logger=logger)
 
     try:
         # Get environment from environment variable
