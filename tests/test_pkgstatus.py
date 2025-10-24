@@ -271,7 +271,7 @@ def test_init_script_status_to_json():
 
 def test_init_script_status_from_json():
     """from_json() should deserialize from JSON string."""
-    json_str = '{"enabled": false, "last_check": 0, "last_run": 0, "status": "unavailable", "in_dotfiles": false}'
+    json_str = '{"enabled": false, "last_check": 0, "last_run": 0, "status": "unavailable", "dotfiles_found": false}'
     status = InitScriptStatus.from_json(json_str)
 
     assert status.enabled is False
@@ -285,7 +285,7 @@ def test_init_script_status_roundtrip():
         last_check=999,
         last_run=888,
         status=CheckStatus.SUCCESS,
-        in_dotfiles=True,
+        dotfiles_found=True,
     )
 
     json_str = original.to_json()
@@ -295,7 +295,7 @@ def test_init_script_status_roundtrip():
     assert restored.last_check == original.last_check
     assert restored.last_run == original.last_run
     assert restored.status == original.status
-    assert restored.in_dotfiles == original.in_dotfiles
+    assert restored.dotfiles_found == original.dotfiles_found
 
 
 # ==============================================================================
@@ -636,7 +636,7 @@ def test_status_checker_format_interactive_output_all_good(tmp_path):
         package_cache_path=tmp_path / "packages.json",
         git=GitStatus(enabled=True, in_repo=True, uncommitted=0, ahead=0, behind=0),
         init=InitScriptStatus(
-            enabled=True, last_run=int(time.time()), in_dotfiles=True
+            enabled=True, last_run=int(time.time()), dotfiles_found=True
         ),
     )
 
@@ -696,13 +696,13 @@ def test_status_checker_format_interactive_output_not_in_git_repo(tmp_path):
         packages=UpdateCheckCache(total_updates=0),
         package_cache_path=tmp_path / "packages.json",
         git=GitStatus(enabled=True, in_repo=False),
-        init=InitScriptStatus(enabled=True, in_dotfiles=False),
+        init=InitScriptStatus(enabled=True, dotfiles_found=False),
     )
 
     output = checker.format_interactive_output(status)
 
     assert "Not in a git repository" in output
-    assert "Not in dotfiles directory" in output
+    assert "Dotfiles not found at" in output
 
 
 def test_status_checker_format_interactive_output_with_failed_checks(tmp_path):
@@ -716,7 +716,7 @@ def test_status_checker_format_interactive_output_with_failed_checks(tmp_path):
         package_cache_path=tmp_path / "packages.json",
         git=GitStatus(enabled=True, in_repo=True, status=CheckStatus.FAILED),
         init=InitScriptStatus(
-            enabled=True, status=CheckStatus.FAILED, in_dotfiles=True
+            enabled=True, status=CheckStatus.FAILED, dotfiles_found=True
         ),
     )
 
@@ -738,7 +738,7 @@ def test_status_checker_format_interactive_output_with_never_run_init(tmp_path):
         packages=UpdateCheckCache(total_updates=0),
         package_cache_path=tmp_path / "packages.json",
         git=GitStatus(enabled=False),
-        init=InitScriptStatus(enabled=True, in_dotfiles=True, last_run=0),
+        init=InitScriptStatus(enabled=True, dotfiles_found=True, last_run=0),
     )
 
     output = checker.format_interactive_output(status)
@@ -778,7 +778,7 @@ def test_refresh_init_cache_uses_dotfiles_dir_env(tmp_path, monkeypatch):
     init_status = checker._load_cache(
         checker.init_cache, InitScriptStatus, InitScriptStatus, logger
     )
-    assert init_status.in_dotfiles is True
+    assert init_status.dotfiles_found is True
 
 
 def test_refresh_init_cache_uses_default_path_when_env_unset(tmp_path, monkeypatch):
@@ -814,7 +814,31 @@ def test_refresh_init_cache_uses_default_path_when_env_unset(tmp_path, monkeypat
     init_status = checker._load_cache(
         checker.init_cache, InitScriptStatus, InitScriptStatus, logger
     )
-    assert init_status.in_dotfiles is True
+    assert init_status.dotfiles_found is True
+
+
+def test_format_interactive_output_dotfiles_not_found(tmp_path, monkeypatch):
+    """Should show helpful error with DOTFILES_DIR path when dotfiles not found"""
+    from dotfiles.pkgstatus import StatusChecker
+    import os
+
+    checker = StatusChecker(cache_dir=str(tmp_path))
+
+    # Set a non-existent DOTFILES_DIR to test the error message
+    monkeypatch.setenv("DOTFILES_DIR", "/nonexistent/path")
+
+    status = SystemStatus(
+        packages=UpdateCheckCache(),
+        package_cache_path=tmp_path / "packages.json",
+        git=GitStatus(),
+        init=InitScriptStatus(enabled=True, dotfiles_found=False)
+    )
+
+    output = checker.format_interactive_output(status)
+
+    # Should show error with path
+    assert "Dotfiles not found at" in output
+    assert "/nonexistent/path" in output
 
 
 # ==============================================================================

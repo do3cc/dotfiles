@@ -178,14 +178,14 @@ class InitScriptStatus:
         last_check: Unix timestamp of last status check
         last_run: Unix timestamp of last init script execution
         status: Check operation status
-        in_dotfiles: Whether current directory is the dotfiles repository
+        dotfiles_found: Whether dotfiles repository was found at DOTFILES_DIR
     """
 
     enabled: bool = False
     last_check: int = 0
     last_run: int = 0
     status: CheckStatus = CheckStatus.SUCCESS
-    in_dotfiles: bool = False
+    dotfiles_found: bool = False
 
     @property
     def age_hours(self) -> float:
@@ -210,7 +210,7 @@ class InitScriptStatus:
                 last_check=self.last_check,
                 last_run=self.last_run,
                 status=self.status.value,
-                in_dotfiles=self.in_dotfiles,
+                dotfiles_found=self.dotfiles_found,
             )
         )
 
@@ -222,7 +222,7 @@ class InitScriptStatus:
             last_check=data.get("last_check", 0),
             last_run=data.get("last_run", 0),
             status=CheckStatus(data.get("status", "success")),
-            in_dotfiles=data.get("in_dotfiles", False),
+            dotfiles_found=data.get("dotfiles_found", False),
         )
 
 
@@ -559,7 +559,7 @@ class StatusChecker:
         init_script = dotfiles_dir / "init.py"
 
         if init_script.exists():
-            init_data.in_dotfiles = True
+            init_data.dotfiles_found = True
 
             # Check last run time
             last_run_file = Path.home() / ".cache" / "dotfiles_last_update"
@@ -698,7 +698,7 @@ class StatusChecker:
             lines.extend(["", "⚙️  Init Status:"])
             if init_data.status != CheckStatus.SUCCESS:
                 lines.append(f"   ❌ Init check {init_data.status.value}")
-            elif init_data.in_dotfiles:
+            elif init_data.dotfiles_found:
                 if init_data.needs_update:
                     if init_data.last_run == 0:
                         lines.append("   ⚠️  Init script never run - consider running")
@@ -712,7 +712,8 @@ class StatusChecker:
                     age_desc = self._format_age(last_run)
                     lines.append(f"   ✅ Recently run ({age_desc})")
             else:
-                lines.append("   ℹ️  Not in dotfiles directory")
+                dotfiles_dir = os.environ.get("DOTFILES_DIR", "~/projects/dotfiles")
+                lines.append(f"   ❌ Dotfiles not found at {dotfiles_dir}")
 
         return "\n".join(lines)
 
