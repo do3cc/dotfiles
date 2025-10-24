@@ -149,10 +149,13 @@ class ConsoleOutput:
             self._active_progress.stop()
             # Clear the progress lines from terminal
             # This prevents progress spinner from covering the password prompt
+            # Rich Progress can render multiple lines, so clear extra lines to be safe
             UP = "\x1b[1A"  # Move cursor up one line
             CLEAR = "\x1b[2K"  # Clear entire line
-            for _ in self._active_progress.tasks:
-                print(UP + CLEAR + UP, end="")
+            # Clear extra lines (progress bar + any status lines)
+            lines_to_clear = max(len(self._active_progress.tasks), 1) + 1
+            for _ in range(lines_to_clear):
+                print(UP + CLEAR, end="", flush=True)
 
         # Flush any pending Rich output
         self.console.file.flush()
