@@ -383,6 +383,123 @@ class Linux:
                 output.error(f"Unexpected error processing {config_dir_target}: {e}")
                 continue
 
+    def link_local_bin(self, logger: LoggingHelpers, output: ConsoleOutput):
+        """Create symlinks for local_bin files with comprehensive error handling"""
+
+        # Ensure ~/.local/bin exists
+        local_bin_dir = self.homedir / ".local/bin"
+        logger = logger.bind(local_bin_dir=str(local_bin_dir))
+        try:
+            local_bin_dir.mkdir(parents=True, exist_ok=True)
+            logger.log_info("local_bin_directory_created")
+        except OSError as e:
+            logger.log_exception(e, "local_bin_directory_creation_failed")
+            output.error(f"Cannot create {local_bin_dir} directory: {e}", logger=logger)
+            output.info("Try: Check home directory permissions", emoji="💡")
+            raise
+
+        # Determine source directory
+        # Assuming we're in the dotfiles directory or can find it via path resolution
+        # Get the project root by finding where local_bin/ directory exists
+        dotfiles_dir = Path(__file__).parent.parent.parent  # Go up from src/dotfiles/
+        source_dir = dotfiles_dir / "local_bin"
+        logger = logger.bind(source_dir=str(source_dir), dotfiles_dir=str(dotfiles_dir))
+
+        # Handle "*" pattern (all files) or specific file list
+        if "*" in self.config.local_bin_files:
+            # Link all files in local_bin/
+            if not source_dir.exists():
+                logger.log_warning("local_bin_source_not_found")
+                output.warning(
+                    f"local_bin directory not found: {source_dir}", logger=logger
+                )
+                return
+
+            try:
+                files_to_link = [f.name for f in source_dir.iterdir() if f.is_file()]
+                logger = logger.bind(
+                    files_count=len(files_to_link), files=files_to_link
+                )
+                logger.log_info("local_bin_files_discovered")
+            except OSError as e:
+                logger.log_exception(e, "local_bin_directory_read_failed")
+                output.error(f"Cannot read local_bin directory: {e}", logger=logger)
+                return
+        else:
+            # Link only specified files
+            files_to_link = self.config.local_bin_files
+            logger = logger.bind(files_count=len(files_to_link), files=files_to_link)
+            logger.log_info("local_bin_files_from_config")
+
+        if not files_to_link:
+            output.success("No files to link in local_bin/", logger=logger)
+            return
+
+        # Link each file
+        for filename in files_to_link:
+            source_path = source_dir / filename
+            target_path = local_bin_dir / filename
+            logger_bound = logger.bind(
+                filename=filename,
+                source_path=str(source_path),
+                target_path=str(target_path),
+            )
+
+            # Check if source exists
+            if not source_path.exists():
+                logger_bound.log_warning("local_bin_source_file_not_found")
+                output.warning(
+                    f"Source file not found: {source_path}", logger=logger_bound
+                )
+                continue
+
+            # Check if target already exists
+            if target_path.exists():
+                if target_path.is_symlink():
+                    # Check if it points to the right place
+                    try:
+                        current_target = os.readlink(target_path)
+                        if Path(current_target) == source_path:
+                            logger_bound.log_info("local_bin_link_already_correct")
+                            output.success(
+                                f"{filename} already correctly linked",
+                                logger=logger_bound,
+                            )
+                        else:
+                            logger_bound = logger_bound.bind(
+                                current_target=current_target
+                            )
+                            logger_bound.log_warning("local_bin_link_incorrect_target")
+                            output.warning(
+                                f"{filename} is linked to {current_target}, but should link to {source_path}",
+                                logger=logger_bound,
+                            )
+                    except OSError as e:
+                        logger_bound.log_exception(e, "local_bin_readlink_failed")
+                        output.warning(
+                            f"Cannot read symlink for {filename}: {e}",
+                            logger=logger_bound,
+                        )
+                else:
+                    # It's a regular file - conflict!
+                    logger_bound.log_warning("local_bin_file_conflict")
+                    output.warning(
+                        f"{filename} exists as a regular file in ~/.local/bin, skipping symlink",
+                        logger=logger_bound,
+                    )
+            else:
+                # Create the symlink
+                try:
+                    os.symlink(source_path, target_path)
+                    logger_bound.log_info("local_bin_link_created")
+                    output.success(f"Linked {filename}", logger=logger_bound)
+                    self.restart_required = True
+                except OSError as e:
+                    logger_bound.log_exception(e, "local_bin_symlink_creation_failed")
+                    output.error(f"Failed to link {filename}: {e}", logger=logger_bound)
+                    output.info("Try: Check permissions on ~/.local/bin", emoji="💡")
+                    continue
+
     def validate_git_credential_helper(
         self, logger: LoggingHelpers, output: ConsoleOutput
     ) -> bool:
