@@ -47,7 +47,13 @@
       "WebFetch(domain:docs.astral.sh)",
       "Bash(pyright:*)",
       "Bash(ruff check:*)",
-      "Bash(/home/do3cc/.local/bin/pyright src/dotfiles/pkgstatus.py)"
+      "Bash(/home/do3cc/.local/bin/pyright src/dotfiles/pkgstatus.py)",
+      "Bash(while read file)",
+      "WebFetch(domain:claude.ai)",
+      "Bash(unset VIRTUAL_ENV)",
+      "WebFetch(domain:www.andreagrandi.it)",
+      "Bash(.venv/bin/pytest tests/test_init.py::test_help -v)",
+      "Bash(.venv/bin/python:*)"
     ],
     "deny": []
   }

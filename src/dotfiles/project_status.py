@@ -16,7 +16,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from .logging_config import setup_logging
+from .logging_config import setup_logging, LoggingHelpers
 from .output_formatting import ConsoleOutput
 from .process_helper import run_command_with_error_handling
 
@@ -73,29 +73,34 @@ class WorktreeInfo:
 class ProjectStatusChecker:
     """Main class for checking project status"""
 
-    def __init__(self, output: ConsoleOutput):
-        self.logger = setup_logging("project_status")
-        self.output = output
+    def get_github_issues(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> List[IssueInfo]:
+        """Fetch open GitHub issues
 
-    def get_github_issues(self) -> List[IssueInfo]:
-        """Fetch open GitHub issues"""
-        self.logger.log_info("github_issues_fetch_started")
+        Raises:
+            CalledProcessError: If gh command fails
+            TimeoutExpired: If gh command times out
+            JSONDecodeError: If gh returns invalid JSON
+            KeyError: If gh returns unexpected JSON structure
+        """
+        logger.log_info("github_issues_fetch_started")
+
+        result = run_command_with_error_handling(
+            [
+                "gh",
+                "issue",
+                "list",
+                "--json",
+                "number,title,state,labels,assignees,url",
+            ],
+            logger=logger,
+            output=output,
+            description="Fetch GitHub issues",
+            timeout=30,
+        )
 
         try:
-            result = run_command_with_error_handling(
-                [
-                    "gh",
-                    "issue",
-                    "list",
-                    "--json",
-                    "number,title,state,labels,assignees,url",
-                ],
-                logger=self.logger,
-                output=self.output,
-                description="Fetch GitHub issues",
-                timeout=30,
-            )
-
             issues_data: List[Any] = json.loads(result.stdout)
             issues: List[IssueInfo] = []
 
@@ -117,32 +122,48 @@ class ProjectStatusChecker:
                     )
                 )
 
-            self.logger.log_info("github_issues_fetch_completed", count=len(issues))
+            logger.log_info("github_issues_fetch_completed", count=len(issues))
             return issues
 
-        except Exception as e:
-            self.logger.log_exception(e, "github_issues_fetch_failed")
-            return []
+        except json.JSONDecodeError as e:
+            logger.log_exception(
+                e, "github_issues_json_decode_failed", raw_output=result.stdout[:500]
+            )
+            raise
+        except KeyError as e:
+            logger.log_exception(
+                e, "github_issues_unexpected_structure", missing_key=str(e)
+            )
+            raise
 
-    def get_github_prs(self) -> List[PRInfo]:
-        """Fetch open GitHub pull requests"""
-        self.logger.log_info("github_prs_fetch_started")
+    def get_github_prs(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> List[PRInfo]:
+        """Fetch open GitHub pull requests
+
+        Raises:
+            CalledProcessError: If gh command fails
+            TimeoutExpired: If gh command times out
+            JSONDecodeError: If gh returns invalid JSON
+            KeyError: If gh returns unexpected JSON structure
+        """
+        logger.log_info("github_prs_fetch_started")
+
+        result = run_command_with_error_handling(
+            [
+                "gh",
+                "pr",
+                "list",
+                "--json",
+                "number,title,state,headRefName,baseRefName,isDraft,url",
+            ],
+            logger=logger,
+            output=output,
+            description="Fetch GitHub PRs",
+            timeout=30,
+        )
 
         try:
-            result = run_command_with_error_handling(
-                [
-                    "gh",
-                    "pr",
-                    "list",
-                    "--json",
-                    "number,title,state,headRefName,baseRefName,isDraft,url",
-                ],
-                logger=self.logger,
-                output=self.output,
-                description="Fetch GitHub PRs",
-                timeout=30,
-            )
-
             prs_data: List[Any] = json.loads(result.stdout)
             prs: List[PRInfo] = []
 
@@ -159,16 +180,30 @@ class ProjectStatusChecker:
                     )
                 )
 
-            self.logger.log_info("github_prs_fetch_completed", count=len(prs))
+            logger.log_info("github_prs_fetch_completed", count=len(prs))
             return prs
 
-        except Exception as e:
-            self.logger.log_exception(e, "github_prs_fetch_failed")
-            return []
+        except json.JSONDecodeError as e:
+            logger.log_exception(
+                e, "github_prs_json_decode_failed", raw_output=result.stdout[:500]
+            )
+            raise
+        except KeyError as e:
+            logger.log_exception(
+                e, "github_prs_unexpected_structure", missing_key=str(e)
+            )
+            raise
 
-    def get_local_branches(self) -> List[BranchInfo]:
-        """Get information about local branches"""
-        self.logger.log_info("local_branches_analysis_started")
+    def get_local_branches(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> List[BranchInfo]:
+        """Get information about local branches
+
+        Raises:
+            CalledProcessError: If git command fails
+            TimeoutExpired: If git command times out
+        """
+        logger.log_info("local_branches_analysis_started")
 
         try:
             # Get branch info with tracking information
@@ -179,14 +214,14 @@ class ProjectStatusChecker:
                     "--format=%(refname:short)|%(objectname:short)|%(committerdate:iso)|%(upstream:trackshort)",
                     "refs/heads/",
                 ],
-                logger=self.logger,
-                output=self.output,
+                logger=logger,
+                output=output,
                 description="Get branch info",
                 timeout=30,
             )
 
             branches: List[BranchInfo] = []
-            worktrees = self.get_worktrees()
+            worktrees = self.get_worktrees(logger, output)
             worktree_branches: Dict[str, WorktreeInfo] = {
                 wt.branch: wt for wt in worktrees
             }
@@ -230,24 +265,29 @@ class ProjectStatusChecker:
                     )
                 )
 
-            self.logger.log_info(
-                "local_branches_analysis_completed", count=len(branches)
-            )
+            logger.log_info("local_branches_analysis_completed", count=len(branches))
             return branches
 
         except Exception as e:
-            self.logger.log_exception(e, "local_branches_analysis_failed")
-            return []
+            logger.log_exception(e, "local_branches_analysis_failed")
+            raise
 
-    def get_worktrees(self) -> List[WorktreeInfo]:
-        """Get information about git worktrees"""
-        self.logger.log_info("worktrees_analysis_started")
+    def get_worktrees(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> List[WorktreeInfo]:
+        """Get information about git worktrees
+
+        Raises:
+            CalledProcessError: If git command fails
+            TimeoutExpired: If git command times out
+        """
+        logger.log_info("worktrees_analysis_started")
 
         try:
             result = run_command_with_error_handling(
                 ["git", "worktree", "list", "--porcelain"],
-                logger=self.logger,
-                output=self.output,
+                logger=logger,
+                output=output,
                 description="Get worktree info",
                 timeout=30,
             )
@@ -258,7 +298,11 @@ class ProjectStatusChecker:
             for line in result.stdout.strip().split("\n"):
                 if not line:
                     if current_worktree:
-                        worktrees.append(self._process_worktree_info(current_worktree))
+                        worktrees.append(
+                            self._process_worktree_info(
+                                current_worktree, logger, output
+                            )
+                        )
                         current_worktree = {}
                     continue
 
@@ -275,16 +319,20 @@ class ProjectStatusChecker:
 
             # Process last worktree if exists
             if current_worktree:
-                worktrees.append(self._process_worktree_info(current_worktree))
+                worktrees.append(
+                    self._process_worktree_info(current_worktree, logger, output)
+                )
 
-            self.logger.log_info("worktrees_analysis_completed", count=len(worktrees))
+            logger.log_info("worktrees_analysis_completed", count=len(worktrees))
             return worktrees
 
         except Exception as e:
-            self.logger.log_exception(e, "worktrees_analysis_failed")
-            return []
+            logger.log_exception(e, "worktrees_analysis_failed")
+            raise
 
-    def _process_worktree_info(self, wt_data: Dict[str, Any]) -> WorktreeInfo:
+    def _process_worktree_info(
+        self, wt_data: Dict[str, Any], logger: LoggingHelpers, output: ConsoleOutput
+    ) -> WorktreeInfo:
         """Process raw worktree data into WorktreeInfo object"""
         path: str = wt_data.get("path", "")
         branch: str = wt_data.get("branch", "detached")
@@ -305,14 +353,14 @@ class ProjectStatusChecker:
             if not wt_data.get("bare", False):
                 result = run_command_with_error_handling(
                     ["git", "-C", path, "status", "--porcelain"],
-                    logger=self.logger,
-                    output=self.output,
+                    logger=logger,
+                    output=output,
                     description=f"Check worktree status for {path}",
                     timeout=10,
                 )
                 has_uncommitted = bool(result.stdout.strip())
         except Exception as e:
-            self.logger.log_exception(e, "worktree_status_check_failed", path=path)
+            logger.log_exception(e, "worktree_status_check_failed", path=path)
 
         return WorktreeInfo(
             path=path,
@@ -525,14 +573,15 @@ def main():
 
     args = parser.parse_args()
 
+    logger = setup_logging("project_status")
     output = ConsoleOutput()
-    checker = ProjectStatusChecker(output)
+    checker = ProjectStatusChecker()
 
     # Gather all status information
-    issues = [] if args.no_github else checker.get_github_issues()
-    prs = [] if args.no_github else checker.get_github_prs()
-    branches = checker.get_local_branches()
-    worktrees = checker.get_worktrees()
+    issues = [] if args.no_github else checker.get_github_issues(logger, output)
+    prs = [] if args.no_github else checker.get_github_prs(logger, output)
+    branches = checker.get_local_branches(logger, output)
+    worktrees = checker.get_worktrees(logger, output)
 
     # Format and output report
     format_type = "json" if args.json else "text"

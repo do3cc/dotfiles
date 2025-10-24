@@ -11,6 +11,7 @@ dependencies = [
     "structlog>=25.4.0",
     "rich>=13.0.0",
     "click>=8.0.0",
+    "pytest-cov>=7.0.0",
 ]
 
 [project.scripts]
@@ -27,8 +28,41 @@ dev = [
     "pyright>=1.1.405",
 ]
 test = [
-    "pytest>=8.0.0",
-    "hypothesis>=6.0.0",
-    "faker>=30.0.0",
+    "faker>=37.11.0",
+    "hypothesis>=6.140.3",
+    "pytest>=8.4.2",
 ]
-# Trigger PR update
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--verbose",
+    "--strict-markers",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "property: Property-based tests with hypothesis",
+    "slow: Slow-running tests",
+]
+
+[tool.coverage.run]
+source = ["src/dotfiles"]
+omit = ["tests/*", ".venv/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
