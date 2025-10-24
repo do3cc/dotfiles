@@ -40,6 +40,7 @@ class ConsoleOutput:
         self.verbose = verbose
         self.quiet = quiet
         self.console = console
+        self._active_progress: Progress | None = None  # Track active progress display
 
     def status(
         self, message: str, emoji: str = "🔍", logger: LoggingHelpers | None = None
@@ -106,9 +107,10 @@ class ConsoleOutput:
 
             self.console.print(table)
 
+    @contextmanager
     def progress_context(self):
         """Return a Rich progress context for long operations."""
-        return Progress(
+        progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
@@ -116,6 +118,13 @@ class ConsoleOutput:
             console=self.console,
             disable=self.quiet,
         )
+        # Store reference so pause_for_interactive() can stop it
+        self._active_progress = progress
+        try:
+            with progress:
+                yield progress
+        finally:
+            self._active_progress = None
 
     def json(self, data: Any) -> None:
         """Pretty print JSON data."""
@@ -135,11 +144,18 @@ class ConsoleOutput:
                 # Interactive command runs here with clean terminal I/O
                 subprocess.run(["sudo", "command"])
         """
+        # Stop the active progress display to show password prompt
+        if self._active_progress is not None:
+            self._active_progress.stop()
+
         # Flush any pending Rich output
         self.console.file.flush()
 
         try:
             yield
         finally:
+            # Restart the progress display
+            if self._active_progress is not None:
+                self._active_progress.start()
             # Rich automatically resumes on context exit
             self.console.file.flush()

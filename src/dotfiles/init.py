@@ -1911,16 +1911,25 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
         # Use Rich progress bar for the installation steps
         with output.progress_context() as progress:
             task = progress.add_task("Installing dotfiles...", total=len(steps))
+            errors: list[str] = []  # Track failures
 
             for i, (step_name, step_func) in enumerate(steps):
                 step_log = logger.bind(step_num=i, step_name=step_name)
                 try:
                     step_log.log_info("step_started")
                     progress.update(task, description=f"🔄 {step_name}...")
-                    step_func(step_log)
-                    output.success(
-                        f"{step_name} completed successfully", logger=step_log
-                    )
+                    result = step_func(step_log)
+
+                    # Check if step returned False (validation failure)
+                    # Some steps return bool, some return None
+                    if result is False:
+                        error_msg = f"{step_name} validation failed"
+                        errors.append(error_msg)
+                        output.error(error_msg, logger=step_log)
+                    else:
+                        output.success(
+                            f"{step_name} completed successfully", logger=step_log
+                        )
                     progress.advance(task)
                 except KeyboardInterrupt:
                     output.error(f"{step_name} interrupted by user", logger=step_log)
@@ -1930,12 +1939,26 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
                         e,
                         "step_failed",
                     )
+                    error_msg = f"{step_name}: {e}"
+                    errors.append(error_msg)
                     output.error(f"ERROR in {step_name}: {e}")
                     if verbose:
                         output.info("DETAILED ERROR INFORMATION:")
                         traceback.print_exc()
                         output.info("Check the error details above and retry")
-                    return 1
+                    # Continue to next step instead of exiting immediately
+
+        # Report final status
+        if errors:
+            logger = logger.bind(error_count=len(errors), errors=errors)
+            output.error(
+                f"Dotfiles installation completed with {len(errors)} error(s):",
+                "❌",
+                logger=logger,
+            )
+            for error in errors:
+                output.error(f"  - {error}")
+            return 1
 
         logger = logger.bind(restart_required=operating_system.restart_required)
         output.success(
