@@ -1899,6 +1899,10 @@ def main(no_remote: bool, quiet: bool, verbose: bool):
                 lambda logger: operating_system.link_configs(logger, output),
             ),
             (
+                "Linking local bin scripts",
+                lambda logger: operating_system.link_local_bin(logger, output),
+            ),
+            (
                 "Validating git credential helper",
                 lambda logger: operating_system.validate_git_credential_helper(
                     logger, output
