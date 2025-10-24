@@ -873,7 +873,7 @@ class Arch(Linux):
             projects_dir = self.homedir / "projects"
             logger = logger.bind(projects_dir=projects_dir)
             try:
-                projects_dir.mkdir(parents=True)
+                projects_dir.mkdir(parents=True, exist_ok=True)
             except OSError as e:
                 logger.log_exception(e, "projects_directory_creation_failed")
                 output.error(f"Cannot create projects directory: {e}")
