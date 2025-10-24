@@ -1050,8 +1050,8 @@ class Arch(Linux):
                             emoji="🔄",
                             logger=logger,
                         )
-                        run_command_with_error_handling(
-                            ["systemctl", "start", service], logger, output
+                        run_interactive_command(
+                            ["sudo", "systemctl", "start", service], logger, output
                         )
                         output.success(f"Started service: {service}", logger=logger)
                     else:
@@ -1060,8 +1060,10 @@ class Arch(Linux):
                             emoji="🔄",
                             logger=logger,
                         )
-                        run_command_with_error_handling(
-                            ["systemctl", "enable", "--now", service], logger, output
+                        run_interactive_command(
+                            ["sudo", "systemctl", "enable", "--now", service],
+                            logger,
+                            output,
                         )
                         output.success(
                             f"Enabled and started service: {service}", logger=logger
