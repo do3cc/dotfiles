@@ -62,7 +62,7 @@ This is a personal dotfiles repository for Linux systems (primarily Arch/Garuda)
 
 - **Main branch**: `main` (not `master`)
 - **Default remote**: `origin`
-- **Protected branches**: `main` requires PR reviews and status checks
+- **Main branch protection**: Unprotected - allows direct pushes for fast iteration
 
 ## AI Assistant Workflow Rules
 
@@ -71,7 +71,7 @@ This is a personal dotfiles repository for Linux systems (primarily Arch/Garuda)
 - **ALWAYS fetch before branching**: `git fetch origin main`
 - **ALWAYS branch from latest main**: `git checkout -b new-branch origin/main`
 - **NEVER work directly on main branch**
-- **ALWAYS use worktrees for significant changes**: `git worktree add worktrees/feature/feature-name new-branch`
+- **ALWAYS use worktrees for significant changes**: `git worktree add .worktrees/feature/feature-name -b feature-name`
 - **ALWAYS rebase/merge against current main before PR**
 
 ### Safe Development Practices
@@ -85,7 +85,7 @@ This is a personal dotfiles repository for Linux systems (primarily Arch/Garuda)
 
 #### Directory Organization
 
-- All worktrees are located in `worktrees/` subdirectory within the main repository
+- All worktrees are located in `.worktrees/` (hidden) subdirectory within the main repository
 - Organized by purpose: `review/`, `feature/`, `bugfix/`, `experimental/`
 - Use descriptive names: `feature/issue-25-logging-enhancement`
 
@@ -93,8 +93,8 @@ This is a personal dotfiles repository for Linux systems (primarily Arch/Garuda)
 
 ```bash
 # Create new worktrees using organized structure
-git worktree add worktrees/feature/issue-X-description branch-name
-git worktree add worktrees/review/pr-X-description main
+git worktree add .worktrees/feature/issue-X-description -b issue-X-description
+git worktree add .worktrees/review/pr-X-description -b pr-X-description
 
 # List and manage worktrees
 git wtlist                    # List all worktrees (alias)
@@ -103,9 +103,10 @@ wt-list                       # Enhanced listing with structure
 wt-clean                      # Cleanup and maintenance
 
 # Navigation and creation
-wt-new feature issue-25 branch-name    # Create new organized worktree
+wt-new feature issue-25                # Create new organized worktree with new branch
 wt-goto issue-25                       # Quick navigation to matching worktree
 wt-remove issue-25                     # Safely remove worktree after checks
+wt-root                                # Navigate back to project root from any worktree
 ```
 
 #### Workflow Guidelines

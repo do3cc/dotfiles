@@ -7,7 +7,7 @@ function wt-goto --description "Quick navigation to worktrees"
     end
 
     set target $argv[1]
-    set found (find worktrees -name "*$target*" -type d 2>/dev/null | head -1)
+    set found (find .worktrees -name "*$target*" -type d 2>/dev/null | head -1)
 
     if test -n "$found"
         echo "Navigating to: $found"

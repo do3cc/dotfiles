@@ -2,7 +2,7 @@
 nvim.appimage
 __pycache__/
 .envrc
-worktrees/
+.worktrees/
 
 # Testing artifacts
 .hypothesis/

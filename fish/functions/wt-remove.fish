@@ -7,7 +7,7 @@ function wt-remove --description "Safely remove a worktree after checking for un
     end
 
     set target $argv[1]
-    set found (find worktrees -name "*$target*" -type d 2>/dev/null | head -1)
+    set found (find .worktrees -name "*$target*" -type d 2>/dev/null | head -1)
 
     if test -z "$found"
         echo "Worktree matching '$target' not found"
