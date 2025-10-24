@@ -800,10 +800,11 @@ class Arch(Linux):
             Execute pacman commands with real-time output, error handling, and retry logic.
 
             Key improvements implemented here:
-            1. Real-time output streaming (removed capture_output=True)
-            2. Reduced timeout for faster failure detection
-            3. Comprehensive error handling with retries
-            4. Consistent timeout with APT operations (600s)
+            1. Real-time output streaming via run_interactive_command
+            2. Interactive sudo password prompt support
+            3. Reduced timeout for faster failure detection
+            4. Comprehensive error handling with retries
+            5. Consistent timeout with APT operations (600s)
 
             Arch Linux advantages:
             - Uses --noconfirm to prevent interactive prompts (no timezone issues)
@@ -814,20 +815,12 @@ class Arch(Linux):
             for attempt in range(max_retries):
                 pacman_logger = logger.bind(attempt=attempt)
                 try:
-                    # Real-time output streaming configuration
-                    #
-                    # Previous problem: capture_output=True hid all pacman progress from users.
-                    # Users only saw "Installing X packages..." with no visible progress.
-                    #
-                    # Solution: Remove capture_output=True to show real-time package installation.
-                    # Still capture stderr for error handling while stdout flows to terminal.
-                    #
-                    # Timeout reduced from 1800s (30min) to 600s (10min) for consistency with APT
-                    # and faster failure detection in CI environments.
-                    result = run_command_with_error_handling(
+                    # Use interactive command to allow sudo password prompt
+                    result = run_interactive_command(
                         ["sudo", "pacman"] + list(args),
                         pacman_logger,
                         output,
+                        "pacman operation",
                         timeout=600,
                         **kwargs,
                     )
@@ -851,33 +844,7 @@ class Arch(Linux):
                 except CalledProcessError as e:
                     output.error(f"Package installation failed: {e}", logger=logger)
                     output.info(f"Command: sudo pacman {' '.join(args)}", emoji="🔍")
-                    if e.stdout:
-                        output.info(f"STDOUT:\n{e.stdout}", emoji="📄")
-                    if e.stderr:
-                        output.info(f"STDERR:\n{e.stderr}", emoji="📄")
-
-                    # Provide specific advice based on error
-                    stderr_lower = e.stderr.lower() if e.stderr else ""
-                    if "conflict" in stderr_lower:
-                        output.info(
-                            "Try: Resolve conflicts manually or update system first",
-                            emoji="💡",
-                        )
-                    elif "not found" in stderr_lower:
-                        output.info(
-                            "Try: Update package databases with 'pacman -Sy'",
-                            emoji="💡",
-                        )
-                    elif (
-                        "permission denied" in stderr_lower
-                        or "password" in stderr_lower
-                    ):
-                        output.info(
-                            "Try: Configure sudo or run in interactive terminal",
-                            emoji="💡",
-                        )
-                    else:
-                        output.info("Try: Check the error details above", emoji="💡")
+                    # Note: No stdout/stderr available since we don't capture interactive output
                     raise
             raise
 
