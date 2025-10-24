@@ -3,7 +3,7 @@ from subprocess import CalledProcessError, TimeoutExpired, CompletedProcess
 from dataclasses import dataclass, field
 from datetime import datetime
 import os
-from .process_helper import run_command_with_error_handling
+from .process_helper import run_command_with_error_handling, run_interactive_command
 from pathlib import Path
 import socket
 import sys
@@ -563,7 +563,7 @@ class Linux:
                         "Tailscale not connected, running setup...", logger=logger
                     )
                     # Use 'tailscale up' for locked tailnets instead of login
-                    run_command_with_error_handling(
+                    run_interactive_command(
                         ["sudo", "tailscale", "up", "--operator=do3cc"], logger, output
                     )
                 else:
@@ -572,7 +572,7 @@ class Linux:
                 output.status(
                     "Tailscale not available, running setup...", logger=logger
                 )
-                run_command_with_error_handling(
+                run_interactive_command(
                     ["sudo", "tailscale", "up", "--operator=do3cc"], logger, output
                 )
 
