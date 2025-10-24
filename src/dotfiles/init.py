@@ -154,6 +154,10 @@ class Linux:
         """Install NVM and Pyenv with proper error handling"""
         logger.log_progress("starting_dependency_installation")
 
+        # Get dotfiles repo root directory
+        dotfiles_dir = Path(__file__).parent.parent.parent  # Go up from src/dotfiles/
+        install_scripts_dir = dotfiles_dir / "install_scripts"
+
         # Install NVM
         nvm_path = self.homedir / ".local/share/nvm"
         logger = logger.bind(nvm_path=nvm_path)
@@ -163,7 +167,7 @@ class Linux:
             nvm_script = "doesnotexist"
             try:
                 output.status("Installing NVM...", logger=logger)
-                nvm_script = self.homedir / "install_scripts/install_nvm.sh"
+                nvm_script = install_scripts_dir / "install_nvm.sh"
                 logger = logger.bind(nvm_script_path=nvm_script)
 
                 if not nvm_script.exists():
@@ -214,7 +218,7 @@ class Linux:
         if not pyenv_path.exists():
             try:
                 output.status("Installing Pyenv...")
-                pyenv_script = self.homedir / "install_scripts/install_pyenv.sh"
+                pyenv_script = install_scripts_dir / "install_pyenv.sh"
                 logger = logger.bind(pyenv_script=pyenv_script)
                 if not pyenv_script.exists():
                     output.error(
