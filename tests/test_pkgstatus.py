@@ -761,7 +761,8 @@ def test_refresh_init_cache_uses_dotfiles_dir_env(tmp_path, monkeypatch):
     # Setup fake dotfiles repo in custom location
     fake_dotfiles = tmp_path / "custom-dotfiles"
     fake_dotfiles.mkdir()
-    (fake_dotfiles / "init.py").touch()
+    (fake_dotfiles / "src" / "dotfiles").mkdir(parents=True)
+    (fake_dotfiles / "src" / "dotfiles" / "init.py").touch()
 
     # Create and change to different directory
     other_dir = tmp_path / "other-dir"
@@ -793,7 +794,8 @@ def test_refresh_init_cache_uses_default_path_when_env_unset(tmp_path, monkeypat
     # Create fake default dotfiles location
     default_dotfiles = tmp_path / "projects" / "dotfiles"
     default_dotfiles.mkdir(parents=True)
-    (default_dotfiles / "init.py").touch()
+    (default_dotfiles / "src" / "dotfiles").mkdir(parents=True)
+    (default_dotfiles / "src" / "dotfiles" / "init.py").touch()
 
     # Mock Path.expanduser to redirect to our tmp_path
     original_expanduser = Path.expanduser

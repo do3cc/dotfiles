@@ -554,9 +554,9 @@ class StatusChecker:
 
         # Get dotfiles directory from environment or use default
         dotfiles_dir = Path(
-            os.environ.get("DOTFILES_DIR", "~/projects/dotfiles")
+            os.environ.get("DOTFILES_DIR", "/home/do3cc/projects/dotfiles")
         ).expanduser()
-        init_script = dotfiles_dir / "init.py"
+        init_script = dotfiles_dir / "src" / "dotfiles" / "init.py"
 
         if init_script.exists():
             init_data.dotfiles_found = True
@@ -712,7 +712,7 @@ class StatusChecker:
                     age_desc = self._format_age(last_run)
                     lines.append(f"   ✅ Recently run ({age_desc})")
             else:
-                dotfiles_dir = os.environ.get("DOTFILES_DIR", "~/projects/dotfiles")
+                dotfiles_dir = os.environ.get("DOTFILES_DIR", "/home/do3cc/projects/dotfiles")
                 lines.append(f"   ❌ Dotfiles not found at {dotfiles_dir}")
 
         return "\n".join(lines)
