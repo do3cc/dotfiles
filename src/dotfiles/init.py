@@ -538,16 +538,27 @@ class Linux:
                 )
                 return False
 
-            # Test if credential helper responds
+            # Test if credential helper responds to 'get' command
+            # According to git credential protocol, helpers must receive a command
+            # (get, store, or erase) and input via stdin in key=value format
             try:
-                run_command_with_error_handling(
-                    [str(libsecret_path)], logger, output, timeout=5, input=""
+                # Test with 'get' command and empty stdin (newline triggers protocol end)
+                test_input = "\n"  # Empty input followed by blank line
+                result = run_command_with_error_handling(
+                    [str(libsecret_path), "get"],
+                    logger,
+                    output,
+                    timeout=5,
+                    input=test_input,
                 )
-                # libsecret helper should exit cleanly when given empty input
+                # Helper should exit with code 0 and produce no output for empty query
+                # This confirms the helper accepts the protocol and can be invoked
                 output.success(
                     "Git credential helper (libsecret) is properly configured",
                     logger=logger,
                 )
+                logger = logger.bind(returncode=result.returncode)
+                logger.log_info("git_credential_helper_validated")
                 return True
             except TimeoutExpired:
                 output.warning("Git credential helper test timed out", logger=logger)
