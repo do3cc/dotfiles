@@ -45,9 +45,6 @@ class UpdateResult:
 
 
 class PackageManager(ABC):
-    name: str
-    type: ManagerType
-
     def __init__(self, name: str, manager_type: ManagerType) -> None:
         self.name: str = name
         self.type: ManagerType = manager_type

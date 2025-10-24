@@ -32,8 +32,8 @@ class EnvironmentConfig:
     """Type-safe configuration for a specific environment."""
 
     # Package management
-    packages: set[str] = field(default_factory=set[str])
-    aur_packages: set[str] = field(default_factory=set[str])
+    packages: list[str] = field(default_factory=list[str])
+    aur_packages: list[str] = field(default_factory=list[str])
 
     # Configuration directories: (source_dir, target_dir)
     config_dirs: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
@@ -47,10 +47,14 @@ class EnvironmentConfig:
     def merge_with(self, base_config: "EnvironmentConfig") -> "EnvironmentConfig":
         """Merge this config with a base, with this taking priority."""
         return EnvironmentConfig(
-            packages=base_config.packages.union(self.packages),
-            aur_packages=base_config.aur_packages.union(self.aur_packages),
-            config_dirs=base_config.config_dirs + self.config_dirs,
-            systemd_services=base_config.systemd_services + self.systemd_services,
+            packages=list(set(base_config.packages).union(set(self.packages))),
+            aur_packages=list(
+                set(base_config.aur_packages).union(set(self.aur_packages))
+            ),
+            config_dirs=list(set(base_config.config_dirs).union(set(self.config_dirs))),
+            systemd_services=list(
+                set(base_config.systemd_services).union(set(self.systemd_services))
+            ),
             ssh_key_email=self.ssh_key_email or base_config.ssh_key_email,
         )
 
@@ -62,6 +66,10 @@ class Linux:
         no_remote_mode: bool = False,
         homedir: Path = Path("~").expanduser(),
     ):
+        if environment not in VALID_ENVIRONMENTS:
+            raise AttributeError(
+                f"Unknown Environment {environment}, must be one of {VALID_ENVIRONMENTS}"
+            )
         self.environment = environment
         self.no_remote_mode = no_remote_mode
         # Single source of truth for this environment's configuration
@@ -126,7 +134,7 @@ class Linux:
                 output,
                 "systemctl is-active",
             )
-            is_active = "active" in active_result.stdout
+            is_active = active_result.stdout.startswith("active")
 
             return is_enabled, is_active
         except CalledProcessError as e:
@@ -574,7 +582,7 @@ class Arch(Linux):
         """Get base configuration for Arch Linux systems."""
         base = super()._get_base_config()
         arch_config = EnvironmentConfig(
-            packages={
+            packages=[
                 "ast-grep",  # structural code search tool
                 "bat",  # syntax highlighted cat alternative
                 "direnv",  # environment variable manager
@@ -613,12 +621,12 @@ class Arch(Linux):
                 "uv",  # fast Python package manager
                 "wget",  # web file downloader
                 "yarn",  # Node.js package manager
-            },
-            aur_packages={
+            ],
+            aur_packages=[
                 "google-java-format",  # Java formatting tool
                 "nodejs-markdown-toc",  # TOC Generator in javascript
                 "tmux-plugin-manager",  # Tmux Plugin Manager (TPM)
-            },
+            ],
         )
         return arch_config.merge_with(base)
 
@@ -629,7 +637,7 @@ class Arch(Linux):
         # Add Arch-specific environment configurations
         arch_configs = {
             "private": EnvironmentConfig(
-                packages={
+                packages=[
                     "bitwarden",  # password manager
                     "firefox",  # web browser
                     "ghostscript",  # PostScript and PDF interpreter
@@ -638,7 +646,7 @@ class Arch(Linux):
                     "otf-font-awesome",  # icon font
                     "python-gobject",  # Python GObject bindings
                     "tailscale",  # mesh VPN service
-                },
+                ],
                 systemd_services=["tailscaled"],
             ),
         }
@@ -653,15 +661,15 @@ class Arch(Linux):
         return merged_configs
 
     def check_packages_installed(
-        self, packages: set[str], logger: LoggingHelpers, output: ConsoleOutput
-    ) -> tuple[set[str], set[str]]:
+        self, packages: list[str], logger: LoggingHelpers, output: ConsoleOutput
+    ) -> tuple[list[str], list[str]]:
         """Check which packages are already installed via pacman"""
         logger = logger.bind(package_count=len(packages), packages=packages)
         logger.log_info("checking_pacman_packages")
 
         if not packages:
             logger.log_info("no_packages_to_check", logger=logger)
-            return set(), set()
+            return [], []
 
         try:
             result = run_command_with_error_handling(
@@ -671,21 +679,21 @@ class Arch(Linux):
             # pacman -Q returns 0 if all packages are installed
             if result.returncode == 0:
                 logger.log_info("all_packages_installed", logger=logger)
-                return packages, set()
+                return packages, []
 
             # Some packages are missing, check individually
             logger.log_info("checking_packages_individually", logger=logger)
-            installed: set[str] = set()
-            missing: set[str] = set()
+            installed: list[str] = []
+            missing: list[str] = []
 
             for package in packages:
                 check_result = run_command_with_error_handling(
                     ["pacman", "-", package], logger, output
                 )
                 if check_result.returncode == 0:
-                    installed.add(package)
+                    installed.append(package)
                 else:
-                    missing.add(package)
+                    missing.append(package)
 
             logger = logger.bind(
                 installed_count=len(installed),
@@ -700,7 +708,7 @@ class Arch(Linux):
         except Exception as e:
             logger.log_exception(e, "pacman_package_check_failed")
             # If pacman check fails, assume all packages need installation
-            return set(), packages
+            return [], packages
 
     def should_update_system(self) -> bool:
         """Check if system update needed (not done in last 24 hours)"""
@@ -875,7 +883,7 @@ class Arch(Linux):
 
         try:
             # Check and install base packages
-            base_packages = {"git", "base-devel"}
+            base_packages = ["git", "base-devel"]
             output.status("Checking base development tools...")
             installed, missing = self.check_packages_installed(
                 base_packages, logger, output
