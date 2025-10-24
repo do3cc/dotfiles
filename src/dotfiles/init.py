@@ -288,7 +288,7 @@ class Linux:
         # Ensure ~/.config exists
         config_base_dir = self.homedir / ".config"
         try:
-            config_base_dir.mkdir(parents=True)
+            config_base_dir.mkdir(parents=True, exist_ok=True)
         except OSError as e:
             output.error(
                 f"ERROR: Cannot create {config_base_dir} directory: {e}", logger=logger
