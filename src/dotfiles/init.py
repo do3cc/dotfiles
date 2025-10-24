@@ -442,7 +442,7 @@ class Linux:
                         f"Changing shell from {user_entry.pw_shell} to fish",
                         logger=logger,
                     )
-                    run_command_with_error_handling(
+                    run_interactive_command(
                         ["chsh", "-s", "/usr/bin/fish"],
                         logger,
                         output,
