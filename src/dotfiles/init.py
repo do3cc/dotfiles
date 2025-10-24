@@ -289,6 +289,9 @@ class Linux:
 
     def link_configs(self, logger: LoggingHelpers, output: ConsoleOutput):
         """Create symlinks with comprehensive error handling"""
+        # Get dotfiles repo root directory
+        dotfiles_dir = Path(__file__).parent.parent.parent  # Go up from src/dotfiles/
+
         # Ensure ~/.config exists
         config_base_dir = self.homedir / ".config"
         try:
@@ -302,7 +305,7 @@ class Linux:
 
         for config_dir_src, config_dir_target in self.config.config_dirs:
             target_path = self.homedir / f".config/{config_dir_target}"
-            source_path = self.homedir / f"{config_dir_src}"
+            source_path = dotfiles_dir / config_dir_src
             logger = logger.bind(target_path=target_path, source_path=source_path)
 
             try:
