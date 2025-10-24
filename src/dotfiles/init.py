@@ -38,6 +38,9 @@ class EnvironmentConfig:
     # Configuration directories: (source_dir, target_dir)
     config_dirs: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
 
+    # Local bin files to link
+    local_bin_files: list[str] = field(default_factory=list[str])
+
     # System services to enable
     systemd_services: list[str] = field(default_factory=list[str])
 
@@ -52,6 +55,9 @@ class EnvironmentConfig:
                 set(base_config.aur_packages).union(set(self.aur_packages))
             ),
             config_dirs=list(set(base_config.config_dirs).union(set(self.config_dirs))),
+            local_bin_files=list(
+                set(base_config.local_bin_files).union(set(self.local_bin_files))
+            ),
             systemd_services=list(
                 set(base_config.systemd_services).union(set(self.systemd_services))
             ),
@@ -87,6 +93,7 @@ class Linux:
                 ("tmux", "tmux"),
                 ("git", "git"),
             ],
+            local_bin_files=["*"],
             ssh_key_email="sshkeys@patrick-gerken.de",
         )
 
