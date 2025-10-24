@@ -8,6 +8,7 @@ Separated from logging to maintain single responsibility principle.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from rich.console import Console
 from rich.progress import (
     Progress,
@@ -120,3 +121,25 @@ class ConsoleOutput:
         """Pretty print JSON data."""
         if not self.quiet:
             rich_print(data)
+
+    @contextmanager
+    def pause_for_interactive(self):
+        """Pause Rich live displays for interactive command execution
+
+        This context manager stops any active Rich displays (progress bars,
+        live status, etc.) to allow raw terminal I/O for interactive commands
+        like sudo password prompts.
+
+        Usage:
+            with output.pause_for_interactive():
+                # Interactive command runs here with clean terminal I/O
+                subprocess.run(["sudo", "command"])
+        """
+        # Flush any pending Rich output
+        self.console.file.flush()
+
+        try:
+            yield
+        finally:
+            # Rich automatically resumes on context exit
+            self.console.file.flush()
