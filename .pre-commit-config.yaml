@@ -59,3 +59,9 @@ repos:
         args: [-w]
         language: system
         files: \.(sh|bash)$
+      - id: forbid-review-markers
+        name: forbid-review-markers
+        entry: .pre-commit-hooks/forbid-review-markers.sh
+        language: system
+        files: \.(py|sh|bash|fish|lua|java|js|ts|tsx|jsx|md)$
+        pass_filenames: true

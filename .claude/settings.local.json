@@ -39,7 +39,15 @@
       "Read(//home/do3cc/.config/**)",
       "Read(//home/do3cc/.cargo/**)",
       "Read(//home/do3cc/projects/**)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(pacman:*)",
+      "Bash(yay -Ss:*)",
+      "Bash(pip search:*)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:docs.astral.sh)",
+      "Bash(pyright:*)",
+      "Bash(ruff check:*)",
+      "Bash(/home/do3cc/.local/bin/pyright src/dotfiles/pkgstatus.py)"
     ],
     "deny": []
   }

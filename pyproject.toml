@@ -26,4 +26,9 @@ packages = ["src/dotfiles"]
 dev = [
     "pyright>=1.1.405",
 ]
+test = [
+    "pytest>=8.0.0",
+    "hypothesis>=6.0.0",
+    "faker>=30.0.0",
+]
 # Trigger PR update

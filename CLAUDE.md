@@ -8,6 +8,52 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **ALWAYS run the pre-commit or prek check when you are done editing files**
 - When editing markdown files, follow the markdownlint rules
 
+### TODO: REVIEW Markers for Code Changes
+
+**MANDATORY**: When modifying any code, you MUST add `# TODO: REVIEW` markers to highlight changes for human review.
+
+#### Marker Placement Rules
+
+1. **Above function/method definitions** when modifying them:
+
+   ```python
+   # TODO: REVIEW
+   def updated_function():
+       """This function was modified."""
+       pass
+   ```
+
+2. **Above specific lines** when making other changes:
+
+   ```python
+   def existing_function():
+       # TODO: REVIEW
+       new_line = "added by Claude"
+       existing_line = "was here before"
+   ```
+
+3. **For multi-line changes**, place marker above the first changed line:
+
+   ```python
+   # TODO: REVIEW
+   if condition:
+       new_logic()
+       more_new_logic()
+   ```
+
+#### Pre-commit Enforcement
+
+- A pre-commit hook **blocks commits** containing `# TODO: REVIEW` markers
+- You must manually remove markers after reviewing changes before committing
+- This ensures all AI-generated code receives human review
+
+#### Benefits
+
+- **Forces explicit review** of all AI-generated changes
+- **Prevents accidental commits** of unreviewed code
+- **Visual markers** in editors (LazyVim todo-comments plugin)
+- **Maintains code quality** through mandatory human oversight
+
 ## Overview
 
 This is a personal dotfiles repository for Linux systems (primarily Arch/Garuda) containing configuration files for development tools and shell environments. The repository is structured to support multiple Linux distributions through a Python-based installation system.
@@ -279,6 +325,76 @@ The logging system provides comprehensive abstractions for production debugging:
 - **Unused variables**: Use `log_unused_variables(logger, **vars)` to capture variables that would otherwise trigger linter warnings
 - **Global logger**: All abstractions automatically use the global logger set by `setup_logging()`
 
+### Event-Based Logging Pattern
+
+All Python tools **MUST** use event-based logging with snake_case event identifiers instead of human-readable sentences. This pattern enables queryable, machine-parseable logs for production debugging and analytics.
+
+**Event Naming Conventions:**
+
+- Use **snake_case** identifiers: `update_completed`, `manager_availability_check`
+- Use **consistent event names** across all tools for the same type of operation
+- Keep events **short and descriptive**: `update_started`, `update_failed`, `update_timeout`
+- Avoid sentences or variable phrasing: ~~`"Pacman update was successful"`~~ → `"update_completed"`
+
+**Context Binding Pattern:**
+
+ALWAYS bind structured data to the logger using `logger.bind()`, which creates a **new logger instance** with the context attached. This ensures all subsequent log calls include the context without repeating it.
+
+**CRITICAL:** `bind()` returns a new logger - you MUST reassign it:
+
+```python
+# ✅ CORRECT - reassign the logger
+logger = logger.bind(package_manager="pacman", operation="update")
+logger.log_info("update_started")  # Context automatically included
+
+# ❌ WRONG - context is lost
+logger.bind(package_manager="pacman")  # Returns new logger but discarded!
+logger.log_info("update_started")      # Missing context
+```
+
+**Standard Event Categories:**
+
+- **Availability checks**: `manager_availability_check`
+- **Update operations**: `update_started`, `update_completed`, `update_failed`, `update_timeout`, `update_simulated`
+- **Check operations**: `update_check_completed`, `update_check_failed`
+- **Exceptions**: `unexpected_exception`
+- **Cache operations**: `cache_update_failed`
+
+**Example Usage:**
+
+```python
+# Initialize and bind base context
+logger = setup_logging("swman")
+logger = logger.bind(manager="pacman", manager_type="system")
+
+# Operation-level context binding
+logger.log_info("manager_availability_check", is_available=True)
+
+# Bind additional context before update
+logger = logger.bind(dry_run=False, updates_count=5)
+logger.log_info("update_started")
+
+# Success logging with new context
+logger = logger.bind(duration=12.5, returncode=0)
+logger.log_info("update_completed")
+
+# Error logging preserves all bound context
+logger.log_error("update_failed")
+
+# Exception logging with event identifier
+try:
+    risky_operation()
+except Exception as e:
+    logger.log_exception(e, "unexpected_exception")
+```
+
+**Benefits:**
+
+- **Queryability**: `jq 'select(.event=="update_completed")' < dotfiles.log`
+- **Aggregation**: Count events, measure time between events
+- **Consistency**: Standardized event names across all tools
+- **Analytics**: Track success rates, failure patterns, performance metrics
+
 ### Log File Management
 
 - **Location**: `~/.cache/dotfiles/logs/dotfiles.log`
@@ -315,6 +431,96 @@ except Exception as e:
 ```
 
 This enhanced logging provides complete observability into every operation, error, and progress step for production debugging.
+
+## Console Output Guidelines
+
+All Python tools use **Click** for CLI parsing and **Rich** for output formatting. These libraries serve different purposes and should be used appropriately.
+
+### Click vs Rich Usage
+
+**Click - CLI Framework**
+
+Use Click for:
+
+- Command-line argument parsing: `@click.command()`, `@click.option()`
+- Input validation and type checking
+- Automatic help text generation: `ctx.get_help()`
+- Command grouping and subcommands
+- Outputting pre-formatted multi-line strings: `click.echo(formatted_string)`
+
+**Rich - Terminal Output Library**
+
+Use Rich (via `ConsoleOutput`) for:
+
+- All formatted output (tables, colors, styling)
+- Status messages: `output.status()`, `output.success()`, `output.error()`
+- Progress bars and spinners: `output.progress_context()`
+- Tables: `output.table()`
+- JSON output: `output.json()`
+- Any output that benefits from styling or markup
+
+### Standard Pattern
+
+```python
+import click
+from output_formatting import ConsoleOutput
+
+@click.command()
+@click.option("--verbose", is_flag=True, help="Show detailed output")
+@click.option("--quiet", is_flag=True, help="Suppress non-essential output")
+def main(verbose: bool, quiet: bool):
+    """Tool description"""
+
+    # Initialize Rich-based output
+    output = ConsoleOutput(verbose=verbose, quiet=quiet)
+
+    # Use Rich for all user-facing output
+    output.status("Checking for updates...")
+    output.table("Results", ["Name", "Status"], rows)
+    output.success("Operation completed!")
+
+    # Only use click.echo() for:
+    # 1. Help text
+    if some_error:
+        ctx = click.get_current_context()
+        click.echo(ctx.get_help())
+
+    # 2. Pre-formatted multi-line strings (rare)
+    formatted_output = build_complex_output()  # Returns string with \n
+    click.echo(formatted_output)
+```
+
+### When to Use click.echo()
+
+**Appropriate uses:**
+
+1. **Help text**: `click.echo(ctx.get_help())` - Click's domain
+2. **Pre-formatted strings**: When you have a fully formatted multi-line string and just need to print it
+
+**Avoid using click.echo() for:**
+
+- Status messages → Use `output.status()`
+- Errors → Use `output.error()`
+- Tables → Use `output.table()`
+- Styled output → Use `output.success()`, `output.warning()`, etc.
+
+### Benefits
+
+**Rich advantages:**
+
+- Automatic TTY detection (plain text for pipes)
+- Consistent styling across all tools
+- Advanced formatting (tables, progress, markup)
+- Better accessibility (screen readers)
+- Emoji and Unicode support
+
+**Click advantages:**
+
+- Lightweight for simple string output
+- Guaranteed plain output when needed
+- Native help text integration
+
+**Best practice:** Default to Rich (via `ConsoleOutput`) for all output unless you specifically need Click's help text functionality.
 
 ## Testing
 
@@ -456,3 +662,37 @@ The project includes custom slash commands for quick project status analysis:
 ```
 
 These commands leverage the `dotfiles-status` tool and provide Claude with structured prompts for consistent, actionable project analysis.
+
+### Issue Management Commands
+
+**`/evaluate-issues`** - Comprehensive GitHub issue evaluation and management:
+
+This command performs a complete audit of all open GitHub issues:
+
+**Complexity Labeling:**
+
+- Adds missing `complexity` labels (easy/medium/hard) based on issue scope
+- Never changes existing complexity labels, only adds when missing
+- Uses consistent criteria: easy (simple changes), medium (moderate refactoring), hard (architectural changes)
+
+**Plan Status Tracking:**
+
+- Checks if issue has a branch with implementation plan
+- Labels with `has-plan` if plan file exists in branch
+- Labels with `needs-plan` if no branch or plan file found
+- Automatically removes conflicting labels
+
+**Worktree Management:**
+
+- Ensures local worktrees exist for all branches
+- Creates missing worktrees in appropriate `worktrees/<type>/` directories
+- Checks branch sync status against origin/main
+- Reports branches that need rebasing (does not auto-rebase)
+
+**Output:**
+
+- Summary table showing issue status, complexity, plan status, branch sync
+- Actionable recommendations for next steps
+- Identifies blocking issues or missing plans
+
+**Usage:** Simply run `/evaluate-issues` to audit all open issues and ensure proper project organization.
