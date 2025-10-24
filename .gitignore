@@ -3,3 +3,16 @@ nvim.appimage
 __pycache__/
 .envrc
 worktrees/
+
+# Testing artifacts
+.hypothesis/
+*.log
+
+# Python
+.venv/
+*.pyc
+.pytest_cache/
+.coverage
+
+# Development
+calendar-sync/
