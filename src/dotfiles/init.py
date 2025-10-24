@@ -1247,7 +1247,7 @@ class Debian(Linux):
 
                 # Step 1: Create symlink from /etc/localtime to UTC timezone data
                 # This is the primary way Linux systems determine the current timezone
-                run_command_with_error_handling(
+                run_interactive_command(
                     ["sudo", "ln", "-fs", "/usr/share/zoneinfo/UTC", "/etc/localtime"],
                     logger,
                     output,
@@ -1257,7 +1257,7 @@ class Debian(Linux):
 
                 # Step 2: Set the timezone name in /etc/timezone for consistency
                 # Some tools and packages read this file to determine the timezone name
-                run_command_with_error_handling(
+                run_interactive_command(
                     ["sudo", "sh", "-c", "echo 'UTC' > /etc/timezone"],
                     logger,
                     output,
