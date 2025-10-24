@@ -147,6 +147,12 @@ class ConsoleOutput:
         # Stop the active progress display to show password prompt
         if self._active_progress is not None:
             self._active_progress.stop()
+            # Clear the progress lines from terminal
+            # This prevents progress spinner from covering the password prompt
+            UP = "\x1b[1A"  # Move cursor up one line
+            CLEAR = "\x1b[2K"  # Clear entire line
+            for _ in self._active_progress.tasks:
+                print(UP + CLEAR + UP, end="")
 
         # Flush any pending Rich output
         self.console.file.flush()
