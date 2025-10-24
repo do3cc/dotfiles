@@ -541,9 +541,15 @@ class Linux:
             # Test if credential helper responds to 'get' command
             # According to git credential protocol, helpers must receive a command
             # (get, store, or erase) and input via stdin in key=value format
+            #
+            # The libsecret helper requires at minimum:
+            # - protocol field
+            # - host OR path field
+            # Without these, it exits with status 1
             try:
-                # Test with 'get' command and empty stdin (newline triggers protocol end)
-                test_input = "\n"  # Empty input followed by blank line
+                # Test with 'get' command and minimal valid protocol input
+                # This is a dummy query that won't match any stored credentials
+                test_input = "protocol=https\nhost=example.com\n\n"
                 result = run_command_with_error_handling(
                     [str(libsecret_path), "get"],
                     logger,
@@ -551,8 +557,9 @@ class Linux:
                     timeout=5,
                     input=test_input,
                 )
-                # Helper should exit with code 0 and produce no output for empty query
-                # This confirms the helper accepts the protocol and can be invoked
+                # Helper should exit with code 0 (success) even if no credentials found
+                # An empty output is expected for this test query
+                # This confirms the helper can be invoked and follows the protocol
                 output.success(
                     "Git credential helper (libsecret) is properly configured",
                     logger=logger,
