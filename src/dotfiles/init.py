@@ -1286,10 +1286,11 @@ class Debian(Linux):
             Execute APT commands with real-time output, error handling, and retry logic.
 
             Key improvements implemented here:
-            1. Real-time output streaming (removed capture_output=True)
-            2. Non-interactive environment setup (DEBIAN_FRONTEND=noninteractive)
-            3. Reduced timeout for faster failure detection
-            4. Comprehensive error handling with retries
+            1. Real-time output streaming via run_interactive_command
+            2. Interactive sudo password prompt support
+            3. Non-interactive environment setup (DEBIAN_FRONTEND=noninteractive)
+            4. Reduced timeout for faster failure detection
+            5. Comprehensive error handling with retries
 
             Note: DEBIAN_FRONTEND=noninteractive may not work with sudo due to
             environment variable filtering, but we set it anyway as a fallback.
@@ -1300,27 +1301,15 @@ class Debian(Linux):
                 try:
                     logger = logger.bind(retry_attempt=attempt)
                     # Set up non-interactive environment to prevent prompts
-                    #
-                    # Problem: sudo often drops environment variables for security.
-                    # Even with env parameter, DEBIAN_FRONTEND may not reach apt-get.
-                    # This is why we pre-configure timezone as the primary solution.
                     env = os.environ.copy()
                     env["DEBIAN_FRONTEND"] = "noninteractive"
 
-                    # Real-time output streaming configuration
-                    #
-                    # Previous problem: capture_output=True hid all APT progress from users.
-                    # Users only saw "Installing X packages..." with no visible progress.
-                    #
-                    # Solution: Remove capture_output=True to show real-time package installation.
-                    # Still capture stderr for error handling while stdout flows to terminal.
-                    #
-                    # Timeout reduced from 1800s (30min) to 600s (10min) for faster failure detection
-                    # while still allowing time for large package downloads.
-                    result = run_command_with_error_handling(
+                    # Use interactive command to allow sudo password prompt
+                    result = run_interactive_command(
                         ["sudo", "apt-get"] + list(args),
                         logger,
                         output,
+                        "apt-get operation",
                         env=env,
                         timeout=600,
                         **kwargs,
@@ -1340,29 +1329,13 @@ class Debian(Linux):
                     output.status("Retrying in 10 seconds...", emoji="🔄")
                     time.sleep(10)
                 except CalledProcessError as e:
-                    logger.log_exception(e, "apt_update_failed")
-                    if "unable to lock" in e.stderr.lower():
-                        output.error("APT database is locked")
-                        output.info(
-                            "Try: Wait for other package operations to complete",
-                            emoji="💡",
-                        )
-                    elif "no space left" in e.stderr.lower():
-                        output.error("No space left on device")
-                        output.info("Try: Free up disk space and try again", emoji="💡")
-                    elif "permission denied" in e.stderr.lower():
-                        output.error("Permission denied - sudo may not be configured")
-                        output.info(
-                            "Try: Configure sudo or run as appropriate user", emoji="💡"
-                        )
-                    elif "failed to fetch" in e.stderr.lower():
-                        output.error("Failed to fetch packages")
-                        output.info(
-                            "Try: Check internet connection and repository availability",
-                            emoji="💡",
-                        )
-                    else:
-                        output.error(f"APT operation failed: {e.stderr}")
+                    logger.log_exception(e, "apt_operation_failed")
+                    # Note: No stderr available since we don't capture interactive output
+                    # Provide generic guidance based on common apt-get errors
+                    output.error(f"APT operation failed with exit code {e.returncode}")
+                    output.info(
+                        "Try: Check for lock files or permission issues", emoji="💡"
+                    )
                     raise
 
         try:
