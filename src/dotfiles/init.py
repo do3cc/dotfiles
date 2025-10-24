@@ -322,7 +322,7 @@ class Linux:
                 if not target_path.exists():
                     try:
                         os.symlink(source_path, target_path)
-                        output.success(f"Linked {config_dir_target}", logger=logger)
+                        output.success(f"{target_path} → {source_path}", logger=logger)
                         self.restart_required = True
                     except OSError as e:
                         if e.errno == 13:  # Permission denied
@@ -356,16 +356,20 @@ class Linux:
                         if os.path.islink(target_path):
                             # It's a symlink to a directory
                             try:
-                                current_target = os.readlink(target_path)
+                                current_target = Path(os.readlink(target_path))
                                 expected_target = source_path
-                                if current_target != expected_target:
+                                # Resolve both paths to absolute for comparison
+                                current_resolved = current_target.resolve()
+                                expected_resolved = expected_target.resolve()
+
+                                if current_resolved != expected_resolved:
                                     output.warning(
-                                        f"{config_dir_target} is linked to {current_target}, but should be linked to {expected_target}",
+                                        f"{target_path} → {current_target}, but should link to {expected_target}",
                                         logger=logger,
                                     )
                                 else:
                                     output.success(
-                                        f"{config_dir_target} is already correctly linked",
+                                        f"{target_path} → {source_path}",
                                         logger=logger,
                                     )
                             except OSError as e:
