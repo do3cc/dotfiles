@@ -17,6 +17,8 @@ if status is-interactive
     export ANSIBLE_HOME="$XDG_DATA_HOME"/ansible
     export NODE_VERSIONS="$XDG_DATA_HOME/nvm"
     export NODE_VERSION_PREFIX=""
+    # Dotfiles repository location for tools like pkgstatus
+    export DOTFILES_DIR="$HOME/projects/dotfiles"
     nvm use lts
 
     # Show package/system status on startup

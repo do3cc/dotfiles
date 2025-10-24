@@ -11,6 +11,7 @@ from dotfiles.pkgstatus import (
 import json
 import pytest
 import time
+from pathlib import Path
 
 
 # ==============================================================================
@@ -744,6 +745,76 @@ def test_status_checker_format_interactive_output_with_never_run_init(tmp_path):
 
     assert "⚙️  Init Status:" in output
     assert "Init script never run - consider running" in output
+
+
+# ==============================================================================
+# StatusChecker _refresh_init_cache Tests (DOTFILES_DIR Environment Variable)
+# ==============================================================================
+
+
+def test_refresh_init_cache_uses_dotfiles_dir_env(tmp_path, monkeypatch):
+    """Should use DOTFILES_DIR environment variable when set"""
+    from dotfiles.pkgstatus import StatusChecker
+    from dotfiles.logging_config import setup_logging
+    from dotfiles.output_formatting import ConsoleOutput
+
+    # Setup fake dotfiles repo in custom location
+    fake_dotfiles = tmp_path / "custom-dotfiles"
+    fake_dotfiles.mkdir()
+    (fake_dotfiles / "init.py").touch()
+
+    # Create and change to different directory
+    other_dir = tmp_path / "other-dir"
+    other_dir.mkdir()
+    monkeypatch.setenv("DOTFILES_DIR", str(fake_dotfiles))
+    monkeypatch.chdir(other_dir)
+
+    checker = StatusChecker(cache_dir=str(tmp_path / "cache"))
+    logger = setup_logging("test").bind()
+
+    checker._refresh_init_cache(logger)
+
+    # Should detect init.py via DOTFILES_DIR
+    init_status = checker._load_cache(
+        checker.init_cache, InitScriptStatus, InitScriptStatus, logger
+    )
+    assert init_status.in_dotfiles is True
+
+
+def test_refresh_init_cache_uses_default_path_when_env_unset(tmp_path, monkeypatch):
+    """Should use ~/projects/dotfiles fallback when DOTFILES_DIR unset"""
+    from dotfiles.pkgstatus import StatusChecker
+    from dotfiles.logging_config import setup_logging
+    from dotfiles.output_formatting import ConsoleOutput
+
+    monkeypatch.delenv("DOTFILES_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    # Create fake default dotfiles location
+    default_dotfiles = tmp_path / "projects" / "dotfiles"
+    default_dotfiles.mkdir(parents=True)
+    (default_dotfiles / "init.py").touch()
+
+    # Mock Path.expanduser to redirect to our tmp_path
+    original_expanduser = Path.expanduser
+
+    def mock_expanduser(self):  # type: ignore[no-untyped-def]
+        path_str = str(self)
+        if "~/projects/dotfiles" in path_str:
+            return default_dotfiles
+        return original_expanduser(self)
+
+    monkeypatch.setattr(Path, "expanduser", mock_expanduser)
+
+    checker = StatusChecker(cache_dir=str(tmp_path / "cache"))
+    logger = setup_logging("test").bind()
+
+    checker._refresh_init_cache(logger)
+
+    init_status = checker._load_cache(
+        checker.init_cache, InitScriptStatus, InitScriptStatus, logger
+    )
+    assert init_status.in_dotfiles is True
 
 
 # ==============================================================================

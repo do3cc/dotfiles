@@ -552,8 +552,13 @@ class StatusChecker:
         logger = logger.bind(timestamp=timestamp)
         init_data = InitScriptStatus(enabled=True, last_check=timestamp)
 
-        # Check if we're in dotfiles directory
-        if Path("./init.py").exists():
+        # Get dotfiles directory from environment or use default
+        dotfiles_dir = Path(
+            os.environ.get("DOTFILES_DIR", "~/projects/dotfiles")
+        ).expanduser()
+        init_script = dotfiles_dir / "init.py"
+
+        if init_script.exists():
             init_data.in_dotfiles = True
 
             # Check last run time

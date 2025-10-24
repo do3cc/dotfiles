@@ -264,6 +264,9 @@ uv run dotfiles-pkgstatus --refresh
 
 **Supported package managers:** pacman, yay, uv-tools, lazy.nvim, fisher
 
+**Environment Variables:**
+- `DOTFILES_DIR`: Path to dotfiles repository (default: `~/projects/dotfiles`)
+
 ### Project Status Tool (status)
 
 Comprehensive project status overview including GitHub issues, PRs, branches, and worktrees:
