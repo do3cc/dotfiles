@@ -383,3 +383,32 @@ def test_json_with_complex_data(output):
         }
         output.json(data)
         mock_rich_print.assert_called_once_with(data)
+
+
+# ==============================================================================
+# pause_for_interactive() Context Manager Tests
+# ==============================================================================
+
+
+def test_pause_for_interactive_context_manager():
+    """Test that pause_for_interactive context manager works."""
+    output = ConsoleOutput(verbose=False, quiet=False)
+
+    # Should not raise exception
+    with output.pause_for_interactive():
+        pass
+
+
+def test_pause_for_interactive_with_active_progress():
+    """Test that pause works even with active progress bars."""
+    output = ConsoleOutput(verbose=False, quiet=False)
+
+    # This should work without errors
+    with output.progress_context() as progress:
+        task = progress.add_task("Test", total=10)
+
+        # Pause should handle active progress gracefully
+        with output.pause_for_interactive():
+            pass
+
+        progress.advance(task)

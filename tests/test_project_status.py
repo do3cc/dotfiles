@@ -1,5 +1,4 @@
 """Tests for project_status.py - Project status checker."""
-# pyright: reportArgumentType=false, reportUnusedVariable=false, reportUnusedParameter=false
 
 import json
 from unittest.mock import MagicMock, patch

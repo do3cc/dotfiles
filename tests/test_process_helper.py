@@ -333,3 +333,52 @@ def test_real_timeout(mock_logging_helpers, mock_output):
 
     mock_logging_helpers.log_exception.assert_called()
     mock_output.error.assert_called()
+
+
+# ==============================================================================
+# Tests for run_interactive_command()
+# ==============================================================================
+
+
+def test_run_interactive_command_success(mock_logging_helpers):
+    """Test that run_interactive_command executes successfully"""
+    output = ConsoleOutput(verbose=False, quiet=True)
+
+    # Simple command that doesn't require interaction
+    result = process_helper.run_interactive_command(
+        ["echo", "test"],
+        mock_logging_helpers,
+        output,
+        "Test echo command",
+        timeout=5,
+    )
+
+    assert result.returncode == 0
+
+
+def test_run_interactive_command_timeout(mock_logging_helpers):
+    """Test that run_interactive_command respects timeout"""
+    output = ConsoleOutput(verbose=False, quiet=True)
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        process_helper.run_interactive_command(
+            ["sleep", "10"],
+            mock_logging_helpers,
+            output,
+            "Test timeout",
+            timeout=1,
+        )
+
+
+def test_run_interactive_command_failure(mock_logging_helpers):
+    """Test that run_interactive_command handles command failures"""
+    output = ConsoleOutput(verbose=False, quiet=True)
+
+    with pytest.raises(subprocess.CalledProcessError):
+        process_helper.run_interactive_command(
+            ["false"],  # Command that always fails
+            mock_logging_helpers,
+            output,
+            "Test failure",
+            timeout=5,
+        )

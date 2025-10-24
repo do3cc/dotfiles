@@ -1,5 +1,6 @@
 """Tests for logging_config.py - structured logging with LoggingHelpers."""
 
+# pyright: reportMissingImports=false
 from dotfiles import logging_config
 import pytest
 import subprocess

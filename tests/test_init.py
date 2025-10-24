@@ -1,4 +1,4 @@
-# pyright: reportArgumentType=false, reportUnusedVariable=false, reportUnusedParameter=false
+# pyright: reportMissingImports=false, reportArgumentType=false
 from dotfiles import init
 import subprocess
 from unittest.mock import MagicMock

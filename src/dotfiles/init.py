@@ -3,7 +3,7 @@ from subprocess import CalledProcessError, TimeoutExpired, CompletedProcess
 from dataclasses import dataclass, field
 from datetime import datetime
 import os
-from .process_helper import run_command_with_error_handling
+from .process_helper import run_command_with_error_handling, run_interactive_command
 from pathlib import Path
 import socket
 import sys
@@ -566,7 +566,7 @@ class Linux:
                         f"Changing shell from {user_entry.pw_shell} to fish",
                         logger=logger,
                     )
-                    run_command_with_error_handling(
+                    run_interactive_command(
                         ["chsh", "-s", "/usr/bin/fish"],
                         logger,
                         output,
@@ -687,7 +687,7 @@ class Linux:
                         "Tailscale not connected, running setup...", logger=logger
                     )
                     # Use 'tailscale up' for locked tailnets instead of login
-                    run_command_with_error_handling(
+                    run_interactive_command(
                         ["sudo", "tailscale", "up", "--operator=do3cc"], logger, output
                     )
                 else:
@@ -696,7 +696,7 @@ class Linux:
                 output.status(
                     "Tailscale not available, running setup...", logger=logger
                 )
-                run_command_with_error_handling(
+                run_interactive_command(
                     ["sudo", "tailscale", "up", "--operator=do3cc"], logger, output
                 )
 
@@ -924,10 +924,11 @@ class Arch(Linux):
             Execute pacman commands with real-time output, error handling, and retry logic.
 
             Key improvements implemented here:
-            1. Real-time output streaming (removed capture_output=True)
-            2. Reduced timeout for faster failure detection
-            3. Comprehensive error handling with retries
-            4. Consistent timeout with APT operations (600s)
+            1. Real-time output streaming via run_interactive_command
+            2. Interactive sudo password prompt support
+            3. Reduced timeout for faster failure detection
+            4. Comprehensive error handling with retries
+            5. Consistent timeout with APT operations (600s)
 
             Arch Linux advantages:
             - Uses --noconfirm to prevent interactive prompts (no timezone issues)
@@ -938,20 +939,12 @@ class Arch(Linux):
             for attempt in range(max_retries):
                 pacman_logger = logger.bind(attempt=attempt)
                 try:
-                    # Real-time output streaming configuration
-                    #
-                    # Previous problem: capture_output=True hid all pacman progress from users.
-                    # Users only saw "Installing X packages..." with no visible progress.
-                    #
-                    # Solution: Remove capture_output=True to show real-time package installation.
-                    # Still capture stderr for error handling while stdout flows to terminal.
-                    #
-                    # Timeout reduced from 1800s (30min) to 600s (10min) for consistency with APT
-                    # and faster failure detection in CI environments.
-                    result = run_command_with_error_handling(
+                    # Use interactive command to allow sudo password prompt
+                    result = run_interactive_command(
                         ["sudo", "pacman"] + list(args),
                         pacman_logger,
                         output,
+                        "pacman operation",
                         timeout=600,
                         **kwargs,
                     )
@@ -975,33 +968,7 @@ class Arch(Linux):
                 except CalledProcessError as e:
                     output.error(f"Package installation failed: {e}", logger=logger)
                     output.info(f"Command: sudo pacman {' '.join(args)}", emoji="🔍")
-                    if e.stdout:
-                        output.info(f"STDOUT:\n{e.stdout}", emoji="📄")
-                    if e.stderr:
-                        output.info(f"STDERR:\n{e.stderr}", emoji="📄")
-
-                    # Provide specific advice based on error
-                    stderr_lower = e.stderr.lower() if e.stderr else ""
-                    if "conflict" in stderr_lower:
-                        output.info(
-                            "Try: Resolve conflicts manually or update system first",
-                            emoji="💡",
-                        )
-                    elif "not found" in stderr_lower:
-                        output.info(
-                            "Try: Update package databases with 'pacman -Sy'",
-                            emoji="💡",
-                        )
-                    elif (
-                        "permission denied" in stderr_lower
-                        or "password" in stderr_lower
-                    ):
-                        output.info(
-                            "Try: Configure sudo or run in interactive terminal",
-                            emoji="💡",
-                        )
-                    else:
-                        output.info("Try: Check the error details above", emoji="💡")
+                    # Note: No stdout/stderr available since we don't capture interactive output
                     raise
             raise
 
@@ -1030,7 +997,7 @@ class Arch(Linux):
             projects_dir = self.homedir / "projects"
             logger = logger.bind(projects_dir=projects_dir)
             try:
-                projects_dir.mkdir(parents=True)
+                projects_dir.mkdir(parents=True, exist_ok=True)
             except OSError as e:
                 logger.log_exception(e, "projects_directory_creation_failed")
                 output.error(f"Cannot create projects directory: {e}")
@@ -1207,8 +1174,8 @@ class Arch(Linux):
                             emoji="🔄",
                             logger=logger,
                         )
-                        run_command_with_error_handling(
-                            ["systemctl", "start", service], logger, output
+                        run_interactive_command(
+                            ["sudo", "systemctl", "start", service], logger, output
                         )
                         output.success(f"Started service: {service}", logger=logger)
                     else:
@@ -1217,8 +1184,10 @@ class Arch(Linux):
                             emoji="🔄",
                             logger=logger,
                         )
-                        run_command_with_error_handling(
-                            ["systemctl", "enable", "--now", service], logger, output
+                        run_interactive_command(
+                            ["sudo", "systemctl", "enable", "--now", service],
+                            logger,
+                            output,
                         )
                         output.success(
                             f"Enabled and started service: {service}", logger=logger
@@ -1402,7 +1371,7 @@ class Debian(Linux):
 
                 # Step 1: Create symlink from /etc/localtime to UTC timezone data
                 # This is the primary way Linux systems determine the current timezone
-                run_command_with_error_handling(
+                run_interactive_command(
                     ["sudo", "ln", "-fs", "/usr/share/zoneinfo/UTC", "/etc/localtime"],
                     logger,
                     output,
@@ -1412,7 +1381,7 @@ class Debian(Linux):
 
                 # Step 2: Set the timezone name in /etc/timezone for consistency
                 # Some tools and packages read this file to determine the timezone name
-                run_command_with_error_handling(
+                run_interactive_command(
                     ["sudo", "sh", "-c", "echo 'UTC' > /etc/timezone"],
                     logger,
                     output,
@@ -1441,10 +1410,11 @@ class Debian(Linux):
             Execute APT commands with real-time output, error handling, and retry logic.
 
             Key improvements implemented here:
-            1. Real-time output streaming (removed capture_output=True)
-            2. Non-interactive environment setup (DEBIAN_FRONTEND=noninteractive)
-            3. Reduced timeout for faster failure detection
-            4. Comprehensive error handling with retries
+            1. Real-time output streaming via run_interactive_command
+            2. Interactive sudo password prompt support
+            3. Non-interactive environment setup (DEBIAN_FRONTEND=noninteractive)
+            4. Reduced timeout for faster failure detection
+            5. Comprehensive error handling with retries
 
             Note: DEBIAN_FRONTEND=noninteractive may not work with sudo due to
             environment variable filtering, but we set it anyway as a fallback.
@@ -1455,27 +1425,15 @@ class Debian(Linux):
                 try:
                     logger = logger.bind(retry_attempt=attempt)
                     # Set up non-interactive environment to prevent prompts
-                    #
-                    # Problem: sudo often drops environment variables for security.
-                    # Even with env parameter, DEBIAN_FRONTEND may not reach apt-get.
-                    # This is why we pre-configure timezone as the primary solution.
                     env = os.environ.copy()
                     env["DEBIAN_FRONTEND"] = "noninteractive"
 
-                    # Real-time output streaming configuration
-                    #
-                    # Previous problem: capture_output=True hid all APT progress from users.
-                    # Users only saw "Installing X packages..." with no visible progress.
-                    #
-                    # Solution: Remove capture_output=True to show real-time package installation.
-                    # Still capture stderr for error handling while stdout flows to terminal.
-                    #
-                    # Timeout reduced from 1800s (30min) to 600s (10min) for faster failure detection
-                    # while still allowing time for large package downloads.
-                    result = run_command_with_error_handling(
+                    # Use interactive command to allow sudo password prompt
+                    result = run_interactive_command(
                         ["sudo", "apt-get"] + list(args),
                         logger,
                         output,
+                        "apt-get operation",
                         env=env,
                         timeout=600,
                         **kwargs,
@@ -1495,29 +1453,13 @@ class Debian(Linux):
                     output.status("Retrying in 10 seconds...", emoji="🔄")
                     time.sleep(10)
                 except CalledProcessError as e:
-                    logger.log_exception(e, "apt_update_failed")
-                    if "unable to lock" in e.stderr.lower():
-                        output.error("APT database is locked")
-                        output.info(
-                            "Try: Wait for other package operations to complete",
-                            emoji="💡",
-                        )
-                    elif "no space left" in e.stderr.lower():
-                        output.error("No space left on device")
-                        output.info("Try: Free up disk space and try again", emoji="💡")
-                    elif "permission denied" in e.stderr.lower():
-                        output.error("Permission denied - sudo may not be configured")
-                        output.info(
-                            "Try: Configure sudo or run as appropriate user", emoji="💡"
-                        )
-                    elif "failed to fetch" in e.stderr.lower():
-                        output.error("Failed to fetch packages")
-                        output.info(
-                            "Try: Check internet connection and repository availability",
-                            emoji="💡",
-                        )
-                    else:
-                        output.error(f"APT operation failed: {e.stderr}")
+                    logger.log_exception(e, "apt_operation_failed")
+                    # Note: No stderr available since we don't capture interactive output
+                    # Provide generic guidance based on common apt-get errors
+                    output.error(f"APT operation failed with exit code {e.returncode}")
+                    output.info(
+                        "Try: Check for lock files or permission issues", emoji="💡"
+                    )
                     raise
 
         try:
