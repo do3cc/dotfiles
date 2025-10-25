@@ -12,6 +12,7 @@ dependencies = [
     "rich>=13.0.0",
     "click>=8.0.0",
     "pytest-cov>=7.0.0",
+    "PyYAML>=6.0.0",
 ]
 
 [project.scripts]
