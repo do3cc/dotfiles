@@ -1,7 +1,7 @@
 """Tests for package manifest loading."""
 
 from pathlib import Path
-from dotfiles.init import Linux, Arch
+from dotfiles.init import Linux, Arch, Debian
 
 
 def test_package_manifest_loads():
@@ -75,3 +75,26 @@ def test_arch_environment_packages():
     # Should include environment-specific packages
     for pkg in env_packages:
         assert pkg in packages, f"Private env package {pkg} missing"
+
+
+def test_debian_reads_base_packages_from_manifest():
+    """Debian class should read base packages from manifest"""
+    debian = Debian(environment="minimal")
+
+    # apt_packages should come from manifest
+    manifest_packages = debian.package_manifest["base"]["debian"]
+
+    # Check that apt_packages matches manifest
+    assert debian.apt_packages == manifest_packages
+
+
+def test_debian_environment_packages():
+    """Debian environment-specific packages should work (when defined)"""
+    # Currently all Debian environments have empty package lists
+    # This test verifies the structure works for future additions
+    debian = Debian(environment="private")
+
+    env_packages = debian.package_manifest["environments"]["private"]["debian"]
+
+    # Should be a list (even if empty)
+    assert isinstance(env_packages, list)

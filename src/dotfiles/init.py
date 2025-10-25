@@ -1337,33 +1337,10 @@ class Debian(Linux):
             # where we don't want to accidentally modify timezone settings.
             return False
 
-    apt_packages = [
-        "ack",  # text search tool
-        "apt-file",  # search files in packages
-        "build-essential",  # compilation tools and libraries
-        "curl",  # command line URL tool
-        "direnv",  # environment variable manager
-        "fish",  # friendly interactive shell
-        "jq",  # JSON command line processor
-        "libbz2-dev",  # bzip2 development library
-        "libffi-dev",  # foreign function interface library
-        "libfuse2",  # filesystem in userspace library
-        "liblzma-dev",  # XZ compression library
-        "libncursesw5-dev",  # terminal control library
-        "libreadline-dev",  # GNU readline library
-        "libsqlite3-dev",  # SQLite development library
-        "libssl-dev",  # SSL development library
-        "libxml2-dev",  # XML development library
-        "libxmlsec1-dev",  # XML security library
-        "neovim",  # modern Vim text editor
-        "nmap",  # network discovery and scanning
-        "npm",  # Node.js package manager
-        "silversearcher-ag",  # fast text search tool
-        "tig",  # text-mode Git interface
-        "tk-dev",  # Tk GUI toolkit
-        "xz-utils",  # XZ compression utilities
-        "zlib1g-dev",  # compression library
-    ]
+    @property
+    def apt_packages(self) -> list[str]:
+        """Get Debian/Ubuntu package list from manifest"""
+        return self.package_manifest["base"]["debian"]
 
     def install_dependencies(self, logger: LoggingHelpers, output: ConsoleOutput):
         """Install packages with retry logic and comprehensive error handling"""
