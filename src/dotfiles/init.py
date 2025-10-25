@@ -20,7 +20,7 @@ from .logging_config import (
 from .output_formatting import ConsoleOutput
 from .swman import DebianSystemManager, PacmanManager
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -758,52 +758,18 @@ class Arch(Linux):
     def _get_base_config(self) -> EnvironmentConfig:
         """Get base configuration for Arch Linux systems."""
         base = super()._get_base_config()
+
+        # Read packages from manifest instead of hardcoding
+        base_packages = cast(
+            list[str], self.package_manifest.get("base", {}).get("arch", [])
+        )
+        aur_packages = cast(
+            list[str], self.package_manifest.get("aur", {}).get("base", [])
+        )
+
         arch_config = EnvironmentConfig(
-            packages=[
-                "ast-grep",  # structural code search tool
-                "bat",  # syntax highlighted cat alternative
-                "direnv",  # environment variable manager
-                "eza",  # modern ls replacement
-                "fd",  # fast find replacement
-                "fish",  # friendly interactive shell
-                "git",  # version control system
-                "github-cli",  # GitHub command line interface
-                "glab",  # GitLab command line interface
-                "htop",  # interactive process viewer
-                "jdk-openjdk",  # Java development kit
-                "jq",  # JSON command line processor
-                "texlive-latex",  # for markdown rendering
-                "lazygit",  # git cli used by lazy vim
-                "less",  # terminal pager
-                "lua51",  # Lua scripting language
-                "luarocks",  # Lua package manager
-                "man-db",  # manual page database
-                "markdownlint-cli2",  # linter for markdown
-                "mermaid-cli",  # diagram generation tool
-                "neovim",  # modern Vim text editor
-                "nmap",  # network discovery and scanning
-                "npm",  # Node.js package manager
-                "pacman-contrib",  # pacman utilities including checkupdates
-                "prettier",  # code formatter for JS/TS/JSON/YAML/MD
-                "python-pip",  # Global pip
-                "rsync",  # file synchronization tool
-                "shfmt",  # shell script formatter
-                "starship",  # cross-shell prompt
-                "stylua",  # Lua code formatter
-                "tectonic",  # LaTeX engine
-                "the_silver_searcher",  # fast text search tool
-                "tig",  # text-mode Git interface
-                "tealdeer",  # fast tldr client
-                "tree-sitter-cli",  # parser generator tool
-                "uv",  # fast Python package manager
-                "wget",  # web file downloader
-                "yarn",  # Node.js package manager
-            ],
-            aur_packages=[
-                "google-java-format",  # Java formatting tool
-                "nodejs-markdown-toc",  # TOC Generator in javascript
-                "tmux-plugin-manager",  # Tmux Plugin Manager (TPM)
-            ],
+            packages=base_packages,
+            aur_packages=aur_packages,
         )
         return arch_config.merge_with(base)
 
@@ -811,22 +777,28 @@ class Arch(Linux):
         """Get environment-specific configurations for Arch Linux."""
         base_configs = super()._get_environment_configs()
 
-        # Add Arch-specific environment configurations
-        arch_configs = {
-            "private": EnvironmentConfig(
-                packages=[
-                    "bitwarden",  # password manager
-                    "firefox",  # web browser
-                    "ghostscript",  # PostScript and PDF interpreter
-                    "imagemagick",  # image manipulation toolkit
-                    "noto-fonts-emoji",  # emoji font collection
-                    "otf-font-awesome",  # icon font
-                    "python-gobject",  # Python GObject bindings
-                    "tailscale",  # mesh VPN service
-                ],
-                systemd_services=["tailscaled"],
-            ),
-        }
+        # Read environment-specific packages from manifest
+        arch_configs: dict[str, EnvironmentConfig] = {}
+        environments = cast(
+            dict[str, Any], self.package_manifest.get("environments", {})
+        )
+
+        for env_name, env_data in environments.items():
+            arch_packages = cast(
+                list[str], cast(dict[str, Any], env_data).get("arch", [])
+            )
+
+            # Only create config if there are packages or systemd services
+            if arch_packages or env_name == "private":
+                arch_config = EnvironmentConfig(
+                    packages=arch_packages,
+                )
+
+                # Add systemd services for private environment
+                if env_name == "private":
+                    arch_config.systemd_services = ["tailscaled"]
+
+                arch_configs[env_name] = arch_config
 
         # Merge with base configurations
         merged_configs: dict[str, EnvironmentConfig] = {}
