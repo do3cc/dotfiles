@@ -56,5 +56,6 @@
       "Bash(.venv/bin/python:*)"
     ],
     "deny": []
-  }
+  },
+  "outputStyle": "default"
 }
