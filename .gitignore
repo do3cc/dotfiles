@@ -16,3 +16,6 @@ __pycache__/
 
 # Development
 calendar-sync/
+
+# Tmux plugins (installed via tpm)
+tmux/plugins/
