@@ -214,6 +214,48 @@ The script handles:
 - Version managers: NVM (Node.js), Pyenv (Python)
 - Package managers: UV (Python), NPM/Yarn (Node.js)
 
+## Package Management
+
+### Shared Package Manifest
+
+All package definitions are centralized in `packages.yaml`:
+
+```yaml
+base:
+  arch: [...] # Arch Linux packages
+  debian: [...] # Debian/Ubuntu packages
+
+environments:
+  private:
+    arch: [...]
+    debian: [...]
+
+aur:
+  base: [...] # AUR packages for Arch
+```
+
+**Used by:**
+
+- `src/dotfiles/init.py` - Python installation script reads from manifest
+- `local_bin/run-claude.sh` - Docker image build installs packages from manifest
+
+**To add a package:**
+
+1. Edit `packages.yaml`
+2. Add package to appropriate section (`base.arch`, `base.debian`, etc.)
+3. Both init.py and Dockerfile will use it automatically
+
+**To add environment-specific packages:**
+
+1. Add to `environments.<env-name>.arch` or `environments.<env-name>.debian`
+2. Will be installed when running `dotfiles-init` with that environment
+
+**Benefits:**
+
+- **Single source of truth** - No duplicate package lists to maintain
+- **Consistency** - Both local installs and Docker images use same packages
+- **Easy maintenance** - Add package once, works everywhere
+
 ## Commit Guidelines
 
 - **ALWAYS use `cog commit` instead of `git commit`** for creating commits
@@ -265,6 +307,7 @@ uv run dotfiles-pkgstatus --refresh
 **Supported package managers:** pacman, yay, uv-tools, lazy.nvim, fisher
 
 **Environment Variables:**
+
 - `DOTFILES_DIR`: Path to dotfiles repository (default: `~/projects/dotfiles`)
 
 ### Project Status Tool (status)
