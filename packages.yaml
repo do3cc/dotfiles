@@ -1,0 +1,109 @@
+---
+# packages.yaml - Shared package manifest for dotfiles
+#
+# This file is the single source of truth for package definitions.
+# Used by:
+#   - src/dotfiles/init.py (Python installation script)
+#   - local_bin/run-claude.sh (Docker image build)
+
+# Base packages for all Linux systems
+base:
+  arch:
+    - ast-grep
+    - bat
+    - direnv
+    - eza
+    - fd
+    - fish
+    - git
+    - github-cli
+    - glab
+    - htop
+    - jdk-openjdk
+    - jq
+    - texlive-latex
+    - lazygit
+    - less
+    - lua51
+    - luarocks
+    - man-db
+    - markdownlint-cli2
+    - mermaid-cli
+    - neovim
+    - nmap
+    - npm
+    - pacman-contrib
+    - prettier
+    - python-pip
+    - rsync
+    - shfmt
+    - starship
+    - stylua
+    - tectonic
+    - the_silver_searcher
+    - tig
+    - tealdeer
+    - tree-sitter-cli
+    - uv
+    - wget
+    - yarn
+
+  debian:
+    - ack
+    - apt-file
+    - build-essential
+    - curl
+    - direnv
+    - fish
+    - jq
+    - libbz2-dev
+    - libffi-dev
+    - libfuse2
+    - liblzma-dev
+    - libncursesw5-dev
+    - libreadline-dev
+    - libsqlite3-dev
+    - libssl-dev
+    - libxml2-dev
+    - libxmlsec1-dev
+    - neovim
+    - nmap
+    - npm
+    - silversearcher-ag
+    - tig
+    - tk-dev
+    - xz-utils
+    - zlib1g-dev
+
+# Environment-specific packages
+environments:
+  private:
+    arch:
+      - bitwarden
+      - firefox
+      - ghostscript
+      - imagemagick
+      - noto-fonts-emoji
+      - otf-font-awesome
+      - python-gobject
+      - tailscale
+    debian: []
+
+  work:
+    arch: []
+    debian: []
+
+  minimal:
+    arch: []
+    debian: []
+
+# AUR packages (Arch only)
+aur:
+  base:
+    - google-java-format
+    - nodejs-markdown-toc
+    - tmux-plugin-manager
+  environments:
+    private: []
+    work: []
+    minimal: []
