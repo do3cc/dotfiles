@@ -12,6 +12,7 @@ def run_command_with_error_handling(
     output: ConsoleOutput,
     description: str = "Command",
     timeout: int = 300,
+    check: bool = True,
     **kwargs: Any,
 ) -> subprocess.CompletedProcess[str]:
     """Run a subprocess command with comprehensive error handling and logging"""
@@ -21,7 +22,7 @@ def run_command_with_error_handling(
     try:
         result = subprocess.run(
             command,
-            check=True,
+            check=check,
             capture_output=True,
             text=True,
             timeout=timeout,

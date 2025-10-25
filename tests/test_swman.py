@@ -160,9 +160,9 @@ def test_update_result_fields_are_correct_types():
     ],
     ids=["updates_available", "no_updates_rc2", "empty_output", "single_update"],
 )
-@patch("dotfiles.swman.run_command_with_error_handling")
+@patch("subprocess.run")
 def test_pacman_check_updates_return_codes(
-    mock_run_command, returncode, stdout, expected_has_updates, expected_count
+    mock_subprocess_run, returncode, stdout, expected_has_updates, expected_count
 ):
     """PacmanManager.check_updates should handle different return codes correctly.
 
@@ -170,14 +170,20 @@ def test_pacman_check_updates_return_codes(
     - 0: updates available
     - 2: no updates available (this is NOT an error!)
     - other: actual errors (should raise)
+
+    This test mocks subprocess.run directly (not run_command_with_error_handling)
+    to ensure the real code path through process_helper.py is exercised.
+    This catches bugs like duplicate keyword arguments in subprocess.run().
     """
     # Setup mocks
     mock_logger = Mock()
     mock_logger.bind.return_value = mock_logger
+    mock_logger.log_info.return_value = None
+    mock_logger.log_subprocess_result.return_value = None
     mock_output = Mock()
 
-    # Mock the command result
-    mock_run_command.return_value = CompletedProcess(
+    # Mock the subprocess result
+    mock_subprocess_run.return_value = CompletedProcess(
         args=["checkupdates"],
         returncode=returncode,
         stdout=stdout,
@@ -188,24 +194,32 @@ def test_pacman_check_updates_return_codes(
     manager = PacmanManager()
     has_updates, count = manager.check_updates(mock_logger, mock_output)
 
-    # Verify
+    # Verify behavior
     assert has_updates == expected_has_updates
     assert count == expected_count
-    mock_run_command.assert_called_once()
-    # Verify check=False was passed to handle return codes manually
-    assert mock_run_command.call_args.kwargs["check"] is False
+
+    # Verify subprocess.run was called with check=False
+    mock_subprocess_run.assert_called_once()
+    assert mock_subprocess_run.call_args.kwargs["check"] is False
+    assert mock_subprocess_run.call_args.kwargs["capture_output"] is True
+    assert mock_subprocess_run.call_args.kwargs["text"] is True
 
 
-@patch("dotfiles.swman.run_command_with_error_handling")
-def test_pacman_check_updates_error_returncode(mock_run_command):
-    """PacmanManager.check_updates should raise on actual errors (non-0, non-2 returncodes)."""
+@patch("subprocess.run")
+def test_pacman_check_updates_error_returncode(mock_subprocess_run):
+    """PacmanManager.check_updates should raise on actual errors (non-0, non-2 returncodes).
+
+    This test mocks subprocess.run directly to exercise the real code path.
+    """
     # Setup mocks
     mock_logger = Mock()
     mock_logger.bind.return_value = mock_logger
+    mock_logger.log_info.return_value = None
+    mock_logger.log_subprocess_result.return_value = None
     mock_output = Mock()
 
     # Mock an error result (returncode 1 = actual error)
-    mock_run_command.return_value = CompletedProcess(
+    mock_subprocess_run.return_value = CompletedProcess(
         args=["checkupdates"],
         returncode=1,
         stdout="",
@@ -220,3 +234,7 @@ def test_pacman_check_updates_error_returncode(mock_run_command):
     # Verify exception details
     assert exc_info.value.returncode == 1
     assert exc_info.value.cmd == ["checkupdates"]
+
+    # Verify subprocess.run was called with check=False
+    mock_subprocess_run.assert_called_once()
+    assert mock_subprocess_run.call_args.kwargs["check"] is False
