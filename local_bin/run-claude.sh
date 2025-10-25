@@ -798,6 +798,17 @@ build_image() {
 	TEMP_DIR=$(mktemp -d)
 	trap "rm -rf $TEMP_DIR" EXIT
 
+	# Copy packages.yaml to build context
+	SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+	DOTFILES_DIR=$(dirname "$SCRIPT_DIR") # Go up from local_bin/
+
+	if [[ ! -f "$DOTFILES_DIR/packages.yaml" ]]; then
+		echo -e "${RED}Error: packages.yaml not found at $DOTFILES_DIR/packages.yaml${NC}"
+		exit 1
+	fi
+
+	cp "$DOTFILES_DIR/packages.yaml" "$TEMP_DIR/packages.yaml"
+
 	# Generate Dockerfile using shared function
 	generate_dockerfile_content >"$TEMP_DIR/Dockerfile"
 
@@ -1268,11 +1279,26 @@ export_dockerfile() {
 
 	echo -e "${MAGENTA}Exporting Dockerfile to: ${BRIGHT_CYAN}$OUTPUT_FILE${NC}"
 
-	# Use the shared function to generate content
+	# Get output directory
+	OUTPUT_DIR=$(dirname "$OUTPUT_FILE")
+
+	# Use the shared function to generate Dockerfile content
 	generate_dockerfile_content >"$OUTPUT_FILE"
 
+	# Copy packages.yaml to same directory
+	SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+	DOTFILES_DIR=$(dirname "$SCRIPT_DIR")
+
+	if [[ -f "$DOTFILES_DIR/packages.yaml" ]]; then
+		cp "$DOTFILES_DIR/packages.yaml" "$OUTPUT_DIR/packages.yaml"
+		echo -e "${MAGENTA}Exported packages.yaml to: ${BRIGHT_CYAN}$OUTPUT_DIR/packages.yaml${NC}"
+	else
+		echo -e "${RED}Warning: packages.yaml not found at $DOTFILES_DIR/packages.yaml${NC}"
+		echo -e "${YELLOW}Dockerfile will fail to build without packages.yaml${NC}"
+	fi
+
 	echo -e "${MAGENTA}Dockerfile exported successfully!${NC}"
-	echo -e "${YELLOW}To build: podman build --build-arg USERNAME=claude-user -t your-image-name .${NC}"
+	echo -e "${YELLOW}To build: podman build --build-arg USERNAME=claude-user -t your-image-name $OUTPUT_DIR${NC}"
 }
 
 # Function to push image to repository
