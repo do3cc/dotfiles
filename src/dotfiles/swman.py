@@ -126,7 +126,7 @@ class PacmanManager(PackageManager):
             return False, 0
         except (SubprocessError, FileNotFoundError) as e:
             logger.log_exception(e, "unexpected_exception")
-            return False, 0
+            raise
 
     def update(
         self, logger: LoggingHelpers, output: ConsoleOutput, dry_run: bool = False
@@ -258,7 +258,7 @@ class YayManager(PackageManager):
             return False, 0
         except (SubprocessError, FileNotFoundError) as e:
             logger.log_exception(e, "unexpected_exception")
-            return False, 0
+            raise
 
     def update(
         self, logger: LoggingHelpers, output: ConsoleOutput, dry_run: bool = False
@@ -382,7 +382,7 @@ class DebianSystemManager(PackageManager):
             return False, 0
         except (SubprocessError, FileNotFoundError) as e:
             logger.log_exception(e, "unexpected_exception")
-            return False, 0
+            raise
 
     def update(
         self, logger: LoggingHelpers, output: ConsoleOutput, dry_run: bool = False
