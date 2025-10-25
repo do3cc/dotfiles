@@ -26,35 +26,35 @@ set -e
 
 # Check for required tools
 check_required_tools() {
-  local missing_tools=()
-  local required_tools=(
-    "podman"
-    "jq"
-    "sha256sum"
-    "whoami"
-    "awk"
-    "sed"
-    "cut"
-    "wc"
-    "grep"
-    "git"
-  )
+	local missing_tools=()
+	local required_tools=(
+		"podman"
+		"jq"
+		"sha256sum"
+		"whoami"
+		"awk"
+		"sed"
+		"cut"
+		"wc"
+		"grep"
+		"git"
+	)
 
-  for tool in "${required_tools[@]}"; do
-    if ! command -v "$tool" &>/dev/null; then
-      missing_tools+=("$tool")
-    fi
-  done
+	for tool in "${required_tools[@]}"; do
+		if ! command -v "$tool" &>/dev/null; then
+			missing_tools+=("$tool")
+		fi
+	done
 
-  if [[ ${#missing_tools[@]} -gt 0 ]]; then
-    echo -e "${RED}Error: The following required tools are missing:${NC}" >&2
-    for tool in "${missing_tools[@]}"; do
-      echo -e "  - ${YELLOW}$tool${NC}" >&2
-    done
-    echo >&2
-    echo -e "${YELLOW}Please install the missing tools and try again.${NC}" >&2
-    exit 1
-  fi
+	if [[ ${#missing_tools[@]} -gt 0 ]]; then
+		echo -e "${RED}Error: The following required tools are missing:${NC}" >&2
+		for tool in "${missing_tools[@]}"; do
+			echo -e "  - ${YELLOW}$tool${NC}" >&2
+		done
+		echo >&2
+		echo -e "${YELLOW}Please install the missing tools and try again.${NC}" >&2
+		exit 1
+	fi
 }
 
 # Version and default values
@@ -91,12 +91,12 @@ EXTRA_VOLUMES=()
 
 # List of environment variables to forward to the container
 FORWARDED_VARIABLES=(
-  "ANTHROPIC_API_KEY"
-  "OPENAI_API_KEY"
-  "NUGET_API_KEY"
-  "UNSPLASH_ACCESS_KEY"
-  "ANTHROPIC_MODEL"
-  "TERM"
+	"ANTHROPIC_API_KEY"
+	"OPENAI_API_KEY"
+	"NUGET_API_KEY"
+	"UNSPLASH_ACCESS_KEY"
+	"ANTHROPIC_MODEL"
+	"TERM"
 )
 
 # Colors for output
@@ -114,107 +114,107 @@ check_required_tools
 
 # Generate -e flags for forwarded environment variables
 generate_forwarded_variables() {
-  local env_flags=""
-  local seen_vars=""
+	local env_flags=""
+	local seen_vars=""
 
-  # Process all forwarded variables (avoiding duplicates)
-  for var in "${FORWARDED_VARIABLES[@]}"; do
-    if [[ -n "${!var}" && "$seen_vars" != *"|$var|"* ]]; then
-      env_flags="$env_flags -e $var=${!var}"
-      seen_vars="$seen_vars|$var|"
-    fi
-  done
+	# Process all forwarded variables (avoiding duplicates)
+	for var in "${FORWARDED_VARIABLES[@]}"; do
+		if [[ -n "${!var}" && "$seen_vars" != *"|$var|"* ]]; then
+			env_flags="$env_flags -e $var=${!var}"
+			seen_vars="$seen_vars|$var|"
+		fi
+	done
 
-  echo "$env_flags"
+	echo "$env_flags"
 }
 
 # Format Docker command for pretty verbose output
 format_docker_command() {
-  local cmd="$1"
+	local cmd="$1"
 
-  # First normalize the command: remove existing backslashes and tabs, then add proper breaks
-  local normalized_cmd=$(echo "$cmd" | tr -d '\\\n\t' | sed 's/  */ /g')
+	# First normalize the command: remove existing backslashes and tabs, then add proper breaks
+	local normalized_cmd=$(echo "$cmd" | tr -d '\\\n\t' | sed 's/  */ /g')
 
-  # Add line breaks before flags AND before image name, then process each line
-  # Use a more targeted approach to separate image:tag from any trailing arguments
-  local all_lines=$(echo "$normalized_cmd" | sed -E '
+	# Add line breaks before flags AND before image name, then process each line
+	# Use a more targeted approach to separate image:tag from any trailing arguments
+	local all_lines=$(echo "$normalized_cmd" | sed -E '
 		s/ (-[a-z]|--[a-z-]+)/ \\\n  \1/g
 		s/ ([a-z0-9-]+:[a-z0-9.-]+)/ \\\n\1/g
 	' | sed -E 's/^([a-z0-9-]+:[a-z0-9.-]+) (.+)$/\1\n\2/')
 
-  local line_count=$(echo "$all_lines" | wc -l)
-  local current_line=0
+	local line_count=$(echo "$all_lines" | wc -l)
+	local current_line=0
 
-  echo "$all_lines" | while IFS= read -r line; do
-    current_line=$((current_line + 1))
-    # Skip empty lines
-    [[ -z "$line" ]] && continue
+	echo "$all_lines" | while IFS= read -r line; do
+		current_line=$((current_line + 1))
+		# Skip empty lines
+		[[ -z "$line" ]] && continue
 
-    # Remove any trailing backslashes for cleaner output
-    line=$(echo "$line" | sed 's/ \\$//')
+		# Remove any trailing backslashes for cleaner output
+		line=$(echo "$line" | sed 's/ \\$//')
 
-    # Color the first line (docker run command)
-    if [[ "$line" =~ ^docker\ run ]]; then
-      printf "${WHITE}%s${NC}\n" "$line"
-    # Color environment and volume flags specially
-    elif [[ "$line" =~ ^[[:space:]]*(-[ev])[[:space:]]+(.+)$ ]]; then
-      flag="${BASH_REMATCH[1]}"
-      value="${BASH_REMATCH[2]}"
+		# Color the first line (docker run command)
+		if [[ "$line" =~ ^docker\ run ]]; then
+			printf "${WHITE}%s${NC}\n" "$line"
+		# Color environment and volume flags specially
+		elif [[ "$line" =~ ^[[:space:]]*(-[ev])[[:space:]]+(.+)$ ]]; then
+			flag="${BASH_REMATCH[1]}"
+			value="${BASH_REMATCH[2]}"
 
-      # Special handling for -v flags to colorize name:value parts
-      if [[ "$flag" == "-v" && "$value" =~ ^([^:]+):(.+)$ ]]; then
-        name="${BASH_REMATCH[1]}"
-        dest="${BASH_REMATCH[2]}"
-        printf "    ${YELLOW}%s${NC} ${MAGENTA}%s${NC}:${BRIGHT_CYAN}%s${NC}\n" "$flag" "$name" "$dest"
-      # Special handling for -e flags to colorize name=value parts
-      elif [[ "$flag" == "-e" && "$value" =~ ^([^=]+)=(.+)$ ]]; then
-        name="${BASH_REMATCH[1]}"
-        val="${BASH_REMATCH[2]}"
-        printf "    ${YELLOW}%s${NC} ${MAGENTA}%s${NC}=${BRIGHT_CYAN}%s${NC}\n" "$flag" "$name" "$val"
-      else
-        printf "    ${YELLOW}%s${NC} ${BRIGHT_CYAN}%s${NC}\n" "$flag" "$value"
-      fi
-    # Color other flags with special handling for --label and --name
-    elif [[ "$line" =~ ^[[:space:]]*(-[a-z]|--[a-z-]+) ]]; then
-      # Special handling for --label flags to colorize name=value parts
-      if [[ "$line" =~ ^([[:space:]]*--label[[:space:]]+)([^=]+)=(.+)$ ]]; then
-        flag_part="${BASH_REMATCH[1]}"
-        name="${BASH_REMATCH[2]}"
-        value="${BASH_REMATCH[3]}"
-        printf "${BLUE}%s${MAGENTA}%s${NC}=${BRIGHT_CYAN}%s${NC}\n" "$flag_part" "$name" "$value"
-      # Special handling for --name flags to colorize the name value
-      elif [[ "$line" =~ ^([[:space:]]*--name[[:space:]]+)(.+)$ ]]; then
-        flag_part="${BASH_REMATCH[1]}"
-        name_value="${BASH_REMATCH[2]}"
-        printf "${BLUE}%s${BRIGHT_CYAN}%s${NC}\n" "$flag_part" "$name_value"
-      else
-        printf "${BLUE}%s${NC}\n" "$line"
-      fi
-    # Everything else (like image name and command arguments)
-    else
-      # Add proper indentation for image name and arguments
-      # Don't add backslash to the very last line
-      if [[ $current_line -eq $line_count ]]; then
-        printf "  ${BRIGHT_CYAN}%s${NC}\n" "$line"
-      else
-        printf "  ${BRIGHT_CYAN}%s${NC} \\\\\n" "$line"
-      fi
-    fi
-  done
+			# Special handling for -v flags to colorize name:value parts
+			if [[ "$flag" == "-v" && "$value" =~ ^([^:]+):(.+)$ ]]; then
+				name="${BASH_REMATCH[1]}"
+				dest="${BASH_REMATCH[2]}"
+				printf "    ${YELLOW}%s${NC} ${MAGENTA}%s${NC}:${BRIGHT_CYAN}%s${NC}\n" "$flag" "$name" "$dest"
+			# Special handling for -e flags to colorize name=value parts
+			elif [[ "$flag" == "-e" && "$value" =~ ^([^=]+)=(.+)$ ]]; then
+				name="${BASH_REMATCH[1]}"
+				val="${BASH_REMATCH[2]}"
+				printf "    ${YELLOW}%s${NC} ${MAGENTA}%s${NC}=${BRIGHT_CYAN}%s${NC}\n" "$flag" "$name" "$val"
+			else
+				printf "    ${YELLOW}%s${NC} ${BRIGHT_CYAN}%s${NC}\n" "$flag" "$value"
+			fi
+		# Color other flags with special handling for --label and --name
+		elif [[ "$line" =~ ^[[:space:]]*(-[a-z]|--[a-z-]+) ]]; then
+			# Special handling for --label flags to colorize name=value parts
+			if [[ "$line" =~ ^([[:space:]]*--label[[:space:]]+)([^=]+)=(.+)$ ]]; then
+				flag_part="${BASH_REMATCH[1]}"
+				name="${BASH_REMATCH[2]}"
+				value="${BASH_REMATCH[3]}"
+				printf "${BLUE}%s${MAGENTA}%s${NC}=${BRIGHT_CYAN}%s${NC}\n" "$flag_part" "$name" "$value"
+			# Special handling for --name flags to colorize the name value
+			elif [[ "$line" =~ ^([[:space:]]*--name[[:space:]]+)(.+)$ ]]; then
+				flag_part="${BASH_REMATCH[1]}"
+				name_value="${BASH_REMATCH[2]}"
+				printf "${BLUE}%s${BRIGHT_CYAN}%s${NC}\n" "$flag_part" "$name_value"
+			else
+				printf "${BLUE}%s${NC}\n" "$line"
+			fi
+		# Everything else (like image name and command arguments)
+		else
+			# Add proper indentation for image name and arguments
+			# Don't add backslash to the very last line
+			if [[ $current_line -eq $line_count ]]; then
+				printf "  ${BRIGHT_CYAN}%s${NC}\n" "$line"
+			else
+				printf "  ${BRIGHT_CYAN}%s${NC} \\\\\n" "$line"
+			fi
+		fi
+	done
 }
 
 # Generate shell completions
 generate_completions() {
-  local shell="$1"
+	local shell="$1"
 
-  if [[ -z "$shell" ]]; then
-    echo -e "${RED}Error: Shell type required. Use 'bash' or 'zsh'${NC}" >&2
-    exit 1
-  fi
+	if [[ -z "$shell" ]]; then
+		echo -e "${RED}Error: Shell type required. Use 'bash' or 'zsh'${NC}" >&2
+		exit 1
+	fi
 
-  case "$shell" in
-  bash)
-    cat <<'EOF'
+	case "$shell" in
+	bash)
+		cat <<'EOF'
 _run_claude_completion() {
     local cur prev opts
     COMPREPLY=()
@@ -273,9 +273,9 @@ _run_claude_completion() {
 }
 complete -F _run_claude_completion run-claude.sh
 EOF
-    ;;
-  zsh)
-    cat <<'EOF'
+		;;
+	zsh)
+		cat <<'EOF'
 _run_claude_zsh_completion() {
     local -a options
     options=(
@@ -313,345 +313,345 @@ _run_claude_zsh_completion() {
 }
 compdef _run_claude_zsh_completion run-claude.sh
 EOF
-    ;;
-  *)
-    echo -e "${RED}Error: Unsupported shell '$shell'. Use 'bash' or 'zsh'${NC}" >&2
-    exit 1
-    ;;
-  esac
+		;;
+	*)
+		echo -e "${RED}Error: Unsupported shell '$shell'. Use 'bash' or 'zsh'${NC}" >&2
+		exit 1
+		;;
+	esac
 }
 
 usage() {
-  echo "Usage: $(basename $0) [OPTIONS] [COMMAND]"
-  echo ""
-  echo "OPTIONS:"
-  echo "  -w, --workspace PATH    Set workspace path (default: current directory)"
-  echo "  -c, --claude-config PATH Set Claude config path (default: ~/.claude)"
-  echo "  -n, --name NAME         Set container name"
-  echo "  -i, --image NAME        Set image name (default: claude-code:latest)"
-  echo "  --rm                    Remove container after exit (default: persistent)"
-  echo "  --no-interactive        Run in non-interactive mode"
-  echo "  --no-privileged         Run without privileged mode"
-  echo "  --safe                  Disable dangerous permissions"
-  echo "  --no-gpg                Disable GPG agent forwarding"
-  echo "  --gpg                   Enable GPG agent forwarding (overrides RUN_CLAUDE_NO_GPG)"
-  echo "  --build                 Build the Docker image and exit"
-  echo "  --pull                  Pull latest image from registry"
-  echo "  --rebuild               Force rebuild the Docker image and continue"
-  echo "  --recreate              Remove existing container and create new one"
-  echo "  --verbose               Show detailed output including Docker commands"
-  echo "  --dry-run               Show what would be executed without actually running"
-  echo "  --remove-containers     Remove stopped Claude Code containers and exit"
-  echo "  --force-remove-all-containers"
-  echo "                          Remove ALL Claude Code containers (including active ones) and exit"
-  echo "  --export-dockerfile FILE"
-  echo "                          Export the embedded Dockerfile to specified file and exit"
-  echo "  --push-to REPO          Tag and push image to repository (e.g., docker.io/user/repo:tag)"
-  echo "  --generate-completions SHELL"
-  echo "                          Generate shell completions (bash|zsh) and exit"
-  echo "  --username NAME         Set container username (default: current user)"
-  echo "  --extra-package PACKAGE Add extra Ubuntu package to container (can be used multiple times)"
-  echo "                          Only works with --build, --rebuild, or --export-dockerfile"
-  echo "  -E, --forward-variable VAR"
-  echo "                          Forward additional environment variable to container (can be used multiple times)"
-  echo "                          Use -E !VAR to exclude a variable from the default forwarded list"
-  echo "  --aws                   Enable AWS integration: forward common AWS environment variables"
-  echo "                          and mount ~/.aws directory to container (readonly)"
-  echo "  --                      Pass remaining arguments directly to docker run/exec"
-  echo "  -h, --help              Show this help"
-  echo ""
-  echo "EXAMPLES:"
-  echo "  # Interactive shell"
-  echo "  $(basename $0)"
-  echo ""
-  echo "  # Run specific command"
-  echo "  $(basename $0) claude --dangerously-skip-permissions 'help me with this project'"
-  echo ""
-  echo "  # Custom workspace"
-  echo "  $(basename $0) -w /path/to/project"
-  echo ""
-  echo "  # One-shot command with cleanup"
-  echo "  $(basename $0) --rm --no-interactive claude auth status"
-  echo ""
-  echo "  # Build image only"
-  echo "  $(basename $0) --build"
-  echo ""
-  echo "  # Force rebuild image and run"
-  echo "  $(basename $0) --rebuild"
-  echo ""
-  echo "  # Push to Docker Hub"
-  echo "  $(basename $0) --push-to docker.io/username/claude-code:latest"
-  echo ""
-  echo "  # Add extra packages during build"
-  echo "  $(basename $0) --extra-package tmux --extra-package curl --build"
-  echo ""
-  echo "  # Use environment variable for extra packages"
-  echo "  RUN_CLAUDE_EXTRA_PACKAGES=\"tmux curl\" $(basename $0) --extra-package gpg --build"
-  echo ""
-  echo "  # Forward additional environment variables"
-  echo "  $(basename $0) -E AWS_ACCESS_KEY_ID -E AWS_SECRET_ACCESS_KEY"
-  echo ""
-  echo "  # Exclude a default variable from being forwarded"
-  echo "  $(basename $0) -E !TERM -E AWS_ACCESS_KEY_ID"
-  echo ""
-  echo "  # Use environment variable for extra variables"
-  echo "  RUN_CLAUDE_EXTRA_VARIABLES=\"AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY\" $(basename $0)"
-  echo ""
-  echo "  # Pass Docker arguments directly"
-  echo "  $(basename $0) -- --env MY_VAR=value --volume /host:/container"
-  echo ""
-  echo "  # Install shell completions"
-  echo "  # For bash:"
-  echo "  echo 'eval \"\$($(basename $0) --generate-completions bash)\"' >> ~/.bashrc"
-  echo ""
-  echo "  # For zsh:"
-  echo "  echo 'eval \"\$($(basename $0) --generate-completions zsh)\"' >> ~/.zshrc"
-  echo ""
-  echo "ENVIRONMENT VARIABLES:"
-  echo "  CLAUDE_CODE_IMAGE_NAME  Override the default Docker Hub image (default: do3cc/claude-code)"
-  echo "                          Note: :latest tag is automatically appended"
-  echo ""
-  echo "  RUN_CLAUDE_EXTRA_PACKAGES  Space-separated list of extra Ubuntu packages to install"
-  echo "                             Combined with --extra-package options during build"
-  echo ""
-  echo "  RUN_CLAUDE_EXTRA_VARIABLES Space-separated list of extra environment variables to forward"
-  echo "                             Combined with -E/--forward-variable options. Use !VAR to exclude variables"
-  echo ""
-  echo "  # Use custom image:"
-  echo "  CLAUDE_CODE_IMAGE_NAME=myregistry/my-claude-code $(basename $0)"
+	echo "Usage: $(basename $0) [OPTIONS] [COMMAND]"
+	echo ""
+	echo "OPTIONS:"
+	echo "  -w, --workspace PATH    Set workspace path (default: current directory)"
+	echo "  -c, --claude-config PATH Set Claude config path (default: ~/.claude)"
+	echo "  -n, --name NAME         Set container name"
+	echo "  -i, --image NAME        Set image name (default: claude-code:latest)"
+	echo "  --rm                    Remove container after exit (default: persistent)"
+	echo "  --no-interactive        Run in non-interactive mode"
+	echo "  --no-privileged         Run without privileged mode"
+	echo "  --safe                  Disable dangerous permissions"
+	echo "  --no-gpg                Disable GPG agent forwarding"
+	echo "  --gpg                   Enable GPG agent forwarding (overrides RUN_CLAUDE_NO_GPG)"
+	echo "  --build                 Build the Docker image and exit"
+	echo "  --pull                  Pull latest image from registry"
+	echo "  --rebuild               Force rebuild the Docker image and continue"
+	echo "  --recreate              Remove existing container and create new one"
+	echo "  --verbose               Show detailed output including Docker commands"
+	echo "  --dry-run               Show what would be executed without actually running"
+	echo "  --remove-containers     Remove stopped Claude Code containers and exit"
+	echo "  --force-remove-all-containers"
+	echo "                          Remove ALL Claude Code containers (including active ones) and exit"
+	echo "  --export-dockerfile FILE"
+	echo "                          Export the embedded Dockerfile to specified file and exit"
+	echo "  --push-to REPO          Tag and push image to repository (e.g., docker.io/user/repo:tag)"
+	echo "  --generate-completions SHELL"
+	echo "                          Generate shell completions (bash|zsh) and exit"
+	echo "  --username NAME         Set container username (default: current user)"
+	echo "  --extra-package PACKAGE Add extra Ubuntu package to container (can be used multiple times)"
+	echo "                          Only works with --build, --rebuild, or --export-dockerfile"
+	echo "  -E, --forward-variable VAR"
+	echo "                          Forward additional environment variable to container (can be used multiple times)"
+	echo "                          Use -E !VAR to exclude a variable from the default forwarded list"
+	echo "  --aws                   Enable AWS integration: forward common AWS environment variables"
+	echo "                          and mount ~/.aws directory to container (readonly)"
+	echo "  --                      Pass remaining arguments directly to docker run/exec"
+	echo "  -h, --help              Show this help"
+	echo ""
+	echo "EXAMPLES:"
+	echo "  # Interactive shell"
+	echo "  $(basename $0)"
+	echo ""
+	echo "  # Run specific command"
+	echo "  $(basename $0) claude --dangerously-skip-permissions 'help me with this project'"
+	echo ""
+	echo "  # Custom workspace"
+	echo "  $(basename $0) -w /path/to/project"
+	echo ""
+	echo "  # One-shot command with cleanup"
+	echo "  $(basename $0) --rm --no-interactive claude auth status"
+	echo ""
+	echo "  # Build image only"
+	echo "  $(basename $0) --build"
+	echo ""
+	echo "  # Force rebuild image and run"
+	echo "  $(basename $0) --rebuild"
+	echo ""
+	echo "  # Push to Docker Hub"
+	echo "  $(basename $0) --push-to docker.io/username/claude-code:latest"
+	echo ""
+	echo "  # Add extra packages during build"
+	echo "  $(basename $0) --extra-package tmux --extra-package curl --build"
+	echo ""
+	echo "  # Use environment variable for extra packages"
+	echo "  RUN_CLAUDE_EXTRA_PACKAGES=\"tmux curl\" $(basename $0) --extra-package gpg --build"
+	echo ""
+	echo "  # Forward additional environment variables"
+	echo "  $(basename $0) -E AWS_ACCESS_KEY_ID -E AWS_SECRET_ACCESS_KEY"
+	echo ""
+	echo "  # Exclude a default variable from being forwarded"
+	echo "  $(basename $0) -E !TERM -E AWS_ACCESS_KEY_ID"
+	echo ""
+	echo "  # Use environment variable for extra variables"
+	echo "  RUN_CLAUDE_EXTRA_VARIABLES=\"AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY\" $(basename $0)"
+	echo ""
+	echo "  # Pass Docker arguments directly"
+	echo "  $(basename $0) -- --env MY_VAR=value --volume /host:/container"
+	echo ""
+	echo "  # Install shell completions"
+	echo "  # For bash:"
+	echo "  echo 'eval \"\$($(basename $0) --generate-completions bash)\"' >> ~/.bashrc"
+	echo ""
+	echo "  # For zsh:"
+	echo "  echo 'eval \"\$($(basename $0) --generate-completions zsh)\"' >> ~/.zshrc"
+	echo ""
+	echo "ENVIRONMENT VARIABLES:"
+	echo "  CLAUDE_CODE_IMAGE_NAME  Override the default Docker Hub image (default: do3cc/claude-code)"
+	echo "                          Note: :latest tag is automatically appended"
+	echo ""
+	echo "  RUN_CLAUDE_EXTRA_PACKAGES  Space-separated list of extra Ubuntu packages to install"
+	echo "                             Combined with --extra-package options during build"
+	echo ""
+	echo "  RUN_CLAUDE_EXTRA_VARIABLES Space-separated list of extra environment variables to forward"
+	echo "                             Combined with -E/--forward-variable options. Use !VAR to exclude variables"
+	echo ""
+	echo "  # Use custom image:"
+	echo "  CLAUDE_CODE_IMAGE_NAME=myregistry/my-claude-code $(basename $0)"
 }
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
-  case $1 in
-  -w | --workspace)
-    WORKSPACE_PATH="$2"
-    shift 2
-    ;;
-  -c | --claude-config)
-    CLAUDE_CONFIG_PATH="$2"
-    shift 2
-    ;;
-  -n | --name)
-    CONTAINER_NAME="$2"
-    shift 2
-    ;;
-  -i | --image)
-    IMAGE_NAME="$2"
-    shift 2
-    ;;
-  --rm)
-    REMOVE_CONTAINER=true
-    shift
-    ;;
-  --no-interactive)
-    INTERACTIVE=false
-    shift
-    ;;
-  --no-privileged)
-    PRIVILEGED=false
-    shift
-    ;;
-  --safe)
-    DANGEROUS_MODE=false
-    ENABLE_GPG=false
-    shift
-    ;;
-  --no-gpg)
-    ENABLE_GPG=false
-    shift
-    ;;
-  --gpg)
-    ENABLE_GPG=true
-    shift
-    ;;
-  --build)
-    BUILD_ONLY=true
-    shift
-    ;;
-  --pull)
-    FORCE_PULL=true
-    shift
-    ;;
-  --rebuild)
-    FORCE_REBUILD=true
-    shift
-    ;;
-  --recreate)
-    RECREATE_CONTAINER=true
-    shift
-    ;;
-  --verbose)
-    VERBOSE=true
-    shift
-    ;;
-  --dry-run)
-    DRY_RUN=true
-    shift
-    ;;
-  --remove-containers)
-    REMOVE_CONTAINERS=true
-    shift
-    ;;
-  --force-remove-all-containers)
-    FORCE_REMOVE_ALL_CONTAINERS=true
-    shift
-    ;;
-  --export-dockerfile)
-    EXPORT_DOCKERFILE="$2"
-    shift 2
-    ;;
-  --push-to)
-    PUSH_TO_REPO="$2"
-    shift 2
-    ;;
-  --generate-completions)
-    generate_completions "$2"
-    exit 0
-    ;;
-  --username)
-    USERNAME="$2"
-    shift 2
-    ;;
-  --extra-package)
-    EXTRA_PACKAGES+=("$2")
-    shift 2
-    ;;
-  -E | --forward-variable)
-    var="$2"
-    if [[ "$var" =~ ^!(.+)$ ]]; then
-      # Remove variable from forwarded list
-      var_to_remove="${BASH_REMATCH[1]}"
-      new_array=()
-      for existing_var in "${FORWARDED_VARIABLES[@]}"; do
-        if [[ "$existing_var" != "$var_to_remove" ]]; then
-          new_array+=("$existing_var")
-        fi
-      done
-      FORWARDED_VARIABLES=("${new_array[@]}")
-    else
-      # Add variable to forwarded list
-      FORWARDED_VARIABLES+=("$var")
-    fi
-    shift 2
-    ;;
-  --aws)
-    # Add default AWS environment variables
-    AWS_VARS=("AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN" "AWS_REGION" "AWS_DEFAULT_REGION" "AWS_PROFILE" "AWS_ROLE_ARN" "AWS_WEB_IDENTITY_TOKEN_FILE" "AWS_ROLE_SESSION_NAME")
-    for aws_var in "${AWS_VARS[@]}"; do
-      FORWARDED_VARIABLES+=("$aws_var")
-    done
-    # Mount ~/.aws directory if it exists
-    if [[ -d "$HOME/.aws" ]]; then
-      EXTRA_VOLUMES+=(-v "$HOME/.aws:/home/ubuntu/.aws:ro")
-    fi
-    shift
-    ;;
-  -h | --help)
-    usage
-    exit 0
-    ;;
-  --)
-    # Everything after -- is passed to docker
-    shift
-    PASSTHROUGH_ARGS=("$@")
-    break
-    ;;
-  --*)
-    # Unknown long option
-    echo -e "${RED}Error: Unknown option '$1'${NC}"
-    echo ""
-    usage
-    exit 1
-    ;;
-  -*)
-    # Unknown short option
-    echo -e "${RED}Error: Unknown option '$1'${NC}"
-    echo ""
-    usage
-    exit 1
-    ;;
-  *)
-    # Remaining arguments are the command to run
-    break
-    ;;
-  esac
+	case $1 in
+	-w | --workspace)
+		WORKSPACE_PATH="$2"
+		shift 2
+		;;
+	-c | --claude-config)
+		CLAUDE_CONFIG_PATH="$2"
+		shift 2
+		;;
+	-n | --name)
+		CONTAINER_NAME="$2"
+		shift 2
+		;;
+	-i | --image)
+		IMAGE_NAME="$2"
+		shift 2
+		;;
+	--rm)
+		REMOVE_CONTAINER=true
+		shift
+		;;
+	--no-interactive)
+		INTERACTIVE=false
+		shift
+		;;
+	--no-privileged)
+		PRIVILEGED=false
+		shift
+		;;
+	--safe)
+		DANGEROUS_MODE=false
+		ENABLE_GPG=false
+		shift
+		;;
+	--no-gpg)
+		ENABLE_GPG=false
+		shift
+		;;
+	--gpg)
+		ENABLE_GPG=true
+		shift
+		;;
+	--build)
+		BUILD_ONLY=true
+		shift
+		;;
+	--pull)
+		FORCE_PULL=true
+		shift
+		;;
+	--rebuild)
+		FORCE_REBUILD=true
+		shift
+		;;
+	--recreate)
+		RECREATE_CONTAINER=true
+		shift
+		;;
+	--verbose)
+		VERBOSE=true
+		shift
+		;;
+	--dry-run)
+		DRY_RUN=true
+		shift
+		;;
+	--remove-containers)
+		REMOVE_CONTAINERS=true
+		shift
+		;;
+	--force-remove-all-containers)
+		FORCE_REMOVE_ALL_CONTAINERS=true
+		shift
+		;;
+	--export-dockerfile)
+		EXPORT_DOCKERFILE="$2"
+		shift 2
+		;;
+	--push-to)
+		PUSH_TO_REPO="$2"
+		shift 2
+		;;
+	--generate-completions)
+		generate_completions "$2"
+		exit 0
+		;;
+	--username)
+		USERNAME="$2"
+		shift 2
+		;;
+	--extra-package)
+		EXTRA_PACKAGES+=("$2")
+		shift 2
+		;;
+	-E | --forward-variable)
+		var="$2"
+		if [[ "$var" =~ ^!(.+)$ ]]; then
+			# Remove variable from forwarded list
+			var_to_remove="${BASH_REMATCH[1]}"
+			new_array=()
+			for existing_var in "${FORWARDED_VARIABLES[@]}"; do
+				if [[ "$existing_var" != "$var_to_remove" ]]; then
+					new_array+=("$existing_var")
+				fi
+			done
+			FORWARDED_VARIABLES=("${new_array[@]}")
+		else
+			# Add variable to forwarded list
+			FORWARDED_VARIABLES+=("$var")
+		fi
+		shift 2
+		;;
+	--aws)
+		# Add default AWS environment variables
+		AWS_VARS=("AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN" "AWS_REGION" "AWS_DEFAULT_REGION" "AWS_PROFILE" "AWS_ROLE_ARN" "AWS_WEB_IDENTITY_TOKEN_FILE" "AWS_ROLE_SESSION_NAME")
+		for aws_var in "${AWS_VARS[@]}"; do
+			FORWARDED_VARIABLES+=("$aws_var")
+		done
+		# Mount ~/.aws directory if it exists
+		if [[ -d "$HOME/.aws" ]]; then
+			EXTRA_VOLUMES+=(-v "$HOME/.aws:/home/ubuntu/.aws:ro")
+		fi
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	--)
+		# Everything after -- is passed to docker
+		shift
+		PASSTHROUGH_ARGS=("$@")
+		break
+		;;
+	--*)
+		# Unknown long option
+		echo -e "${RED}Error: Unknown option '$1'${NC}"
+		echo ""
+		usage
+		exit 1
+		;;
+	-*)
+		# Unknown short option
+		echo -e "${RED}Error: Unknown option '$1'${NC}"
+		echo ""
+		usage
+		exit 1
+		;;
+	*)
+		# Remaining arguments are the command to run
+		break
+		;;
+	esac
 done
 
 # Handle GPG environment variable override
 if [[ "$RUN_CLAUDE_NO_GPG" == "1" && "$ENABLE_GPG" == "true" ]]; then
-  ENABLE_GPG=false
+	ENABLE_GPG=false
 fi
 
 # Handle extra packages from environment variable
 if [[ -n "$RUN_CLAUDE_EXTRA_PACKAGES" ]]; then
-  # Convert space-separated string to array and append to EXTRA_PACKAGES
-  IFS=' ' read -ra ENV_PACKAGES <<<"$RUN_CLAUDE_EXTRA_PACKAGES"
-  EXTRA_PACKAGES+=("${ENV_PACKAGES[@]}")
+	# Convert space-separated string to array and append to EXTRA_PACKAGES
+	IFS=' ' read -ra ENV_PACKAGES <<<"$RUN_CLAUDE_EXTRA_PACKAGES"
+	EXTRA_PACKAGES+=("${ENV_PACKAGES[@]}")
 fi
 
 # Handle extra variables from environment variable
 if [[ -n "$RUN_CLAUDE_EXTRA_VARIABLES" ]]; then
-  # Convert space-separated string to array and process each variable
-  IFS=' ' read -ra ENV_VARIABLES <<<"$RUN_CLAUDE_EXTRA_VARIABLES"
-  for var in "${ENV_VARIABLES[@]}"; do
-    if [[ "$var" =~ ^!(.+)$ ]]; then
-      # Remove variable from forwarded list
-      var_to_remove="${BASH_REMATCH[1]}"
-      new_array=()
-      for existing_var in "${FORWARDED_VARIABLES[@]}"; do
-        if [[ "$existing_var" != "$var_to_remove" ]]; then
-          new_array+=("$existing_var")
-        fi
-      done
-      FORWARDED_VARIABLES=("${new_array[@]}")
-    else
-      # Add variable to forwarded list
-      FORWARDED_VARIABLES+=("$var")
-    fi
-  done
+	# Convert space-separated string to array and process each variable
+	IFS=' ' read -ra ENV_VARIABLES <<<"$RUN_CLAUDE_EXTRA_VARIABLES"
+	for var in "${ENV_VARIABLES[@]}"; do
+		if [[ "$var" =~ ^!(.+)$ ]]; then
+			# Remove variable from forwarded list
+			var_to_remove="${BASH_REMATCH[1]}"
+			new_array=()
+			for existing_var in "${FORWARDED_VARIABLES[@]}"; do
+				if [[ "$existing_var" != "$var_to_remove" ]]; then
+					new_array+=("$existing_var")
+				fi
+			done
+			FORWARDED_VARIABLES=("${new_array[@]}")
+		else
+			# Add variable to forwarded list
+			FORWARDED_VARIABLES+=("$var")
+		fi
+	done
 fi
 
 # Validate conflicting options
 if [[ "$FORCE_PULL" == "true" && "$BUILD_ONLY" == "true" ]]; then
-  echo -e "${RED}Error: Cannot use --pull and --build together${NC}"
-  echo -e "${YELLOW}Choose one: --pull (to pull latest image) or --build (to build locally)${NC}"
-  exit 1
+	echo -e "${RED}Error: Cannot use --pull and --build together${NC}"
+	echo -e "${YELLOW}Choose one: --pull (to pull latest image) or --build (to build locally)${NC}"
+	exit 1
 fi
 
 # Validate that --extra-package is only used with appropriate commands
 if [[ ${#EXTRA_PACKAGES[@]} -gt 0 ]]; then
-  if [[ "$BUILD_ONLY" != "true" && "$FORCE_REBUILD" != "true" && -z "$EXPORT_DOCKERFILE" ]]; then
-    echo -e "${RED}Error: --extra-package can only be used with --build, --rebuild, or --export-dockerfile${NC}"
-    echo -e "${YELLOW}Extra packages are only applied during image building operations${NC}"
-    exit 1
-  fi
+	if [[ "$BUILD_ONLY" != "true" && "$FORCE_REBUILD" != "true" && -z "$EXPORT_DOCKERFILE" ]]; then
+		echo -e "${RED}Error: --extra-package can only be used with --build, --rebuild, or --export-dockerfile${NC}"
+		echo -e "${YELLOW}Extra packages are only applied during image building operations${NC}"
+		exit 1
+	fi
 fi
 
 # Validate paths
 if [[ ! -d "$WORKSPACE_PATH" ]]; then
-  echo -e "${RED}Error: Workspace path does not exist: $WORKSPACE_PATH${NC}"
-  exit 1
+	echo -e "${RED}Error: Workspace path does not exist: $WORKSPACE_PATH${NC}"
+	exit 1
 fi
 
 if [[ ! -d "$CLAUDE_CONFIG_PATH" ]]; then
-  echo -e "${YELLOW}Warning: Claude config path does not exist: $CLAUDE_CONFIG_PATH${NC}"
-  echo -e "${YELLOW}You may need to run 'claude auth' first${NC}"
+	echo -e "${YELLOW}Warning: Claude config path does not exist: $CLAUDE_CONFIG_PATH${NC}"
+	echo -e "${YELLOW}You may need to run 'claude auth' first${NC}"
 fi
 
 # Build podman run command
 DOCKER_CMD="podman run"
 
 if [[ "$REMOVE_CONTAINER" == "true" ]]; then
-  DOCKER_CMD="$DOCKER_CMD --rm"
+	DOCKER_CMD="$DOCKER_CMD --rm"
 fi
 
 if [[ "$INTERACTIVE" == "true" ]]; then
-  DOCKER_CMD="$DOCKER_CMD -it"
+	DOCKER_CMD="$DOCKER_CMD -it"
 fi
 
 if [[ "$PRIVILEGED" == "true" ]]; then
-  DOCKER_CMD="$DOCKER_CMD --privileged"
+	DOCKER_CMD="$DOCKER_CMD --privileged"
 fi
 
 DOCKER_CMD="$DOCKER_CMD --name $CONTAINER_NAME"
@@ -684,30 +684,30 @@ DOCKER_CMD="$DOCKER_CMD \
 
 # Forward dangerous mode flags
 if [[ "$DANGEROUS_MODE" == "true" ]]; then
-  DOCKER_CMD="$DOCKER_CMD \
+	DOCKER_CMD="$DOCKER_CMD \
 	-e CLAUDE_DANGEROUS_MODE=1 \
 	-e ANTHROPIC_DANGEROUS_MODE=1"
 fi
 
 # Forward verbose mode to container
 if [[ "$VERBOSE" == "true" ]]; then
-  DOCKER_CMD="$DOCKER_CMD \
+	DOCKER_CMD="$DOCKER_CMD \
 	-e RUN_CLAUDE_VERBOSE=1"
 fi
 
 # Forward environment variables from the FORWARDED_VARIABLES list
 FORWARDED_ENV_FLAGS=$(generate_forwarded_variables)
 if [[ -n "$FORWARDED_ENV_FLAGS" ]]; then
-  DOCKER_CMD="$DOCKER_CMD$FORWARDED_ENV_FLAGS"
+	DOCKER_CMD="$DOCKER_CMD$FORWARDED_ENV_FLAGS"
 fi
 
 # Add conditional bind-mount for host Claude config if it exists
 if [[ -f "$HOME/.claude.json" ]]; then
-  DOCKER_CMD="$DOCKER_CMD \
+	DOCKER_CMD="$DOCKER_CMD \
 	-v $HOME/.claude.json:/home/ubuntu/.claude.host.json:ro"
-  if [[ "$VERBOSE" == "true" ]]; then
-    echo -e "${MAGENTA}Host Claude config detected and will be mounted for merging${NC}"
-  fi
+	if [[ "$VERBOSE" == "true" ]]; then
+		echo -e "${MAGENTA}Host Claude config detected and will be mounted for merging${NC}"
+	fi
 fi
 
 # Add volume mounts
@@ -717,52 +717,52 @@ DOCKER_CMD="$DOCKER_CMD \
 
 # Add optional read-only mounts if they exist
 if [[ -d "$HOME/.ssh" ]]; then
-  DOCKER_CMD="$DOCKER_CMD \
+	DOCKER_CMD="$DOCKER_CMD \
 	-v $HOME/.ssh:/home/ubuntu/.ssh:ro"
 fi
 
 if [[ -f "$HOME/.gitconfig" ]]; then
-  DOCKER_CMD="$DOCKER_CMD \
+	DOCKER_CMD="$DOCKER_CMD \
 	-v $HOME/.gitconfig:/home/ubuntu/.gitconfig:ro"
 fi
 
 # Forward SSH agent if available
 if [[ -n "$SSH_AUTH_SOCK" && -S "$SSH_AUTH_SOCK" ]]; then
-  SSH_AGENT_PATH=$(readlink -f "$SSH_AUTH_SOCK")
-  DOCKER_CMD="$DOCKER_CMD \
+	SSH_AGENT_PATH=$(readlink -f "$SSH_AUTH_SOCK")
+	DOCKER_CMD="$DOCKER_CMD \
 	-v $SSH_AGENT_PATH:/ssh-agent \
 	-e SSH_AUTH_SOCK=/ssh-agent"
-  if [[ "$VERBOSE" == "true" ]]; then
-    echo -e "${MAGENTA}SSH agent socket detected and will be forwarded to container${NC}"
-  fi
+	if [[ "$VERBOSE" == "true" ]]; then
+		echo -e "${MAGENTA}SSH agent socket detected and will be forwarded to container${NC}"
+	fi
 fi
 
 # Forward GPG directory and agent if available
 if [[ "$ENABLE_GPG" == "true" && -d "$HOME/.gnupg" ]]; then
-  # Mount GPG directory (read-write for agent communication)
-  DOCKER_CMD="$DOCKER_CMD \
+	# Mount GPG directory (read-write for agent communication)
+	DOCKER_CMD="$DOCKER_CMD \
 	-v $HOME/.gnupg:/home/ubuntu/.gnupg"
 
-  # Forward GPG agent extra socket if available
-  GPG_EXTRA_SOCKET=$(gpgconf --list-dirs agent-extra-socket 2>/dev/null)
-  if [[ -S "$GPG_EXTRA_SOCKET" ]]; then
-    DOCKER_CMD="$DOCKER_CMD \
+	# Forward GPG agent extra socket if available
+	GPG_EXTRA_SOCKET=$(gpgconf --list-dirs agent-extra-socket 2>/dev/null)
+	if [[ -S "$GPG_EXTRA_SOCKET" ]]; then
+		DOCKER_CMD="$DOCKER_CMD \
 	-v $GPG_EXTRA_SOCKET:/gpg-agent-extra"
-    if [[ "$VERBOSE" == "true" ]]; then
-      echo -e "${MAGENTA}GPG agent socket detected and will be forwarded to container${NC}"
-    fi
-  fi
+		if [[ "$VERBOSE" == "true" ]]; then
+			echo -e "${MAGENTA}GPG agent socket detected and will be forwarded to container${NC}"
+		fi
+	fi
 
-  if [[ "$VERBOSE" == "true" ]]; then
-    echo -e "${MAGENTA}GPG directory detected and will be mounted to container${NC}"
-  fi
+	if [[ "$VERBOSE" == "true" ]]; then
+		echo -e "${MAGENTA}GPG directory detected and will be mounted to container${NC}"
+	fi
 fi
 
 # Add extra volumes if any were specified
 if [[ ${#EXTRA_VOLUMES[@]} -gt 0 ]]; then
-  for volume in "${EXTRA_VOLUMES[@]}"; do
-    DOCKER_CMD="$DOCKER_CMD $volume"
-  done
+	for volume in "${EXTRA_VOLUMES[@]}"; do
+		DOCKER_CMD="$DOCKER_CMD $volume"
+	done
 fi
 
 # Add image name
@@ -770,225 +770,204 @@ DOCKER_CMD="$DOCKER_CMD $IMAGE_NAME"
 
 # Add passthrough arguments if provided (after image name)
 if [[ ${#PASSTHROUGH_ARGS[@]} -gt 0 ]]; then
-  for arg in "${PASSTHROUGH_ARGS[@]}"; do
-    DOCKER_CMD="$DOCKER_CMD $arg"
-  done
+	for arg in "${PASSTHROUGH_ARGS[@]}"; do
+		DOCKER_CMD="$DOCKER_CMD $arg"
+	done
 fi
 
 # Add command if provided (only if no passthrough args, since passthrough includes the command)
 if [[ $# -gt 0 && ${#PASSTHROUGH_ARGS[@]} -eq 0 ]]; then
-  DOCKER_CMD="$DOCKER_CMD $*"
+	DOCKER_CMD="$DOCKER_CMD $*"
 fi
 
 # Print what we're about to run
 if [[ "$VERBOSE" == "true" ]]; then
-  echo -e "${MAGENTA}Running Claude Code container...${NC}"
-  echo -e "${MAGENTA}Container name: ${BRIGHT_CYAN}$CONTAINER_NAME${NC}"
-  echo -e "${MAGENTA}Workspace: ${BRIGHT_CYAN}$WORKSPACE_PATH${NC}"
-  echo -e "${MAGENTA}Command:${NC}"
-  format_docker_command "$DOCKER_CMD"
-  echo ""
+	echo -e "${MAGENTA}Running Claude Code container...${NC}"
+	echo -e "${MAGENTA}Container name: ${BRIGHT_CYAN}$CONTAINER_NAME${NC}"
+	echo -e "${MAGENTA}Workspace: ${BRIGHT_CYAN}$WORKSPACE_PATH${NC}"
+	echo -e "${MAGENTA}Command:${NC}"
+	format_docker_command "$DOCKER_CMD"
+	echo ""
 fi
 
 # Function to build Docker image
 build_image() {
-  echo -e "${MAGENTA}Building Docker image ${BRIGHT_CYAN}$IMAGE_NAME${MAGENTA}...${NC}"
+	echo -e "${MAGENTA}Building Docker image ${BRIGHT_CYAN}$IMAGE_NAME${MAGENTA}...${NC}"
 
-  # Create temporary directory for Dockerfile
-  TEMP_DIR=$(mktemp -d)
-  trap "rm -rf $TEMP_DIR" EXIT
+	# Create temporary directory for Dockerfile
+	TEMP_DIR=$(mktemp -d)
+	trap "rm -rf $TEMP_DIR" EXIT
 
-  # Generate Dockerfile using shared function
-  generate_dockerfile_content >"$TEMP_DIR/Dockerfile"
+	# Generate Dockerfile using shared function
+	generate_dockerfile_content >"$TEMP_DIR/Dockerfile"
 
-  # Build the image
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}podman build --build-arg USERNAME=\"$USERNAME\" -t \"$IMAGE_NAME\" \"$TEMP_DIR\"${NC}"
-    echo -e "${GREEN}Dry run complete - would have built Podman image.${NC}"
-    return 0
-  fi
+	# Build the image
+	if [[ "$DRY_RUN" == "true" ]]; then
+		echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}podman build --build-arg USERNAME=\"$USERNAME\" -t \"$IMAGE_NAME\" \"$TEMP_DIR\"${NC}"
+		echo -e "${GREEN}Dry run complete - would have built Podman image.${NC}"
+		return 0
+	fi
 
-  if podman build --build-arg USERNAME="$USERNAME" -t "$IMAGE_NAME" "$TEMP_DIR"; then
-    echo -e "${MAGENTA}Successfully built ${BRIGHT_CYAN}$IMAGE_NAME${NC}"
-  else
-    echo -e "${RED}Failed to build Docker image${NC}"
-    exit 1
-  fi
+	if podman build --build-arg USERNAME="$USERNAME" -t "$IMAGE_NAME" "$TEMP_DIR"; then
+		echo -e "${MAGENTA}Successfully built ${BRIGHT_CYAN}$IMAGE_NAME${NC}"
+	else
+		echo -e "${RED}Failed to build Docker image${NC}"
+		exit 1
+	fi
 }
 
 # Function to pull and tag remote image
 pull_remote_image() {
-  local REMOTE_IMAGE="${CLAUDE_CODE_IMAGE_NAME:-do3cc/claude-code}:latest"
+	local REMOTE_IMAGE="${CLAUDE_CODE_IMAGE_NAME:-do3cc/claude-code}:latest"
 
-  echo -e "${MAGENTA}Pulling remote image ${BRIGHT_CYAN}$REMOTE_IMAGE${MAGENTA}...${NC}"
+	echo -e "${MAGENTA}Pulling remote image ${BRIGHT_CYAN}$REMOTE_IMAGE${MAGENTA}...${NC}"
 
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}podman pull \"$REMOTE_IMAGE\"${NC}"
-    echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}podman tag \"$REMOTE_IMAGE\" \"$IMAGE_NAME\"${NC}"
-    echo -e "${GREEN}Dry run complete - would have pulled and tagged remote image.${NC}"
-    return 0
-  fi
+	if [[ "$DRY_RUN" == "true" ]]; then
+		echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}podman pull \"$REMOTE_IMAGE\"${NC}"
+		echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}podman tag \"$REMOTE_IMAGE\" \"$IMAGE_NAME\"${NC}"
+		echo -e "${GREEN}Dry run complete - would have pulled and tagged remote image.${NC}"
+		return 0
+	fi
 
-  if podman pull "$REMOTE_IMAGE"; then
-    echo -e "${MAGENTA}Successfully pulled ${BRIGHT_CYAN}$REMOTE_IMAGE${NC}"
-    echo -e "${MAGENTA}Tagging as ${BRIGHT_CYAN}$IMAGE_NAME${MAGENTA}...${NC}"
-    if podman tag "$REMOTE_IMAGE" "$IMAGE_NAME"; then
-      echo -e "${MAGENTA}Successfully tagged as ${BRIGHT_CYAN}$IMAGE_NAME${NC}"
-    else
-      echo -e "${RED}Failed to tag remote image${NC}"
-      echo -e "${YELLOW}Falling back to building from source...${NC}"
-      build_image
-    fi
-  else
-    echo -e "${YELLOW}Failed to pull remote image. Building from source...${NC}"
-    build_image
-  fi
+	if podman pull "$REMOTE_IMAGE"; then
+		echo -e "${MAGENTA}Successfully pulled ${BRIGHT_CYAN}$REMOTE_IMAGE${NC}"
+		echo -e "${MAGENTA}Tagging as ${BRIGHT_CYAN}$IMAGE_NAME${MAGENTA}...${NC}"
+		if podman tag "$REMOTE_IMAGE" "$IMAGE_NAME"; then
+			echo -e "${MAGENTA}Successfully tagged as ${BRIGHT_CYAN}$IMAGE_NAME${NC}"
+		else
+			echo -e "${RED}Failed to tag remote image${NC}"
+			echo -e "${YELLOW}Falling back to building from source...${NC}"
+			build_image
+		fi
+	else
+		echo -e "${YELLOW}Failed to pull remote image. Building from source...${NC}"
+		build_image
+	fi
 }
 
 # Function to check if image exists and build if necessary
 build_image_if_missing() {
-  if ! podman image inspect "$IMAGE_NAME" &>/dev/null; then
-    echo -e "${YELLOW}Docker image $IMAGE_NAME not found.${NC}"
-    echo -e "${YELLOW}Building image locally...${NC}"
-    build_image
-  fi
+	if ! podman image inspect "$IMAGE_NAME" &>/dev/null; then
+		echo -e "${YELLOW}Docker image $IMAGE_NAME not found.${NC}"
+		echo -e "${YELLOW}Building image locally...${NC}"
+		build_image
+	fi
 }
 
 # Function to remove stopped Claude Code containers using labels
 remove_stopped_containers() {
-  echo -e "${GREEN}Searching for Claude Code containers...${NC}"
+	echo -e "${GREEN}Searching for Claude Code containers...${NC}"
 
-  # Find all containers with our label
-  ALL_CONTAINERS=$(podman ps -aq --filter "label=run-claude.managed=true" 2>/dev/null || true)
+	# Find all containers with our label
+	ALL_CONTAINERS=$(podman ps -aq --filter "label=run-claude.managed=true" 2>/dev/null || true)
 
-  if [[ -z "$ALL_CONTAINERS" ]]; then
-    echo -e "${YELLOW}No Claude Code containers found.${NC}"
-    return 0
-  fi
+	if [[ -z "$ALL_CONTAINERS" ]]; then
+		echo -e "${YELLOW}No Claude Code containers found.${NC}"
+		return 0
+	fi
 
-  # Find running containers with our label
-  RUNNING_CONTAINERS=$(podman ps -q --filter "label=run-claude.managed=true" 2>/dev/null || true)
+	# Find running containers with our label
+	RUNNING_CONTAINERS=$(podman ps -q --filter "label=run-claude.managed=true" 2>/dev/null || true)
 
-  # Find stopped containers (all - running)
-  STOPPED_CONTAINERS=""
-  for container in $ALL_CONTAINERS; do
-    if ! echo "$RUNNING_CONTAINERS" | grep -q "$container"; then
-      STOPPED_CONTAINERS="$STOPPED_CONTAINERS $container"
-    fi
-  done
+	# Find stopped containers (all - running)
+	STOPPED_CONTAINERS=""
+	for container in $ALL_CONTAINERS; do
+		if ! echo "$RUNNING_CONTAINERS" | grep -q "$container"; then
+			STOPPED_CONTAINERS="$STOPPED_CONTAINERS $container"
+		fi
+	done
 
-  # Display all containers with status
-  echo -e "${YELLOW}Found the following Claude Code containers:${NC}"
-  podman ps -a --filter "label=run-claude.managed=true" --format "table {{.Names}}\t{{.Status}}\t{{.Label \"run-claude.workspace\"}}" 2>/dev/null || true
-  echo ""
+	# Display all containers with status
+	echo -e "${YELLOW}Found the following Claude Code containers:${NC}"
+	podman ps -a --filter "label=run-claude.managed=true" --format "table {{.Names}}\t{{.Status}}\t{{.Label \"run-claude.workspace\"}}" 2>/dev/null || true
+	echo ""
 
-  # Handle running containers
-  if [[ -n "$RUNNING_CONTAINERS" ]]; then
-    echo -e "${YELLOW}Active containers (not removed):${NC}"
-    for container in $RUNNING_CONTAINERS; do
-      CONTAINER_NAME=$(podman inspect --format '{{.Name}}' "$container" | sed 's|^/||')
-      echo -e "${YELLOW}  - $CONTAINER_NAME (running)${NC}"
-      echo -e "    ${GREEN}To force remove:${NC}"
-      echo -e "      \033[2mpodman stop \033[1m$CONTAINER_NAME\033[0m\033[2m && podman rm \033[1m$CONTAINER_NAME\033[0m"
-    done
-    echo ""
-  fi
+	# Handle running containers
+	if [[ -n "$RUNNING_CONTAINERS" ]]; then
+		echo -e "${YELLOW}Active containers (not removed):${NC}"
+		for container in $RUNNING_CONTAINERS; do
+			CONTAINER_NAME=$(podman inspect --format '{{.Name}}' "$container" | sed 's|^/||')
+			echo -e "${YELLOW}  - $CONTAINER_NAME (running)${NC}"
+			echo -e "    ${GREEN}To force remove:${NC}"
+			echo -e "      \033[2mpodman stop \033[1m$CONTAINER_NAME\033[0m\033[2m && podman rm \033[1m$CONTAINER_NAME\033[0m"
+		done
+		echo ""
+	fi
 
-  # Remove stopped containers
-  if [[ -n "$(echo $STOPPED_CONTAINERS | xargs)" ]]; then
-    echo -e "${GREEN}Removing stopped containers...${NC}"
-    podman rm $(echo $STOPPED_CONTAINERS | xargs) >/dev/null 2>&1 || true
-    echo -e "${GREEN}Stopped Claude Code containers have been removed.${NC}"
-  else
-    echo -e "${YELLOW}No stopped containers to remove.${NC}"
-  fi
+	# Remove stopped containers
+	if [[ -n "$(echo $STOPPED_CONTAINERS | xargs)" ]]; then
+		echo -e "${GREEN}Removing stopped containers...${NC}"
+		podman rm $(echo $STOPPED_CONTAINERS | xargs) >/dev/null 2>&1 || true
+		echo -e "${GREEN}Stopped Claude Code containers have been removed.${NC}"
+	else
+		echo -e "${YELLOW}No stopped containers to remove.${NC}"
+	fi
 }
 
 # Function to force remove ALL Claude Code containers with warning
 force_remove_all_containers() {
-  echo -e "${RED}⚠️  WARNING: Force removing ALL Claude Code containers!${NC}"
-  echo -e "${RED}This will STOP and DELETE all containers, including active ones.${NC}"
-  echo -e "${RED}Any unsaved work in running containers will be LOST!${NC}"
-  echo ""
+	echo -e "${RED}⚠️  WARNING: Force removing ALL Claude Code containers!${NC}"
+	echo -e "${RED}This will STOP and DELETE all containers, including active ones.${NC}"
+	echo -e "${RED}Any unsaved work in running containers will be LOST!${NC}"
+	echo ""
 
-  # Find all containers with our label
-  ALL_CONTAINERS=$(podman ps -aq --filter "label=run-claude.managed=true" 2>/dev/null || true)
+	# Find all containers with our label
+	ALL_CONTAINERS=$(podman ps -aq --filter "label=run-claude.managed=true" 2>/dev/null || true)
 
-  if [[ -z "$ALL_CONTAINERS" ]]; then
-    echo -e "${YELLOW}No Claude Code containers found.${NC}"
-    return 0
-  fi
+	if [[ -z "$ALL_CONTAINERS" ]]; then
+		echo -e "${YELLOW}No Claude Code containers found.${NC}"
+		return 0
+	fi
 
-  # Display all containers with status
-  echo -e "${YELLOW}Found the following Claude Code containers:${NC}"
-  podman ps -a --filter "label=run-claude.managed=true" --format "table {{.Names}}\t{{.Status}}\t{{.Label \"run-claude.workspace\"}}" 2>/dev/null || true
-  echo ""
+	# Display all containers with status
+	echo -e "${YELLOW}Found the following Claude Code containers:${NC}"
+	podman ps -a --filter "label=run-claude.managed=true" --format "table {{.Names}}\t{{.Status}}\t{{.Label \"run-claude.workspace\"}}" 2>/dev/null || true
+	echo ""
 
-  # Ask for confirmation
-  echo -e "${RED}Are you sure you want to force remove ALL containers? [y/N]:${NC} "
-  read -r CONFIRM
+	# Ask for confirmation
+	echo -e "${RED}Are you sure you want to force remove ALL containers? [y/N]:${NC} "
+	read -r CONFIRM
 
-  if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
-    echo -e "${YELLOW}Operation cancelled.${NC}"
-    return 0
-  fi
+	if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+		echo -e "${YELLOW}Operation cancelled.${NC}"
+		return 0
+	fi
 
-  echo ""
-  echo -e "${GREEN}Force stopping all containers...${NC}"
-  podman stop $ALL_CONTAINERS >/dev/null 2>&1 || true
+	echo ""
+	echo -e "${GREEN}Force stopping all containers...${NC}"
+	podman stop $ALL_CONTAINERS >/dev/null 2>&1 || true
 
-  echo -e "${GREEN}Removing all containers...${NC}"
-  podman rm $ALL_CONTAINERS >/dev/null 2>&1 || true
+	echo -e "${GREEN}Removing all containers...${NC}"
+	podman rm $ALL_CONTAINERS >/dev/null 2>&1 || true
 
-  echo -e "${GREEN}All Claude Code containers have been force removed.${NC}"
+	echo -e "${GREEN}All Claude Code containers have been force removed.${NC}"
 }
 
 # Function to generate Dockerfile content
 generate_dockerfile_content() {
-  # Build the base package list
-  local base_packages=(
-    "build-essential"
-    "ca-certificates"
-    "curl"
-    "wget"
-    "git"
-    "python3"
-    "unzip"
-    "python3-pip"
-    "sudo"
-    "fzf"
-    "zsh"
-    "gh"
-    "vim"
-    "neovim"
-    "htop"
-    "jq"
-    "tree"
-    "ripgrep"
-    "fd-find"
-    "gpg"
-    "git-delta"
-  )
+	# Build minimal bootstrap package list
+	# These are the only packages needed to parse packages.yaml and install remaining packages
+	local bootstrap_packages=(
+		"curl"
+		"ca-certificates"
+		"git"
+		"python3"
+		"python3-yaml"
+	)
 
-  # Add extra packages to the list
-  local all_packages=("${base_packages[@]}")
-  if [[ ${#EXTRA_PACKAGES[@]} -gt 0 ]]; then
-    all_packages+=("${EXTRA_PACKAGES[@]}")
-  fi
+	# Generate the package installation lines for bootstrap
+	local bootstrap_lines=""
+	for ((i = 0; i < ${#bootstrap_packages[@]}; i++)); do
+		if [[ $i -eq $((${#bootstrap_packages[@]} - 1)) ]]; then
+			# Last package, no backslash
+			bootstrap_lines+=$'\t'"${bootstrap_packages[i]}"
+		else
+			# Not last package, add backslash and newline
+			bootstrap_lines+=$'\t'"${bootstrap_packages[i]}"$' \\\n'
+		fi
+	done
 
-  # Generate the package installation lines
-  local package_lines=""
-  for ((i = 0; i < ${#all_packages[@]}; i++)); do
-    if [[ $i -eq $((${#all_packages[@]} - 1)) ]]; then
-      # Last package, no backslash since we're ending the RUN instruction
-      package_lines+=$'\t'"${all_packages[i]}"
-    else
-      # Not last package, add backslash and newline
-      package_lines+=$'\t'"${all_packages[i]}"$' \\\n'
-    fi
-  done
-
-  cat <<'DOCKERFILE_EOF'
+	cat <<'DOCKERFILE_EOF'
 # vim: set ft=dockerfile:
 
 # ============================================================================
@@ -996,17 +975,54 @@ generate_dockerfile_content() {
 # ============================================================================
 FROM ubuntu:25.04 AS base-tools
 
-# Install system dependencies including zsh and tools
+# Install minimal bootstrap packages needed to parse packages.yaml
 RUN apt-get update && apt-get install -y \
 DOCKERFILE_EOF
 
-  # Insert the dynamic package list
-  echo -e "$package_lines"
+	# Insert the bootstrap package list
+	echo -e "$bootstrap_lines"
 
-  cat <<'DOCKERFILE_EOF'
+	cat <<'DOCKERFILE_EOF'
 
 # Clean up apt cache
 RUN rm -rf /var/lib/apt/lists/*
+
+# Copy package manifest into build context
+COPY packages.yaml /tmp/packages.yaml
+
+# Install packages from manifest using Python YAML parsing
+RUN apt-get update && python3 << 'PYEOF'
+import yaml
+import subprocess
+
+# Load manifest
+with open('/tmp/packages.yaml') as f:
+	manifest = yaml.safe_load(f)
+
+# Get base Debian packages
+packages = manifest['base']['debian']
+
+# Add any extra packages from environment variable (set via --extra-package)
+import os
+extra_packages_env = os.environ.get('EXTRA_PACKAGES', '')
+if extra_packages_env:
+	extra = extra_packages_env.split()
+	packages = packages + extra
+	print(f"Installing {len(packages)} packages ({len(extra)} extra):")
+else:
+	print(f"Installing {len(packages)} packages from manifest:")
+
+print(f"  {', '.join(packages[:5])}...")
+
+# Install all packages
+subprocess.run(
+	['apt-get', 'install', '-y'] + packages,
+	check=True
+)
+PYEOF
+
+# Clean up packages.yaml and apt cache
+RUN rm /tmp/packages.yaml && rm -rf /var/lib/apt/lists/*
 
 # Install uv using standalone installer and make it globally available
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
@@ -1243,262 +1259,262 @@ DOCKERFILE_EOF
 
 # Function to export Dockerfile
 export_dockerfile() {
-  local OUTPUT_FILE="$1"
+	local OUTPUT_FILE="$1"
 
-  if [[ -z "$OUTPUT_FILE" ]]; then
-    echo -e "${RED}Error: No output file specified${NC}"
-    exit 1
-  fi
+	if [[ -z "$OUTPUT_FILE" ]]; then
+		echo -e "${RED}Error: No output file specified${NC}"
+		exit 1
+	fi
 
-  echo -e "${MAGENTA}Exporting Dockerfile to: ${BRIGHT_CYAN}$OUTPUT_FILE${NC}"
+	echo -e "${MAGENTA}Exporting Dockerfile to: ${BRIGHT_CYAN}$OUTPUT_FILE${NC}"
 
-  # Use the shared function to generate content
-  generate_dockerfile_content >"$OUTPUT_FILE"
+	# Use the shared function to generate content
+	generate_dockerfile_content >"$OUTPUT_FILE"
 
-  echo -e "${MAGENTA}Dockerfile exported successfully!${NC}"
-  echo -e "${YELLOW}To build: podman build --build-arg USERNAME=claude-user -t your-image-name .${NC}"
+	echo -e "${MAGENTA}Dockerfile exported successfully!${NC}"
+	echo -e "${YELLOW}To build: podman build --build-arg USERNAME=claude-user -t your-image-name .${NC}"
 }
 
 # Function to push image to repository
 push_to_repository() {
-  local REPO="$1"
+	local REPO="$1"
 
-  if [[ -z "$REPO" ]]; then
-    echo -e "${RED}Error: No repository specified${NC}"
-    exit 1
-  fi
+	if [[ -z "$REPO" ]]; then
+		echo -e "${RED}Error: No repository specified${NC}"
+		exit 1
+	fi
 
-  echo -e "${MAGENTA}Pushing image to repository: ${BRIGHT_CYAN}$REPO${NC}"
+	echo -e "${MAGENTA}Pushing image to repository: ${BRIGHT_CYAN}$REPO${NC}"
 
-  # Check if local image exists
-  if ! podman image inspect "$IMAGE_NAME" &>/dev/null; then
-    echo -e "${YELLOW}Local image $IMAGE_NAME not found. Getting it first...${NC}"
-    pull_remote_image
-  fi
+	# Check if local image exists
+	if ! podman image inspect "$IMAGE_NAME" &>/dev/null; then
+		echo -e "${YELLOW}Local image $IMAGE_NAME not found. Getting it first...${NC}"
+		pull_remote_image
+	fi
 
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}podman tag \"$IMAGE_NAME\" \"$REPO\"${NC}"
-    echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}podman push \"$REPO\"${NC}"
-    echo -e "${GREEN}Dry run complete - would have tagged and pushed image.${NC}"
-    return 0
-  fi
+	if [[ "$DRY_RUN" == "true" ]]; then
+		echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}podman tag \"$IMAGE_NAME\" \"$REPO\"${NC}"
+		echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}podman push \"$REPO\"${NC}"
+		echo -e "${GREEN}Dry run complete - would have tagged and pushed image.${NC}"
+		return 0
+	fi
 
-  # Tag the image for the target repository
-  echo -e "${MAGENTA}Tagging image ${BRIGHT_CYAN}$IMAGE_NAME${MAGENTA} as ${BRIGHT_CYAN}$REPO${MAGENTA}...${NC}"
-  if ! podman tag "$IMAGE_NAME" "$REPO"; then
-    echo -e "${RED}Failed to tag image${NC}"
-    exit 1
-  fi
+	# Tag the image for the target repository
+	echo -e "${MAGENTA}Tagging image ${BRIGHT_CYAN}$IMAGE_NAME${MAGENTA} as ${BRIGHT_CYAN}$REPO${MAGENTA}...${NC}"
+	if ! podman tag "$IMAGE_NAME" "$REPO"; then
+		echo -e "${RED}Failed to tag image${NC}"
+		exit 1
+	fi
 
-  # Push the image
-  echo -e "${MAGENTA}Pushing ${BRIGHT_CYAN}$REPO${MAGENTA} to registry...${NC}"
-  if podman push "$REPO"; then
-    echo -e "${MAGENTA}Successfully pushed ${BRIGHT_CYAN}$REPO${NC}"
-    echo -e "${MAGENTA}Image is now available at: ${BRIGHT_CYAN}$REPO${NC}"
-  else
-    echo -e "${RED}Failed to push image${NC}"
-    echo -e "${YELLOW}Make sure you are logged in: podman login${NC}"
-    exit 1
-  fi
+	# Push the image
+	echo -e "${MAGENTA}Pushing ${BRIGHT_CYAN}$REPO${MAGENTA} to registry...${NC}"
+	if podman push "$REPO"; then
+		echo -e "${MAGENTA}Successfully pushed ${BRIGHT_CYAN}$REPO${NC}"
+		echo -e "${MAGENTA}Image is now available at: ${BRIGHT_CYAN}$REPO${NC}"
+	else
+		echo -e "${RED}Failed to push image${NC}"
+		echo -e "${YELLOW}Make sure you are logged in: podman login${NC}"
+		exit 1
+	fi
 }
 
 # Handle special commands
 if [[ -n "$EXPORT_DOCKERFILE" ]]; then
-  export_dockerfile "$EXPORT_DOCKERFILE"
-  exit 0
+	export_dockerfile "$EXPORT_DOCKERFILE"
+	exit 0
 fi
 
 if [[ -n "$PUSH_TO_REPO" ]]; then
-  push_to_repository "$PUSH_TO_REPO"
-  exit 0
+	push_to_repository "$PUSH_TO_REPO"
+	exit 0
 fi
 
 if [[ "$REMOVE_CONTAINERS" == "true" ]]; then
-  remove_stopped_containers
-  exit 0
+	remove_stopped_containers
+	exit 0
 fi
 
 if [[ "$FORCE_REMOVE_ALL_CONTAINERS" == "true" ]]; then
-  force_remove_all_containers
-  exit 0
+	force_remove_all_containers
+	exit 0
 fi
 
 if [[ "$BUILD_ONLY" == "true" ]]; then
-  build_image
-  echo -e "${MAGENTA}Build complete. Exiting.${NC}"
-  exit 0
+	build_image
+	echo -e "${MAGENTA}Build complete. Exiting.${NC}"
+	exit 0
 fi
 
 if [[ "$FORCE_PULL" == "true" ]]; then
-  echo -e "${YELLOW}Force pull requested - pulling latest image...${NC}"
-  pull_remote_image
+	echo -e "${YELLOW}Force pull requested - pulling latest image...${NC}"
+	pull_remote_image
 elif [[ "$FORCE_REBUILD" == "true" ]]; then
-  echo -e "${YELLOW}Force rebuild requested - cleaning up first...${NC}"
+	echo -e "${YELLOW}Force rebuild requested - cleaning up first...${NC}"
 
-  # Remove containers first to avoid conflicts
-  echo -e "${GREEN}Removing existing containers...${NC}"
-  remove_stopped_containers
+	# Remove containers first to avoid conflicts
+	echo -e "${GREEN}Removing existing containers...${NC}"
+	remove_stopped_containers
 
-  # Remove the image
-  if podman image inspect "$IMAGE_NAME" &>/dev/null; then
-    echo -e "${YELLOW}Removing existing image $IMAGE_NAME...${NC}"
-    podman rmi "$IMAGE_NAME"
-  fi
-  build_image
+	# Remove the image
+	if podman image inspect "$IMAGE_NAME" &>/dev/null; then
+		echo -e "${YELLOW}Removing existing image $IMAGE_NAME...${NC}"
+		podman rmi "$IMAGE_NAME"
+	fi
+	build_image
 else
-  # Check if image exists and build if necessary
-  build_image_if_missing
+	# Check if image exists and build if necessary
+	build_image_if_missing
 fi
 
 # Function to handle existing container
 handle_existing_container() {
-  if podman ps -a --format "table {{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
-    echo -e "${MAGENTA}Container ${BRIGHT_CYAN}$CONTAINER_NAME${MAGENTA} already exists.${NC}"
+	if podman ps -a --format "table {{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
+		echo -e "${MAGENTA}Container ${BRIGHT_CYAN}$CONTAINER_NAME${MAGENTA} already exists.${NC}"
 
-    # Check version compatibility
-    CONTAINER_VERSION=$(podman inspect --format '{{index .Config.Labels "run-claude.version"}}' "$CONTAINER_NAME" 2>/dev/null || echo "unknown")
-    if [[ "$CONTAINER_VERSION" != "$VERSION" ]]; then
-      echo -e "${YELLOW}⚠️  Version mismatch detected!${NC}"
-      echo -e "${YELLOW}   Container version: ${BRIGHT_CYAN}$CONTAINER_VERSION${NC}"
-      echo -e "${YELLOW}   Script version:    ${BRIGHT_CYAN}$VERSION${NC}"
-      echo -e "${YELLOW}   This may cause authentication or compatibility issues.${NC}"
-      echo ""
-      echo -e "${YELLOW}To upgrade the container:${NC}"
-      echo -e "${BRIGHT_CYAN}   $(basename $0) --remove-containers && $(basename $0) --build${NC}"
-      echo ""
-    fi
+		# Check version compatibility
+		CONTAINER_VERSION=$(podman inspect --format '{{index .Config.Labels "run-claude.version"}}' "$CONTAINER_NAME" 2>/dev/null || echo "unknown")
+		if [[ "$CONTAINER_VERSION" != "$VERSION" ]]; then
+			echo -e "${YELLOW}⚠️  Version mismatch detected!${NC}"
+			echo -e "${YELLOW}   Container version: ${BRIGHT_CYAN}$CONTAINER_VERSION${NC}"
+			echo -e "${YELLOW}   Script version:    ${BRIGHT_CYAN}$VERSION${NC}"
+			echo -e "${YELLOW}   This may cause authentication or compatibility issues.${NC}"
+			echo ""
+			echo -e "${YELLOW}To upgrade the container:${NC}"
+			echo -e "${BRIGHT_CYAN}   $(basename $0) --remove-containers && $(basename $0) --build${NC}"
+			echo ""
+		fi
 
-    # Check if container is running
-    if podman ps --format "table {{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
-      echo -e "${MAGENTA}Container ${BRIGHT_CYAN}$CONTAINER_NAME${MAGENTA} is already running. Executing command in existing container...${NC}"
-      # Build podman exec command with passthrough args and environment variables
-      EXEC_CMD="podman exec -it"
-      if [[ ${#PASSTHROUGH_ARGS[@]} -gt 0 ]]; then
-        for arg in "${PASSTHROUGH_ARGS[@]}"; do
-          EXEC_CMD="$EXEC_CMD $arg"
-        done
-      fi
+		# Check if container is running
+		if podman ps --format "table {{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
+			echo -e "${MAGENTA}Container ${BRIGHT_CYAN}$CONTAINER_NAME${MAGENTA} is already running. Executing command in existing container...${NC}"
+			# Build podman exec command with passthrough args and environment variables
+			EXEC_CMD="podman exec -it"
+			if [[ ${#PASSTHROUGH_ARGS[@]} -gt 0 ]]; then
+				for arg in "${PASSTHROUGH_ARGS[@]}"; do
+					EXEC_CMD="$EXEC_CMD $arg"
+				done
+			fi
 
-      # Add forwarded environment variables
-      FORWARDED_ENV_FLAGS=$(generate_forwarded_variables)
-      if [[ -n "$FORWARDED_ENV_FLAGS" ]]; then
-        EXEC_CMD="$EXEC_CMD$FORWARDED_ENV_FLAGS"
-      fi
+			# Add forwarded environment variables
+			FORWARDED_ENV_FLAGS=$(generate_forwarded_variables)
+			if [[ -n "$FORWARDED_ENV_FLAGS" ]]; then
+				EXEC_CMD="$EXEC_CMD$FORWARDED_ENV_FLAGS"
+			fi
 
-      EXEC_CMD="$EXEC_CMD $CONTAINER_NAME /usr/local/bin/claude-exec"
+			EXEC_CMD="$EXEC_CMD $CONTAINER_NAME /usr/local/bin/claude-exec"
 
-      if [[ "$DRY_RUN" == "true" ]]; then
-        echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}$EXEC_CMD${NC}"
-        if [[ $# -gt 0 ]]; then
-          echo -e "${MAGENTA}With args: ${BRIGHT_CYAN}$*${NC}"
-        fi
-        echo -e "${GREEN}Dry run complete - would have executed docker exec.${NC}"
-        exit 0
-      fi
+			if [[ "$DRY_RUN" == "true" ]]; then
+				echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}$EXEC_CMD${NC}"
+				if [[ $# -gt 0 ]]; then
+					echo -e "${MAGENTA}With args: ${BRIGHT_CYAN}$*${NC}"
+				fi
+				echo -e "${GREEN}Dry run complete - would have executed docker exec.${NC}"
+				exit 0
+			fi
 
-      if [[ $# -gt 0 ]]; then
-        exec $EXEC_CMD "$@"
-      else
-        exec $EXEC_CMD
-      fi
-    else
-      echo -e "${MAGENTA}Container ${BRIGHT_CYAN}$CONTAINER_NAME${MAGENTA} exists but is not running. Starting it...${NC}"
+			if [[ $# -gt 0 ]]; then
+				exec $EXEC_CMD "$@"
+			else
+				exec $EXEC_CMD
+			fi
+		else
+			echo -e "${MAGENTA}Container ${BRIGHT_CYAN}$CONTAINER_NAME${MAGENTA} exists but is not running. Starting it...${NC}"
 
-      if [[ "$DRY_RUN" == "true" ]]; then
-        if [[ $# -gt 0 ]]; then
-          echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}podman start $CONTAINER_NAME${NC}"
-          EXEC_CMD="podman exec -it"
-          if [[ ${#PASSTHROUGH_ARGS[@]} -gt 0 ]]; then
-            for arg in "${PASSTHROUGH_ARGS[@]}"; do
-              EXEC_CMD="$EXEC_CMD $arg"
-            done
-          fi
+			if [[ "$DRY_RUN" == "true" ]]; then
+				if [[ $# -gt 0 ]]; then
+					echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}podman start $CONTAINER_NAME${NC}"
+					EXEC_CMD="podman exec -it"
+					if [[ ${#PASSTHROUGH_ARGS[@]} -gt 0 ]]; then
+						for arg in "${PASSTHROUGH_ARGS[@]}"; do
+							EXEC_CMD="$EXEC_CMD $arg"
+						done
+					fi
 
-          # Add forwarded environment variables
-          FORWARDED_ENV_FLAGS=$(generate_forwarded_variables)
-          if [[ -n "$FORWARDED_ENV_FLAGS" ]]; then
-            EXEC_CMD="$EXEC_CMD$FORWARDED_ENV_FLAGS"
-          fi
+					# Add forwarded environment variables
+					FORWARDED_ENV_FLAGS=$(generate_forwarded_variables)
+					if [[ -n "$FORWARDED_ENV_FLAGS" ]]; then
+						EXEC_CMD="$EXEC_CMD$FORWARDED_ENV_FLAGS"
+					fi
 
-          EXEC_CMD="$EXEC_CMD $CONTAINER_NAME /usr/local/bin/claude-exec"
-          echo -e "${MAGENTA}Then execute: ${BRIGHT_CYAN}$EXEC_CMD${NC}"
-          echo -e "${MAGENTA}With args: ${BRIGHT_CYAN}$*${NC}"
-        else
-          echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}podman start -i $CONTAINER_NAME${NC}"
-        fi
-        echo -e "${GREEN}Dry run complete - would have started and executed commands.${NC}"
-        exit 0
-      fi
+					EXEC_CMD="$EXEC_CMD $CONTAINER_NAME /usr/local/bin/claude-exec"
+					echo -e "${MAGENTA}Then execute: ${BRIGHT_CYAN}$EXEC_CMD${NC}"
+					echo -e "${MAGENTA}With args: ${BRIGHT_CYAN}$*${NC}"
+				else
+					echo -e "${MAGENTA}Would execute: ${BRIGHT_CYAN}podman start -i $CONTAINER_NAME${NC}"
+				fi
+				echo -e "${GREEN}Dry run complete - would have started and executed commands.${NC}"
+				exit 0
+			fi
 
-      if [[ $# -gt 0 ]]; then
-        # Start container and then execute command in it
-        podman start "$CONTAINER_NAME" >/dev/null
-        # Build podman exec command with passthrough args and environment variables
-        EXEC_CMD="podman exec -it"
-        if [[ ${#PASSTHROUGH_ARGS[@]} -gt 0 ]]; then
-          for arg in "${PASSTHROUGH_ARGS[@]}"; do
-            EXEC_CMD="$EXEC_CMD $arg"
-          done
-        fi
+			if [[ $# -gt 0 ]]; then
+				# Start container and then execute command in it
+				podman start "$CONTAINER_NAME" >/dev/null
+				# Build podman exec command with passthrough args and environment variables
+				EXEC_CMD="podman exec -it"
+				if [[ ${#PASSTHROUGH_ARGS[@]} -gt 0 ]]; then
+					for arg in "${PASSTHROUGH_ARGS[@]}"; do
+						EXEC_CMD="$EXEC_CMD $arg"
+					done
+				fi
 
-        # Add forwarded environment variables
-        FORWARDED_ENV_FLAGS=$(generate_forwarded_variables)
-        if [[ -n "$FORWARDED_ENV_FLAGS" ]]; then
-          EXEC_CMD="$EXEC_CMD$FORWARDED_ENV_FLAGS"
-        fi
+				# Add forwarded environment variables
+				FORWARDED_ENV_FLAGS=$(generate_forwarded_variables)
+				if [[ -n "$FORWARDED_ENV_FLAGS" ]]; then
+					EXEC_CMD="$EXEC_CMD$FORWARDED_ENV_FLAGS"
+				fi
 
-        EXEC_CMD="$EXEC_CMD $CONTAINER_NAME /usr/local/bin/claude-exec"
-        exec $EXEC_CMD "$@"
-      else
-        # Start container interactively
-        exec podman start -i "$CONTAINER_NAME"
-      fi
-    fi
-  fi
+				EXEC_CMD="$EXEC_CMD $CONTAINER_NAME /usr/local/bin/claude-exec"
+				exec $EXEC_CMD "$@"
+			else
+				# Start container interactively
+				exec podman start -i "$CONTAINER_NAME"
+			fi
+		fi
+	fi
 }
 
 # Handle existing container removal if recreate is requested
 if [[ "$RECREATE_CONTAINER" == "true" ]]; then
-  if podman ps -a --format "table {{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
-    echo -e "${MAGENTA}Removing existing container ${BRIGHT_CYAN}$CONTAINER_NAME${MAGENTA}...${NC}"
-    podman stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
-    podman rm "$CONTAINER_NAME" >/dev/null
-  fi
+	if podman ps -a --format "table {{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
+		echo -e "${MAGENTA}Removing existing container ${BRIGHT_CYAN}$CONTAINER_NAME${MAGENTA}...${NC}"
+		podman stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+		podman rm "$CONTAINER_NAME" >/dev/null
+	fi
 fi
 
 # Handle existing container unless we want to remove it
 if [[ "$REMOVE_CONTAINER" == "false" && "$RECREATE_CONTAINER" == "false" ]]; then
-  handle_existing_container "$@"
+	handle_existing_container "$@"
 elif [[ "$REMOVE_CONTAINER" == "true" ]]; then
-  # Check if container exists when using --rm
-  if podman ps -a --format "table {{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
-    echo -e "${RED}Error: Container ${BRIGHT_CYAN}$CONTAINER_NAME${RED} already exists!${NC}"
-    echo -e "${YELLOW}The --rm flag creates temporary containers, but a persistent container with this name already exists.${NC}"
-    echo ""
-    echo -e "${YELLOW}Choose one of these options:${NC}"
-    echo -e "${BRIGHT_CYAN}  # Use the existing container (recommended):${NC}"
-    echo -e "  $(basename $0) $*"
-    echo ""
-    echo -e "${BRIGHT_CYAN}  # Remove the existing container first:${NC}"
-    echo -e "  $(basename $0) --recreate --rm $*"
-    echo ""
-    echo -e "${BRIGHT_CYAN}  # Remove all stopped containers:${NC}"
-    echo -e "  $(basename $0) --remove-containers"
-    echo ""
-    exit 1
-  fi
+	# Check if container exists when using --rm
+	if podman ps -a --format "table {{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
+		echo -e "${RED}Error: Container ${BRIGHT_CYAN}$CONTAINER_NAME${RED} already exists!${NC}"
+		echo -e "${YELLOW}The --rm flag creates temporary containers, but a persistent container with this name already exists.${NC}"
+		echo ""
+		echo -e "${YELLOW}Choose one of these options:${NC}"
+		echo -e "${BRIGHT_CYAN}  # Use the existing container (recommended):${NC}"
+		echo -e "  $(basename $0) $*"
+		echo ""
+		echo -e "${BRIGHT_CYAN}  # Remove the existing container first:${NC}"
+		echo -e "  $(basename $0) --recreate --rm $*"
+		echo ""
+		echo -e "${BRIGHT_CYAN}  # Remove all stopped containers:${NC}"
+		echo -e "  $(basename $0) --remove-containers"
+		echo ""
+		exit 1
+	fi
 fi
 
 # Execute the command (for new containers or when --rm is used)
 if [[ "$DRY_RUN" == "true" ]]; then
-  echo -e "${GREEN}Dry run complete - would have executed the above Docker command.${NC}"
-  exit 0
+	echo -e "${GREEN}Dry run complete - would have executed the above Docker command.${NC}"
+	exit 0
 fi
 
 if ! exec $DOCKER_CMD; then
-  echo -e "${RED}Failed to run Podman container.${NC}"
-  echo -e "${YELLOW}If this failed due to architecture issues (e.g., Apple Silicon/arm64), try:${NC}"
-  echo -e "${BRIGHT_CYAN}  $(basename $0) --build${NC}"
-  echo -e "${YELLOW}This will build a local image compatible with your architecture.${NC}"
-  exit 1
+	echo -e "${RED}Failed to run Podman container.${NC}"
+	echo -e "${YELLOW}If this failed due to architecture issues (e.g., Apple Silicon/arm64), try:${NC}"
+	echo -e "${BRIGHT_CYAN}  $(basename $0) --build${NC}"
+	echo -e "${YELLOW}This will build a local image compatible with your architecture.${NC}"
+	exit 1
 fi
