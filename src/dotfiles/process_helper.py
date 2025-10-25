@@ -119,8 +119,22 @@ def run_interactive_command(
 
     except subprocess.TimeoutExpired as e:
         logger.log_exception(e, "interactive_command_timeout")
-        output.error(f"ERROR: {description} timed out after {timeout} seconds")
+        output.error(
+            f"ERROR: {description} timed out after {timeout} seconds", logger=logger
+        )
         output.status(f"Command: {' '.join(command)}")
+        output.info(
+            "The command was still running when it exceeded the timeout limit",
+            emoji="⏱️",
+        )
+        output.info(
+            "Possible causes: slow network, large download, stuck waiting for input",
+            emoji="💡",
+        )
+        output.info(
+            f"Try: Run the command manually to see detailed output: {' '.join(command)}",
+            emoji="💡",
+        )
         raise
     except subprocess.CalledProcessError as e:
         logger.log_exception(

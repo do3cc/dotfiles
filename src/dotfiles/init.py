@@ -925,7 +925,9 @@ class Arch(Linux):
                             logger=logger,
                         )
                         output.info(f"Message: {result.message}")
-                        self.mark_system_updated(logger)
+                        # Don't mark as updated if it failed - let it retry next time
+                        # Raise exception so it's tracked in error summary
+                        raise RuntimeError(f"System update failed: {result.message}")
                 else:
                     output.success("No system updates available", logger=logger)
                     self.mark_system_updated(logger)

@@ -178,10 +178,38 @@ class PacmanManager(PackageManager):
                 )
         except TimeoutExpired as e:
             logger.log_exception(e, "update_timeout")
+            # Show partial output from before timeout
+            output.error(
+                f"Pacman update timed out after {e.timeout} seconds", logger=logger
+            )
+            if e.stdout:
+                output.info("Partial output before timeout:", emoji="📄")
+                # Show last 20 lines of output to see what it was doing
+                stdout_str = (
+                    e.stdout
+                    if isinstance(e.stdout, str)
+                    else e.stdout.decode("utf-8", errors="replace")
+                )
+                lines = stdout_str.strip().splitlines()
+                for line in lines[-20:]:
+                    output.info(f"  {line}")
+            if e.stderr:
+                output.warning("Error output:", emoji="⚠️")
+                stderr_str = (
+                    e.stderr
+                    if isinstance(e.stderr, str)
+                    else e.stderr.decode("utf-8", errors="replace")
+                )
+                for line in stderr_str.strip().splitlines():
+                    output.warning(f"  {line}")
+            output.info(
+                "Try: Increase timeout or run 'sudo pacman -Syu' manually to complete",
+                emoji="💡",
+            )
             return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.FAILED,
-                message="Update timed out",
+                message=f"Update timed out after {e.timeout}s",
                 duration=time.time() - start_time,
             )
         except Exception as e:
