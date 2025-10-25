@@ -15,7 +15,9 @@ To run integration tests: pytest -m integration
 """
 
 import pytest
-from dotfiles.swman import UpdateStatus, UpdateResult
+from unittest.mock import Mock, patch
+from subprocess import CalledProcessError, CompletedProcess
+from dotfiles.swman import UpdateStatus, UpdateResult, PacmanManager
 
 
 @pytest.mark.parametrize(
@@ -142,3 +144,79 @@ def test_update_result_fields_are_correct_types():
     assert isinstance(result.status, UpdateStatus)
     assert isinstance(result.message, str)
     assert isinstance(result.duration, (int, float))
+
+
+@pytest.mark.parametrize(
+    "returncode,stdout,expected_has_updates,expected_count",
+    [
+        # Updates available - returncode 0 with package list
+        (0, "package1 1.0-1 -> 1.1-1\npackage2 2.0-1 -> 2.1-1\n", True, 2),
+        # No updates - returncode 2 (checkupdates standard behavior)
+        (2, "", False, 0),
+        # Updates available but empty output edge case
+        (0, "", False, 0),
+        # Single update available
+        (0, "package1 1.0-1 -> 1.1-1\n", True, 1),
+    ],
+    ids=["updates_available", "no_updates_rc2", "empty_output", "single_update"],
+)
+@patch("dotfiles.swman.run_command_with_error_handling")
+def test_pacman_check_updates_return_codes(
+    mock_run_command, returncode, stdout, expected_has_updates, expected_count
+):
+    """PacmanManager.check_updates should handle different return codes correctly.
+
+    checkupdates returns:
+    - 0: updates available
+    - 2: no updates available (this is NOT an error!)
+    - other: actual errors (should raise)
+    """
+    # Setup mocks
+    mock_logger = Mock()
+    mock_logger.bind.return_value = mock_logger
+    mock_output = Mock()
+
+    # Mock the command result
+    mock_run_command.return_value = CompletedProcess(
+        args=["checkupdates"],
+        returncode=returncode,
+        stdout=stdout,
+        stderr="",
+    )
+
+    # Test
+    manager = PacmanManager()
+    has_updates, count = manager.check_updates(mock_logger, mock_output)
+
+    # Verify
+    assert has_updates == expected_has_updates
+    assert count == expected_count
+    mock_run_command.assert_called_once()
+    # Verify check=False was passed to handle return codes manually
+    assert mock_run_command.call_args.kwargs["check"] is False
+
+
+@patch("dotfiles.swman.run_command_with_error_handling")
+def test_pacman_check_updates_error_returncode(mock_run_command):
+    """PacmanManager.check_updates should raise on actual errors (non-0, non-2 returncodes)."""
+    # Setup mocks
+    mock_logger = Mock()
+    mock_logger.bind.return_value = mock_logger
+    mock_output = Mock()
+
+    # Mock an error result (returncode 1 = actual error)
+    mock_run_command.return_value = CompletedProcess(
+        args=["checkupdates"],
+        returncode=1,
+        stdout="",
+        stderr="error: database connection failed",
+    )
+
+    # Test - should raise CalledProcessError
+    manager = PacmanManager()
+    with pytest.raises(CalledProcessError) as exc_info:
+        manager.check_updates(mock_logger, mock_output)
+
+    # Verify exception details
+    assert exc_info.value.returncode == 1
+    assert exc_info.value.cmd == ["checkupdates"]

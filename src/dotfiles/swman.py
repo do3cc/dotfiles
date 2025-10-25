@@ -111,9 +111,12 @@ class PacmanManager(PackageManager):
                 output=output,
                 description="Pacman check for updates",
                 timeout=30,
+                check=False,  # Handle return codes manually
             )
             logger = logger.bind(returncode=result.returncode, stderr=result.stderr)
+
             if result.returncode == 0:
+                # Updates available
                 count = (
                     len(result.stdout.strip().split("\n"))
                     if result.stdout.strip()
@@ -122,8 +125,16 @@ class PacmanManager(PackageManager):
                 logger = logger.bind(updates_count=count)
                 logger.log_info("update_check_completed")
                 return count > 0, count
-            logger.log_error("update_check_failed")
-            return False, 0
+            elif result.returncode == 2:
+                # No updates available (checkupdates returns 2 when no updates)
+                logger.log_info("update_check_completed", updates_count=0)
+                return False, 0
+            else:
+                # Actual error - raise to propagate to caller
+                logger.log_error("update_check_failed")
+                raise CalledProcessError(
+                    result.returncode, ["checkupdates"], result.stdout, result.stderr
+                )
         except (SubprocessError, FileNotFoundError) as e:
             logger.log_exception(e, "unexpected_exception")
             raise
