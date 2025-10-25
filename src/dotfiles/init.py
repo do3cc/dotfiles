@@ -12,6 +12,7 @@ import traceback
 import urllib.request
 import urllib.error
 import click
+import yaml
 from .logging_config import (
     setup_logging,
     LoggingHelpers,
@@ -78,9 +79,32 @@ class Linux:
             )
         self.environment = environment
         self.no_remote_mode = no_remote_mode
+        # Load package manifest BEFORE building config
+        self.package_manifest = self._load_package_manifest()
         # Single source of truth for this environment's configuration
         self.config = self._build_environment_config(environment)
         self.homedir = homedir
+
+    def _load_package_manifest(self) -> dict[str, Any]:
+        """Load package manifest from packages.yaml
+
+        Returns:
+            dict: Package manifest with 'base', 'environments', and 'aur' keys
+
+        Raises:
+            FileNotFoundError: If packages.yaml doesn't exist
+            yaml.YAMLError: If packages.yaml is invalid
+        """
+        manifest_path = Path(__file__).parent.parent.parent / "packages.yaml"
+
+        if not manifest_path.exists():
+            raise FileNotFoundError(
+                f"Package manifest not found at {manifest_path}. "
+                "Please ensure packages.yaml exists in repository root."
+            )
+
+        with open(manifest_path) as f:
+            return yaml.safe_load(f) or {}
 
     def _get_base_config(self) -> EnvironmentConfig:
         """Get base configuration for Linux systems."""
