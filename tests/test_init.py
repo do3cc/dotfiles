@@ -674,3 +674,78 @@ def test_main_successful_execution_minimal(monkeypatch, tmp_path):
     mock_os.validate_git_credential_helper.assert_called_once()
     mock_os.setup_shell.assert_called_once()
     mock_os.link_accounts.assert_called_once()
+
+
+def test_main_uses_status_messages_not_persistent_progress(monkeypatch, tmp_path):
+    """Test that main() uses simple status messages instead of persistent progress context.
+
+    This test verifies that the main loop does NOT use output.progress_context() as a
+    persistent wrapper, which would block sudo password prompts. Instead, it should use
+    simple status messages for each step.
+    """
+    from click.testing import CliRunner
+    from dotfiles.output_formatting import ConsoleOutput
+
+    # Mock OS detection to return Arch
+    mock_os = MagicMock(spec=init.Arch)
+    mock_os.restart_required = False
+    mock_os.install_dependencies = MagicMock()
+    mock_os.link_configs = MagicMock()
+    mock_os.validate_git_credential_helper = MagicMock()
+    mock_os.setup_shell = MagicMock()
+    mock_os.link_accounts = MagicMock()
+
+    def mock_detect(*args, **kwargs):
+        return mock_os
+
+    monkeypatch.setattr(init, "detect_operating_system", mock_detect)
+
+    # Track calls to output methods
+    original_progress = ConsoleOutput.progress_context
+    original_status = ConsoleOutput.status
+    original_success = ConsoleOutput.success
+
+    progress_context_calls = []
+    status_calls = []
+    success_calls = []
+
+    def mock_progress_context(self):
+        progress_context_calls.append(True)
+        return original_progress(self)
+
+    def mock_status(self, *args, **kwargs):
+        status_calls.append((args, kwargs))
+        return original_status(self, *args, **kwargs)
+
+    def mock_success(self, *args, **kwargs):
+        success_calls.append((args, kwargs))
+        return original_success(self, *args, **kwargs)
+
+    monkeypatch.setattr(ConsoleOutput, "progress_context", mock_progress_context)
+    monkeypatch.setattr(ConsoleOutput, "status", mock_status)
+    monkeypatch.setattr(ConsoleOutput, "success", mock_success)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        init.main,
+        [],
+        env={"DOTFILES_ENVIRONMENT": "minimal", "HOME": str(tmp_path)},
+    )
+
+    # Verify the invocation succeeded (no unhandled exceptions)
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+
+    # Verify no persistent progress_context wrapper was used
+    assert len(progress_context_calls) == 0, (
+        "main() should not use progress_context() for persistent wrapper"
+    )
+
+    # Verify status messages were used for step progress
+    assert len(status_calls) > 0, (
+        "main() should use status() messages for step progress"
+    )
+
+    # Verify success messages were used
+    assert len(success_calls) > 0, (
+        "main() should use success() messages for completed steps"
+    )

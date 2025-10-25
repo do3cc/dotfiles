@@ -40,7 +40,9 @@ class ConsoleOutput:
         self.verbose = verbose
         self.quiet = quiet
         self.console = console
-        self._active_progress: Progress | None = None  # Track active progress display
+        self._active_progress: Progress | None = (
+            None  # Track active progress for pause_for_interactive()
+        )
 
     def status(
         self, message: str, emoji: str = "🔍", logger: LoggingHelpers | None = None
@@ -109,7 +111,12 @@ class ConsoleOutput:
 
     @contextmanager
     def progress_context(self):
-        """Return a Rich progress context for long operations."""
+        """Return a Rich progress context for long operations.
+
+        Use this when you need progress tracking for a specific operation.
+        Note: Do NOT use this as a persistent wrapper around multiple steps,
+        as it blocks sudo password prompts. Use status() messages instead.
+        """
         progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),

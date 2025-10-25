@@ -332,26 +332,23 @@ def test_table_respects_quiet_mode(quiet_output):
 
 
 def test_progress_context_returns_progress_object(output):
-    """progress_context() should return a Rich Progress object."""
-    progress = output.progress_context()
+    """progress_context() should yield a Rich Progress object."""
+    with output.progress_context() as progress:
+        from rich.progress import Progress
 
-    from rich.progress import Progress
-
-    assert isinstance(progress, Progress)
+        assert isinstance(progress, Progress)
 
 
 def test_progress_context_respects_quiet_mode(quiet_output):
     """progress_context() should be disabled when quiet=True."""
-    progress = quiet_output.progress_context()
-
-    assert progress.disable is True
+    with quiet_output.progress_context() as progress:
+        assert progress.disable is True
 
 
 def test_progress_context_enabled_when_not_quiet(output):
     """progress_context() should be enabled when quiet=False."""
-    progress = output.progress_context()
-
-    assert progress.disable is False
+    with output.progress_context() as progress:
+        assert progress.disable is False
 
 
 # ==============================================================================

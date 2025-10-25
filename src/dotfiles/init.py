@@ -1908,45 +1908,43 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
             ),
         ]
 
-        # Use Rich progress bar for the installation steps
-        with output.progress_context() as progress:
-            task = progress.add_task("Installing dotfiles...", total=len(steps))
-            errors: list[str] = []  # Track failures
+        # Execute steps with simple status messages (no persistent progress context)
+        # This allows sudo password prompts to display clearly
+        errors: list[str] = []  # Track failures
 
-            for i, (step_name, step_func) in enumerate(steps):
-                step_log = logger.bind(step_num=i, step_name=step_name)
-                try:
-                    step_log.log_info("step_started")
-                    progress.update(task, description=f"🔄 {step_name}...")
-                    result = step_func(step_log)
+        for i, (step_name, step_func) in enumerate(steps):
+            step_log = logger.bind(step_num=i, step_name=step_name)
+            try:
+                step_log.log_info("step_started")
+                output.status(f"[{i + 1}/{len(steps)}] {step_name}...", emoji="🔄")
+                result = step_func(step_log)
 
-                    # Check if step returned False (validation failure)
-                    # Some steps return bool, some return None
-                    if result is False:
-                        error_msg = f"{step_name} validation failed"
-                        errors.append(error_msg)
-                        output.error(error_msg, logger=step_log)
-                    else:
-                        output.success(
-                            f"{step_name} completed successfully", logger=step_log
-                        )
-                    progress.advance(task)
-                except KeyboardInterrupt:
-                    output.error(f"{step_name} interrupted by user", logger=step_log)
-                    return 130  # Standard exit code for SIGINT
-                except Exception as e:
-                    step_log.log_exception(
-                        e,
-                        "step_failed",
-                    )
-                    error_msg = f"{step_name}: {e}"
+                # Check if step returned False (validation failure)
+                # Some steps return bool, some return None
+                if result is False:
+                    error_msg = f"{step_name} validation failed"
                     errors.append(error_msg)
-                    output.error(f"ERROR in {step_name}: {e}")
-                    if verbose:
-                        output.info("DETAILED ERROR INFORMATION:")
-                        traceback.print_exc()
-                        output.info("Check the error details above and retry")
-                    # Continue to next step instead of exiting immediately
+                    output.error(error_msg, logger=step_log)
+                else:
+                    output.success(
+                        f"[{i + 1}/{len(steps)}] {step_name} completed", logger=step_log
+                    )
+            except KeyboardInterrupt:
+                output.error(f"{step_name} interrupted by user", logger=step_log)
+                return 130  # Standard exit code for SIGINT
+            except Exception as e:
+                step_log.log_exception(
+                    e,
+                    "step_failed",
+                )
+                error_msg = f"{step_name}: {e}"
+                errors.append(error_msg)
+                output.error(f"ERROR in {step_name}: {e}")
+                if verbose:
+                    output.info("DETAILED ERROR INFORMATION:")
+                    traceback.print_exc()
+                    output.info("Check the error details above and retry")
+                # Continue to next step instead of exiting immediately
 
         # Report final status
         if errors:
