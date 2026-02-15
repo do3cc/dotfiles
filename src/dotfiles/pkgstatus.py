@@ -468,6 +468,37 @@ class StatusChecker:
         else:
             return f"{age // 86400}d ago"
 
+    def check_systemd_timer_status(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> tuple[bool, str]:
+        """Check if pkgstatus systemd timer exists and is active.
+
+        Returns:
+            (is_active, status_message)
+        """
+        timer_name = "pkgstatus-update.timer"
+
+        try:
+            result = run_command_with_error_handling(
+                ["systemctl", "--user", "is-active", timer_name],
+                logger=logger,
+                output=output,
+                description=f"Check {timer_name} status",
+                timeout=5,
+            )
+            is_active = result.stdout.strip() == "active"
+            status_msg = (
+                f"Timer {timer_name} is {'active' if is_active else 'inactive'}"
+            )
+            logger.log_info(
+                "systemd_timer_check", timer=timer_name, is_active=is_active
+            )
+            return is_active, status_msg
+        except Exception as e:
+            msg = f"Timer {timer_name} not found or error checking status"
+            logger.log_exception(e, "systemd_timer_check_failed", timer=timer_name)
+            return False, msg
+
 
 @click.command()
 @click.option("--quiet", is_flag=True, help="Only show if issues exist")
@@ -475,15 +506,35 @@ class StatusChecker:
 @click.option("--refresh", is_flag=True, help="Force cache refresh")
 @click.option("--cache-dir", help="Override cache directory")
 @click.option("--verbose", is_flag=True, help="Show detailed output")
+@click.option(
+    "--cached-only",
+    is_flag=True,
+    help="Display cached results only (no checks, fast startup mode)",
+)
 def main(
-    quiet: bool, json_output: bool, refresh: bool, cache_dir: str | None, verbose: bool
+    quiet: bool,
+    json_output: bool,
+    refresh: bool,
+    cache_dir: str | None,
+    verbose: bool,
+    cached_only: bool,
 ):
     """Package and system status checker
 
     \b
+    Modes:
+      Default:     Perform checks, update cache if expired
+      --refresh:   Force cache refresh from latest system state
+      --cached-only: Display cached results only (no checks, for fast shell startup)
+
     Cache directory:
       Default: $XDG_CACHE_HOME/dotfiles/status (or ~/.cache/dotfiles/status)
       Override: --cache-dir <path>
+
+    For --cached-only mode (shell startup):
+      Set up systemd timer to update cache periodically:
+        systemctl --user enable pkgstatus-update.timer
+      This timer runs 'pkgstatus --refresh' on schedule
 
     To perform updates:
       Package updates:  Use 'dotfiles-swman --system' or 'dotfiles-swman --all'
@@ -499,6 +550,7 @@ def main(
         json_output=json_output,
         refresh=refresh,
         cache_dir=cache_dir or "default",
+        cached_only=cached_only,
     )
     output = ConsoleOutput(verbose=verbose, quiet=quiet)
     logger.log_info("pkgstatus_started")
@@ -509,7 +561,25 @@ def main(
         # Gather status with logging
         gather_log = logger.bind(operation="gather_status")
         gather_log.log_info("operation_started")
-        status = checker.get_system_status(logger, output, refresh)
+
+        # In cached-only mode, only load cache without performing checks
+        if cached_only:
+            status = SystemStatus(
+                package_cache_path=checker.cache.packages.path,
+                packages=checker.cache.packages.load(logger),
+                git=checker.cache.git.load(logger),
+                init=checker.cache.init.load(logger),
+            )
+
+            # Check if systemd timer is active and warn if not
+            is_timer_active, timer_msg = checker.check_systemd_timer_status(
+                logger, output
+            )
+            if not is_timer_active and verbose:
+                output.warning(f"⚠️  {timer_msg} - cache won't auto-update")
+        else:
+            status = checker.get_system_status(logger, output, refresh)
+
         gather_log.log_info("operation_completed")
 
         # Log comprehensive status summary
