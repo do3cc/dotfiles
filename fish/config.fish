@@ -21,8 +21,8 @@ if status is-interactive
     export DOTFILES_DIR="$HOME/projects/dotfiles"
     nvm use lts
 
-    # Show package/system status on startup
-    pkgstatus --quiet
+    # Show package/system status on startup (lazy-loaded in background)
+    pkgstatus --quiet &
 end
 
 # uv
