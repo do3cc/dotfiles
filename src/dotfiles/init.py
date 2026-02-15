@@ -1226,10 +1226,11 @@ class Arch(Linux):
 
                 except CalledProcessError as e:
                     # In containers, systemd services often fail - this is expected
+                    stderr_lower = (e.stderr or "").lower()
                     if (
-                        "chroot" in e.stderr.lower()
-                        or "failed to connect to bus" in e.stderr.lower()
-                        or "not available" in e.stderr.lower()
+                        "chroot" in stderr_lower
+                        or "failed to connect to bus" in stderr_lower
+                        or "not available" in stderr_lower
                     ):
                         logger.log_exception(e, "service_enable_in_container_failed")
                         output.warning(
