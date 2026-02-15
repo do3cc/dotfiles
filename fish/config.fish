@@ -22,9 +22,7 @@ if status is-interactive
     nvm use lts
 
     # Show package/system status on startup (display cached results only, no checks)
-    date
     pkgstatus --cached-only --quiet &
-    date
 end
 
 # uv
