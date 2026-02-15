@@ -114,8 +114,10 @@ class Linux:
                 ("fish", "fish"),
                 ("lazy_nvim", "nvim"),
                 ("git", "git"),
+                ("systemd", "systemd/user"),
             ],
             local_bin_files=["*"],
+            systemd_services=["pkgstatus-update.timer"],
             ssh_key_email="sshkeys@patrick-gerken.de",
         )
 

@@ -1,0 +1,14 @@
+[Unit]
+Description=Update pkgstatus cache periodically
+PartOf=pkgstatus-update.service
+
+[Timer]
+# Run every 6 hours
+OnBootSec=1min
+OnUnitActiveSec=6h
+
+# Run immediately on boot (after 1 minute delay)
+Persistent=true
+
+[Install]
+WantedBy=timers.target
