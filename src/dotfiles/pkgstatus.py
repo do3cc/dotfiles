@@ -481,6 +481,10 @@ def main(
     """Package and system status checker
 
     \b
+    Cache directory:
+      Default: $XDG_CACHE_HOME/dotfiles/status (or ~/.cache/dotfiles/status)
+      Override: --cache-dir <path>
+
     To perform updates:
       Package updates:  Use 'dotfiles-swman --system' or 'dotfiles-swman --all'
       Git operations:   Use 'git add', 'git commit', 'git push'
