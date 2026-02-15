@@ -42,8 +42,11 @@ class EnvironmentConfig:
     # Local bin files to link
     local_bin_files: list[str] = field(default_factory=list[str])
 
-    # System services to enable
+    # System services to enable (uses sudo systemctl)
     systemd_services: list[str] = field(default_factory=list[str])
+
+    # User services to enable (uses systemctl --user)
+    systemd_user_services: list[str] = field(default_factory=list[str])
 
     # Environment-specific overrides
     ssh_key_email: str | None = None
@@ -61,6 +64,11 @@ class EnvironmentConfig:
             ),
             systemd_services=list(
                 set(base_config.systemd_services).union(set(self.systemd_services))
+            ),
+            systemd_user_services=list(
+                set(base_config.systemd_user_services).union(
+                    set(self.systemd_user_services)
+                )
             ),
             ssh_key_email=self.ssh_key_email or base_config.ssh_key_email,
         )
@@ -114,10 +122,9 @@ class Linux:
                 ("fish", "fish"),
                 ("lazy_nvim", "nvim"),
                 ("git", "git"),
-                ("systemd", "systemd/user"),
             ],
             local_bin_files=["*"],
-            systemd_services=["pkgstatus-update.timer"],
+            systemd_user_services=["pkgstatus-update.timer"],
             ssh_key_email="sshkeys@patrick-gerken.de",
         )
 
@@ -140,18 +147,29 @@ class Linux:
         return env_specific.merge_with(base)
 
     def check_systemd_service_status(
-        self, service: str, logger: LoggingHelpers, output: ConsoleOutput
+        self,
+        service: str,
+        logger: LoggingHelpers,
+        output: ConsoleOutput,
+        user: bool = False,
     ) -> tuple[bool, bool]:
         """Check if a systemd service is enabled and active
+
+        Args:
+            service: Service name to check
+            logger: Logger instance
+            output: Console output instance
+            user: If True, use systemctl --user (no sudo)
 
         Note: run_command_with_error_handling uses check=True, so if returncode != 0,
         it raises CalledProcessError. Therefore, if we reach the result, returncode is always 0.
         We only need to check the stdout content.
         """
+        systemctl = ["systemctl", "--user"] if user else ["systemctl"]
         try:
             # Check if service is enabled
             enabled_result = run_command_with_error_handling(
-                ["systemctl", "is-enabled", service],
+                [*systemctl, "is-enabled", service],
                 logger,
                 output,
                 "systemctl is-enabled",
@@ -160,7 +178,7 @@ class Linux:
 
             # Check if service is active
             active_result = run_command_with_error_handling(
-                ["systemctl", "is-active", service],
+                [*systemctl, "is-active", service],
                 logger,
                 output,
                 "systemctl is-active",
@@ -1240,6 +1258,99 @@ class Arch(Linux):
                         logger.log_exception(e, "service_enable_failed")
                         output.error(f"Failed to enable service {service}: {e.stderr}")
                         # Don't raise here - continue with other services
+
+            # Link and enable systemd user services
+            user_services = self.config.systemd_user_services
+            if user_services:
+                logger = logger.bind(user_services=user_services)
+                output.status(
+                    f"Checking {len(user_services)} systemd user services...",
+                    logger=logger,
+                )
+
+                # Symlink unit files into ~/.config/systemd/user/
+                dotfiles_dir = Path(__file__).parent.parent.parent
+                systemd_user_dir = self.homedir / ".config/systemd/user"
+                systemd_user_dir.mkdir(parents=True, exist_ok=True)
+
+                for unit_file in (dotfiles_dir / "systemd").iterdir():
+                    target = systemd_user_dir / unit_file.name
+                    if target.is_symlink() and target.resolve() == unit_file.resolve():
+                        continue
+                    if target.exists() or target.is_symlink():
+                        target.unlink()
+                    os.symlink(unit_file, target)
+                    output.success(f"{target} → {unit_file}", logger=logger)
+
+                # Reload systemd user daemon to pick up new unit files
+                run_command_with_error_handling(
+                    ["systemctl", "--user", "daemon-reload"],
+                    logger,
+                    output,
+                    "systemctl --user daemon-reload",
+                )
+
+                for service in user_services:
+                    try:
+                        is_enabled, is_active = self.check_systemd_service_status(
+                            service, logger, output, user=True
+                        )
+
+                        if is_enabled and is_active:
+                            output.success(
+                                f"User service already enabled and active: {service}",
+                                logger=logger,
+                            )
+                            continue
+                        elif is_enabled and not is_active:
+                            output.status(
+                                f"Starting user service: {service}",
+                                emoji="🔄",
+                                logger=logger,
+                            )
+                            run_command_with_error_handling(
+                                ["systemctl", "--user", "start", service],
+                                logger,
+                                output,
+                                f"systemctl --user start {service}",
+                            )
+                            output.success(
+                                f"Started user service: {service}", logger=logger
+                            )
+                        else:
+                            output.status(
+                                f"Enabling user service: {service}",
+                                emoji="🔄",
+                                logger=logger,
+                            )
+                            run_command_with_error_handling(
+                                ["systemctl", "--user", "enable", "--now", service],
+                                logger,
+                                output,
+                                f"systemctl --user enable --now {service}",
+                            )
+                            output.success(
+                                f"Enabled user service: {service}", logger=logger
+                            )
+
+                    except CalledProcessError as e:
+                        stderr_lower = (e.stderr or "").lower()
+                        if (
+                            "chroot" in stderr_lower
+                            or "failed to connect to bus" in stderr_lower
+                            or "not available" in stderr_lower
+                        ):
+                            logger.log_exception(
+                                e, "user_service_enable_in_container_failed"
+                            )
+                            output.warning(
+                                f"Cannot enable {service} in container environment"
+                            )
+                        else:
+                            logger.log_exception(e, "user_service_enable_failed")
+                            output.error(
+                                f"Failed to enable user service {service}: {e.stderr}"
+                            )
 
         except KeyboardInterrupt as e:
             logger.log_exception(e, "installation_interrupted_by_user")

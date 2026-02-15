@@ -1,14 +1,9 @@
 [Unit]
 Description=Update pkgstatus cache
-After=network-online.target
-Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=uv run dotfiles-pkgstatus --refresh
+ExecStart=%h/.local/bin/dotfiles-pkgstatus --refresh
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=pkgstatus-update
-
-# Run as the user who installed the service
-User=%u
