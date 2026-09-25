@@ -279,7 +279,9 @@ class Linux:
                 "Installing dotfiles package to ~/.local/bin...", logger=logger
             )
             run_command_with_error_handling(
-                ["uv", "tool", "install", "--editable", "."], logger, output
+                ["uv", "tool", "install", "--editable", str(dotfiles_dir)],
+                logger,
+                output,
             )
             output.success(
                 "Dotfiles package installed globally to ~/.local/bin", logger=logger
