@@ -7,223 +7,27 @@ Python backend for the Fish shell pkgstatus function.
 Handles all complex logic for package, git, and init status checking.
 """
 
-import json
 import os
-from subprocess import CalledProcessError, TimeoutExpired
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
 from pathlib import Path
+from subprocess import CalledProcessError, TimeoutExpired
 
 import click
-from .logging_config import setup_logging, LoggingHelpers
+
+from .logging_config import LoggingHelpers, setup_logging
 from .output_formatting import ConsoleOutput
 from .process_helper import run_command_with_error_handling
+from .status_cache import (
+    CheckStatus,
+    GitStatus,
+    InitScriptStatus,
+    StatusCache,
+    UpdateCheckCache,
+    UpdateCheckResult,
+)
 from .swman import SoftwareManagerOrchestrator
-from typing import Any, Callable, cast
-
-
-class CheckStatus(Enum):
-    """Status of a check operation."""
-
-    SUCCESS = "success"
-    UNAVAILABLE = "unavailable"
-    FAILED = "failed"
-
-
-@dataclass
-class UpdateCheckResult:
-    """
-    System update status as reported by a single package manager.
-
-    Attributes:
-        name: Package manager name (e.g., "pacman", "yay", "apt")
-        has_updates: Whether the package manager found updates available
-        count: Number of updates found (0=no updates, >0=updates available, <0=indeterminate)
-    """
-
-    name: str
-    has_updates: bool = False
-    count: int = 0
-
-    def to_dict(self) -> dict[str, Any]:
-        return dict(name=self.name, has_updates=self.has_updates, count=self.count)
-
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict())
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "UpdateCheckResult":
-        return cls(
-            name=data["name"],
-            has_updates=bool(data["has_updates"]),
-            count=int(data["count"]),
-        )
-
-    @classmethod
-    def from_json(cls, json_str: str) -> "UpdateCheckResult":
-        return cls.from_dict(json.loads(json_str))
-
-
-@dataclass
-class UpdateCheckCache:
-    """
-    Cached results from checking all package managers for system updates.
-
-    This represents a point-in-time snapshot of update availability.
-    Cache freshness is determined by file modification time, not stored state.
-
-    Attributes:
-        packages: Update check results from each individual package manager
-        total_updates: Total number of updates available across all managers
-        last_check: Unix timestamp when this cache entry was created
-        status: Check operation status
-    """
-
-    packages: list[UpdateCheckResult] = field(default_factory=lambda: [])
-    total_updates: int = 0
-    last_check: int = 0
-    status: CheckStatus = CheckStatus.SUCCESS
-
-    def to_dict(self) -> dict[str, Any]:
-        return dict(
-            packages=[x.to_dict() for x in self.packages],
-            total_updates=self.total_updates,
-            last_check=self.last_check,
-            status=self.status.value,
-        )
-
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict())
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "UpdateCheckCache":
-        return cls(
-            packages=[UpdateCheckResult.from_dict(x) for x in data.get("packages", [])],
-            total_updates=data.get("total_updates", 0),
-            last_check=data.get("last_check", 0),
-            status=CheckStatus(data.get("status", "success")),
-        )
-
-    @classmethod
-    def from_json(cls, json_str: str) -> "UpdateCheckCache":
-        return cls.from_dict(json.loads(json_str))
-
-
-@dataclass
-class GitStatus:
-    """
-    Git repository status for the current working directory.
-
-    Attributes:
-        last_check: Unix timestamp of last check
-        enabled: Whether git status checking is enabled
-        in_repo: Whether current directory is in a git repository
-        uncommitted: Number of uncommitted changes
-        ahead: Number of commits ahead of remote
-        behind: Number of commits behind remote
-        branch: Current branch name, or "detached" if HEAD is detached
-        status: Check operation status
-    """
-
-    last_check: int = 0
-    enabled: bool = False
-    in_repo: bool = False
-    uncommitted: int = 0
-    ahead: int = 0
-    behind: int = 0
-    branch: str = "detached"
-    status: CheckStatus = CheckStatus.SUCCESS
-
-    def to_json(self) -> str:
-        return json.dumps(
-            dict(
-                last_check=self.last_check,
-                enabled=self.enabled,
-                in_repo=self.in_repo,
-                uncommitted=self.uncommitted,
-                ahead=self.ahead,
-                behind=self.behind,
-                branch=self.branch,
-                status=self.status.value,
-            )
-        )
-
-    @classmethod
-    def from_json(cls, json_str: str) -> "GitStatus":
-        data = json.loads(json_str)
-        return cls(
-            last_check=data.get("last_check", 0),
-            enabled=data.get("enabled", False),
-            in_repo=data.get("in_repo", False),
-            uncommitted=data.get("uncommitted", 0),
-            ahead=data.get("ahead", 0),
-            behind=data.get("behind", 0),
-            branch=data.get("branch", "detached"),
-            status=CheckStatus(data.get("status", "success")),
-        )
-
-
-@dataclass
-class InitScriptStatus:
-    """
-    Dotfiles init script execution status.
-
-    Tracks when the dotfiles init script was last run to determine
-    if the system configuration needs refreshing.
-
-    Attributes:
-        enabled: Whether init script status checking is enabled
-        last_check: Unix timestamp of last status check
-        last_run: Unix timestamp of last init script execution
-        status: Check operation status
-        dotfiles_found: Whether dotfiles repository was found at DOTFILES_DIR
-    """
-
-    enabled: bool = False
-    last_check: int = 0
-    last_run: int = 0
-    status: CheckStatus = CheckStatus.SUCCESS
-    dotfiles_found: bool = False
-
-    @property
-    def age_hours(self) -> float:
-        """Hours since init script was last run.
-
-        Returns float('inf') when never run (last_run=0), indicating infinite time ago.
-        This ensures needs_update correctly evaluates to True for never-run scripts.
-        """
-        if self.last_run == 0:
-            return float("inf")
-        return (time.time() - self.last_run) / 3600
-
-    @property
-    def needs_update(self) -> bool:
-        """Whether init script should be run (>7 days since last run)."""
-        return self.age_hours > 168
-
-    def to_json(self) -> str:
-        return json.dumps(
-            dict(
-                enabled=self.enabled,
-                last_check=self.last_check,
-                last_run=self.last_run,
-                status=self.status.value,
-                dotfiles_found=self.dotfiles_found,
-            )
-        )
-
-    @classmethod
-    def from_json(cls, json_str: str) -> "InitScriptStatus":
-        data = json.loads(json_str)
-        return cls(
-            enabled=data.get("enabled", False),
-            last_check=data.get("last_check", 0),
-            last_run=data.get("last_run", 0),
-            status=CheckStatus(data.get("status", "success")),
-            dotfiles_found=data.get("dotfiles_found", False),
-        )
 
 
 @dataclass
@@ -257,24 +61,11 @@ class StatusChecker:
     Cache files are stored as JSON and loaded/saved atomically to prevent corruption.
 
     Attributes:
-        cache_dir: Base directory for all cache files
-        packages_cache: Path to packages.json cache file
-        git_cache: Path to git.json cache file
-        init_cache: Path to init.json cache file
+        cache: The packages, git and init cache entries
     """
 
     def __init__(self, cache_dir: str | None = None):
-        self.cache_dir = (
-            Path(cache_dir or os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser()
-            / "dotfiles"
-            / "status"
-        )
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-
-        # Cache file paths
-        self.packages_cache = self.cache_dir / "packages.json"
-        self.git_cache = self.cache_dir / "git.json"
-        self.init_cache = self.cache_dir / "init.json"
+        self.cache = StatusCache(cache_dir)
 
     def _get_fish_config(
         self, key: str, default: str, logger: LoggingHelpers, output: ConsoleOutput
@@ -294,14 +85,6 @@ class StatusChecker:
             logger.log_exception(e, "fish_config_read_failed", key=key)
             return default
 
-    def is_cache_expired(self, cache_file: Path, max_age_hours: int) -> bool:
-        """Check if cache file is expired"""
-        if not cache_file.exists():
-            return True
-
-        file_age = time.time() - cache_file.stat().st_mtime
-        return file_age > (max_age_hours * 3600)
-
     def get_packages_status(
         self,
         logger: LoggingHelpers,
@@ -311,12 +94,10 @@ class StatusChecker:
         """Get package status with caching"""
         cache_hours = int(self._get_fish_config("cache_hours", "6", logger, output))
 
-        if force_refresh or self.is_cache_expired(self.packages_cache, cache_hours):
+        if force_refresh or self.cache.packages.is_expired(cache_hours):
             self._refresh_packages_cache(logger, output)
 
-        return self._load_cache(
-            self.packages_cache, UpdateCheckCache, UpdateCheckCache, logger
-        )
+        return self.cache.packages.load(logger)
 
     def get_git_status(
         self, logger: LoggingHelpers, output: ConsoleOutput, force_refresh: bool
@@ -330,11 +111,11 @@ class StatusChecker:
                 enabled=False, in_repo=False, uncommitted=0, ahead=0, behind=0
             )
 
-        if force_refresh or self.is_cache_expired(self.git_cache, 1):  # 1 hour cache
+        if force_refresh or self.cache.git.is_expired():
             logger.log_info("cache_refresh")
             self._refresh_git_cache(logger, output)
 
-        return self._load_cache(self.git_cache, GitStatus, GitStatus, logger)
+        return self.cache.git.load(logger)
 
     def get_init_status(
         self, logger: LoggingHelpers, output: ConsoleOutput, force_refresh: bool
@@ -348,59 +129,11 @@ class StatusChecker:
             logger.log_info("init_disabled")
             return InitScriptStatus()
 
-        if force_refresh or self.is_cache_expired(self.init_cache, 24):  # 24 hour cache
+        if force_refresh or self.cache.init.is_expired():
             logger.log_info("cache_refresh")
             self._refresh_init_cache(logger)
 
-        return self._load_cache(
-            self.init_cache,
-            InitScriptStatus,
-            lambda: InitScriptStatus(enabled=True, status=CheckStatus.UNAVAILABLE),
-            logger,
-        )
-
-    def _load_cache[T: GitStatus | InitScriptStatus | UpdateCheckCache](
-        self,
-        cache_file: Path,
-        cls: type[T],
-        default_factory: type[T] | Callable[[], T],
-        logger: LoggingHelpers,
-    ) -> T:
-        """Load JSON from cache file with fallback"""
-        logger = logger.bind(cache_file=str(cache_file), cls=cls.__name__)
-        # If cache file doesn't exist, return default (expected case)
-        if not cache_file.exists():
-            logger.log_info("cache_file_not_found")
-            return default_factory()
-
-        # Cache file exists - attempt to load it
-        # If this fails, it's a real error (corruption, permissions, etc.) that should be raised
-        try:
-            with open(cache_file, "r") as f:
-                return cast(T, cls.from_json(f.read()))
-        except Exception as e:
-            logger.log_exception(
-                e,
-                "cache_load_failed",
-            )
-            raise
-
-    def _save_cache(
-        self,
-        cache_file: Path,
-        data: GitStatus | InitScriptStatus | UpdateCheckCache,
-        logger: LoggingHelpers,
-    ) -> None:
-        """Save data to cache file atomically"""
-        temp_file = cache_file.with_suffix(".tmp")
-        try:
-            with open(temp_file, "w") as f:
-                f.write(data.to_json())
-            temp_file.replace(cache_file)
-        except Exception as e:
-            logger.log_exception(e, "cache_save_failed", cache_file=str(cache_file))
-            if temp_file.exists():
-                temp_file.unlink()
+        return self.cache.init.load(logger)
 
     def _refresh_packages_cache(
         self, logger: LoggingHelpers, output: ConsoleOutput
@@ -441,7 +174,7 @@ class StatusChecker:
             logger.log_exception(e, "packages_cache_refresh_failed")
             data = UpdateCheckCache()
 
-        self._save_cache(self.packages_cache, data, logger)
+        self.cache.packages.save(data, logger)
 
     def _refresh_git_cache(self, logger: LoggingHelpers, output: ConsoleOutput) -> None:
         """Refresh git status cache"""
@@ -465,7 +198,7 @@ class StatusChecker:
                 # Git command failed (not in a repo) - this is expected/normal
                 logger.log_info("no_git_repo")
                 git_data.in_repo = False
-                self._save_cache(self.git_cache, git_data, logger)
+                self.cache.git.save(git_data, logger)
                 return
             # Other exceptions (timeout, git not found, permissions) bubble up to outer catch
 
@@ -544,7 +277,7 @@ class StatusChecker:
             git_data.status = CheckStatus.FAILED
             logger.log_exception(e, "git_check_failed")
 
-        self._save_cache(self.git_cache, git_data, logger)
+        self.cache.git.save(git_data, logger)
 
     def _refresh_init_cache(self, logger: LoggingHelpers) -> None:
         """Refresh init script status cache"""
@@ -579,7 +312,7 @@ class StatusChecker:
             init_data.last_run = last_run
             # age_hours and needs_update are now computed properties
 
-        self._save_cache(self.init_cache, init_data, logger)
+        self.cache.init.save(init_data, logger)
 
     def get_system_status(
         self,
@@ -589,7 +322,7 @@ class StatusChecker:
     ) -> SystemStatus:
         """Get complete system status across packages, git, and init script"""
         return SystemStatus(
-            package_cache_path=self.packages_cache,
+            package_cache_path=self.cache.packages.path,
             packages=self.get_packages_status(logger, output, force_refresh),
             git=self.get_git_status(logger, output, force_refresh),
             init=self.get_init_status(logger, output, force_refresh),
@@ -712,7 +445,9 @@ class StatusChecker:
                     age_desc = self._format_age(last_run)
                     lines.append(f"   ✅ Recently run ({age_desc})")
             else:
-                dotfiles_dir = os.environ.get("DOTFILES_DIR", "/home/do3cc/projects/dotfiles")
+                dotfiles_dir = os.environ.get(
+                    "DOTFILES_DIR", "/home/do3cc/projects/dotfiles"
+                )
                 lines.append(f"   ❌ Dotfiles not found at {dotfiles_dir}")
 
         return "\n".join(lines)

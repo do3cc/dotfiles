@@ -1,18 +1,19 @@
 """Tests for pkgstatus.py - Package and system status checker."""
 
-from dotfiles.pkgstatus import (
-    CheckStatus,
-    UpdateCheckResult,
-    UpdateCheckCache,
-    GitStatus,
-    InitScriptStatus,
-    SystemStatus,
-)
 import json
-import pytest
 import time
 from pathlib import Path
 
+import pytest
+
+from dotfiles.pkgstatus import (
+    CheckStatus,
+    GitStatus,
+    InitScriptStatus,
+    SystemStatus,
+    UpdateCheckCache,
+    UpdateCheckResult,
+)
 
 # ==============================================================================
 # UpdateCheckResult Tests
@@ -309,49 +310,6 @@ def test_init_script_status_roundtrip():
 # ==============================================================================
 
 
-def test_status_checker_initialization(tmp_path):
-    """StatusChecker should initialize with correct cache directory structure."""
-    from dotfiles.pkgstatus import StatusChecker
-
-    checker = StatusChecker(cache_dir=str(tmp_path))
-
-    assert checker.cache_dir == tmp_path / "dotfiles" / "status"
-    assert checker.cache_dir.exists()
-    assert checker.packages_cache == checker.cache_dir / "packages.json"
-    assert checker.git_cache == checker.cache_dir / "git.json"
-    assert checker.init_cache == checker.cache_dir / "init.json"
-
-
-@pytest.mark.parametrize(
-    "file_exists,file_age_seconds,max_age_hours,expected_expired",
-    [
-        (False, 0, 1, True),  # file doesn't exist
-        (True, 1800, 1, False),  # 30 minutes old, max 1 hour - not expired
-        (True, 7200, 1, True),  # 2 hours old, max 1 hour - expired
-        (True, 3595, 1, False),  # just under 1 hour old - not expired (boundary)
-        (True, 3605, 1, True),  # just over 1 hour old - expired (boundary)
-    ],
-)
-def test_status_checker_is_cache_expired(
-    tmp_path, file_exists, file_age_seconds, max_age_hours, expected_expired
-):
-    """is_cache_expired() should correctly determine cache freshness."""
-    from dotfiles.pkgstatus import StatusChecker
-
-    checker = StatusChecker(cache_dir=str(tmp_path))
-    cache_file = tmp_path / "test_cache.json"
-
-    if file_exists:
-        cache_file.write_text("{}")
-        # Set file modification time to simulate age
-        mtime = time.time() - file_age_seconds
-        import os
-
-        os.utime(cache_file, (mtime, mtime))
-
-    assert checker.is_cache_expired(cache_file, max_age_hours) is expected_expired
-
-
 @pytest.mark.parametrize(
     "timestamp,expected_output",
     [
@@ -370,132 +328,6 @@ def test_status_checker_format_age(timestamp, expected_output):
 
     checker = StatusChecker()
     assert checker._format_age(timestamp) == expected_output
-
-
-# ==============================================================================
-# StatusChecker Cache Operations Tests
-# ==============================================================================
-
-
-def test_status_checker_load_cache_missing_file(tmp_path):
-    """_load_cache() should return default when cache file doesn't exist."""
-    from dotfiles.pkgstatus import StatusChecker
-    from dotfiles.logging_config import setup_logging
-
-    checker = StatusChecker(cache_dir=str(tmp_path))
-    logger = setup_logging("test")
-    cache_file = tmp_path / "nonexistent.json"
-
-    # Should return default GitStatus instance
-    result = checker._load_cache(cache_file, GitStatus, GitStatus, logger)
-
-    assert isinstance(result, GitStatus)
-    assert result.enabled is False
-    assert result.in_repo is False
-
-
-def test_status_checker_load_cache_existing_file(tmp_path):
-    """_load_cache() should load and deserialize existing cache file."""
-    from dotfiles.pkgstatus import StatusChecker
-    from dotfiles.logging_config import setup_logging
-
-    checker = StatusChecker(cache_dir=str(tmp_path))
-    logger = setup_logging("test")
-    cache_file = tmp_path / "git.json"
-
-    # Create a cache file with valid GitStatus JSON
-    git_status = GitStatus(
-        enabled=True, in_repo=True, branch="main", uncommitted=5, ahead=2, behind=1
-    )
-    cache_file.write_text(git_status.to_json())
-
-    # Load should return the cached data
-    result = checker._load_cache(cache_file, GitStatus, GitStatus, logger)
-
-    assert result.enabled is True
-    assert result.in_repo is True
-    assert result.branch == "main"
-    assert result.uncommitted == 5
-    assert result.ahead == 2
-    assert result.behind == 1
-
-
-def test_status_checker_load_cache_corrupted_file(tmp_path):
-    """_load_cache() should raise exception when cache file is corrupted."""
-    from dotfiles.pkgstatus import StatusChecker
-    from dotfiles.logging_config import setup_logging
-
-    checker = StatusChecker(cache_dir=str(tmp_path))
-    logger = setup_logging("test")
-    cache_file = tmp_path / "corrupted.json"
-
-    # Write invalid JSON
-    cache_file.write_text("{invalid json")
-
-    # Should raise exception (not return default)
-    with pytest.raises(Exception):
-        checker._load_cache(cache_file, GitStatus, GitStatus, logger)
-
-
-def test_status_checker_save_cache(tmp_path):
-    """_save_cache() should atomically save data to cache file."""
-    from dotfiles.pkgstatus import StatusChecker
-    from dotfiles.logging_config import setup_logging
-
-    checker = StatusChecker(cache_dir=str(tmp_path))
-    logger = setup_logging("test")
-    cache_file = checker.cache_dir / "test.json"
-
-    # Save a GitStatus object
-    git_status = GitStatus(enabled=True, in_repo=True, branch="develop", uncommitted=3)
-    checker._save_cache(cache_file, git_status, logger)
-
-    # File should exist and contain correct JSON
-    assert cache_file.exists()
-    loaded = GitStatus.from_json(cache_file.read_text())
-    assert loaded.branch == "develop"
-    assert loaded.uncommitted == 3
-
-
-def test_status_checker_save_cache_atomic_write(tmp_path):
-    """_save_cache() should use temp file for atomic writes."""
-    from dotfiles.pkgstatus import StatusChecker
-    from dotfiles.logging_config import setup_logging
-
-    checker = StatusChecker(cache_dir=str(tmp_path))
-    logger = setup_logging("test")
-    cache_file = checker.cache_dir / "atomic.json"
-
-    # Save data
-    init_status = InitScriptStatus(enabled=True, last_run=12345)
-    checker._save_cache(cache_file, init_status, logger)
-
-    # Temp file should not exist after successful write
-    temp_file = cache_file.with_suffix(".tmp")
-    assert not temp_file.exists()
-    assert cache_file.exists()
-
-
-def test_status_checker_load_cache_with_callable_default(tmp_path):
-    """_load_cache() should support callable default_factory."""
-    from dotfiles.pkgstatus import StatusChecker
-    from dotfiles.logging_config import setup_logging
-
-    checker = StatusChecker(cache_dir=str(tmp_path))
-    logger = setup_logging("test")
-    cache_file = tmp_path / "nonexistent.json"
-
-    # Use a lambda as default_factory (like get_init_status does)
-    result = checker._load_cache(
-        cache_file,
-        InitScriptStatus,
-        lambda: InitScriptStatus(enabled=True, status=CheckStatus.UNAVAILABLE),
-        logger,
-    )
-
-    assert isinstance(result, InitScriptStatus)
-    assert result.enabled is True
-    assert result.status == CheckStatus.UNAVAILABLE
 
 
 # ==============================================================================
@@ -754,9 +586,8 @@ def test_status_checker_format_interactive_output_with_never_run_init(tmp_path):
 
 def test_refresh_init_cache_uses_dotfiles_dir_env(tmp_path, monkeypatch):
     """Should use DOTFILES_DIR environment variable when set"""
-    from dotfiles.pkgstatus import StatusChecker
     from dotfiles.logging_config import setup_logging
-    from dotfiles.output_formatting import ConsoleOutput
+    from dotfiles.pkgstatus import StatusChecker
 
     # Setup fake dotfiles repo in custom location
     fake_dotfiles = tmp_path / "custom-dotfiles"
@@ -776,17 +607,14 @@ def test_refresh_init_cache_uses_dotfiles_dir_env(tmp_path, monkeypatch):
     checker._refresh_init_cache(logger)
 
     # Should detect init.py via DOTFILES_DIR
-    init_status = checker._load_cache(
-        checker.init_cache, InitScriptStatus, InitScriptStatus, logger
-    )
+    init_status = checker.cache.init.load(logger)
     assert init_status.dotfiles_found is True
 
 
 def test_refresh_init_cache_uses_default_path_when_env_unset(tmp_path, monkeypatch):
     """Should use ~/projects/dotfiles fallback when DOTFILES_DIR unset"""
-    from dotfiles.pkgstatus import StatusChecker
     from dotfiles.logging_config import setup_logging
-    from dotfiles.output_formatting import ConsoleOutput
+    from dotfiles.pkgstatus import StatusChecker
 
     monkeypatch.delenv("DOTFILES_DIR", raising=False)
     monkeypatch.chdir(tmp_path)
@@ -813,16 +641,14 @@ def test_refresh_init_cache_uses_default_path_when_env_unset(tmp_path, monkeypat
 
     checker._refresh_init_cache(logger)
 
-    init_status = checker._load_cache(
-        checker.init_cache, InitScriptStatus, InitScriptStatus, logger
-    )
+    init_status = checker.cache.init.load(logger)
     assert init_status.dotfiles_found is True
 
 
 def test_format_interactive_output_dotfiles_not_found(tmp_path, monkeypatch):
     """Should show helpful error with DOTFILES_DIR path when dotfiles not found"""
+
     from dotfiles.pkgstatus import StatusChecker
-    import os
 
     checker = StatusChecker(cache_dir=str(tmp_path))
 
@@ -833,7 +659,7 @@ def test_format_interactive_output_dotfiles_not_found(tmp_path, monkeypatch):
         packages=UpdateCheckCache(),
         package_cache_path=tmp_path / "packages.json",
         git=GitStatus(),
-        init=InitScriptStatus(enabled=True, dotfiles_found=False)
+        init=InitScriptStatus(enabled=True, dotfiles_found=False),
     )
 
     output = checker.format_interactive_output(status)
@@ -852,5 +678,5 @@ def test_format_interactive_output_dotfiles_not_found(tmp_path, monkeypatch):
 # of testing. These methods are orchestration logic that call external commands
 # (pacman, git, fish) and are best tested via integration tests in Docker containers.
 #
-# The internal helper methods (_load_cache, _save_cache, is_cache_expired, etc.)
-# ARE tested above with real file I/O, providing confidence in the building blocks.
+# The cache building blocks (load, save, is_expired, invalidate) are tested with
+# real file I/O in test_status_cache.py.
