@@ -82,7 +82,6 @@ uv run dotfiles-pkgstatus --refresh        # Force cache refresh
 
 - **Shell**: Fish with Starship prompt
 - **Editor**: Neovim with LazyVim configuration
-- **Terminal**: Alacritty with comprehensive themes
 - **Multiplexer**: Tmux with vim integration
 - **Version Managers**: NVM (Node.js), Pyenv (Python)
 

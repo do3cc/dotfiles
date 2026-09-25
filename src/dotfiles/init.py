@@ -110,7 +110,6 @@ class Linux:
         """Get base configuration for Linux systems."""
         return EnvironmentConfig(
             config_dirs=[
-                ("alacritty", "alacritty"),
                 ("direnv", "direnv"),
                 ("fish", "fish"),
                 ("lazy_nvim", "nvim"),
