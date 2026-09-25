@@ -7,19 +7,21 @@ A unified interface to manage updates across multiple package managers
 and tools. Designed to work with any system, not just dotfiles.
 """
 
-from subprocess import SubprocessError, TimeoutExpired, CalledProcessError
-from abc import ABC, abstractmethod
 import sys
 import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from subprocess import CalledProcessError, SubprocessError, TimeoutExpired
 
 import click
 
 from dotfiles.process_helper import run_command_with_error_handling
+
 from .logging_config import LoggingHelpers, setup_logging
 from .output_formatting import ConsoleOutput
+from .status_cache import StatusCache
 
 
 class ManagerType(Enum):
@@ -963,6 +965,10 @@ def main(
         )
         results.extend(op_results)
         op_log.log_info("operation_completed", result_count=len(op_results))
+
+    # Updates change what pkgstatus would report, so drop its cached counts.
+    if not dry_run and results:
+        StatusCache().packages.invalidate(logger)
 
     if json_output:
         output.json(
