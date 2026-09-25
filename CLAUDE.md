@@ -168,7 +168,7 @@ export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init --no-remote
 The script handles:
 
 - Package installation (see `pacman_packages` and `apt_packages` lists in init.py)
-- Configuration linking for: direnv, fish, irssi, nvim, tmux, byobu, git
+- Configuration linking for: direnv, fish, irssi, nvim, byobu, git
 - Shell setup (defaults to fish shell)
 - SSH key generation and GitHub authentication
 - Tailscale setup
@@ -177,7 +177,7 @@ The script handles:
 
 ### Configuration Structure
 
-- Each major tool has its own directory (e.g., `fish/`, `tmux/`)
+- Each major tool has its own directory (e.g., `fish/`)
 - Configurations are symlinked to appropriate locations in `~/.config/`
 - The `lazy_nvim/` directory contains a LazyVim-based Neovim configuration
 
@@ -194,17 +194,10 @@ The script handles:
 - LazyVim-based configuration with plugin management
 - Configuration split into `config/` (core settings) and `plugins/` (plugin configurations)
 
-**Tmux (`tmux/`)**:
-
-- Extensive key bindings for pane/window management
-- Vim-tmux integration for seamless navigation
-- Plugin system with resurrect/continuum for session persistence
-
 ### Development Environment
 
 - Primary shell: Fish with starship prompt
 - Editor: Neovim with LazyVim
-- Terminal multiplexer: Tmux with custom key bindings
 - Version managers: NVM (Node.js), Pyenv (Python)
 - Package managers: UV (Python), NPM/Yarn (Node.js)
 

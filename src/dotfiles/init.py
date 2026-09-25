@@ -113,7 +113,6 @@ class Linux:
                 ("direnv", "direnv"),
                 ("fish", "fish"),
                 ("lazy_nvim", "nvim"),
-                ("tmux", "tmux"),
                 ("git", "git"),
             ],
             local_bin_files=["*"],

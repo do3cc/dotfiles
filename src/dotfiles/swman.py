@@ -867,7 +867,7 @@ def print_results_summary(results: list[UpdateResult], output: ConsoleOutput) ->
     "--system", is_flag=True, help="Update system packages only (pacman, yay, apt)"
 )
 @click.option("--tools", is_flag=True, help="Update development tools (uv, etc.)")
-@click.option("--plugins", is_flag=True, help="Update plugins (nvim, fish, tmux)")
+@click.option("--plugins", is_flag=True, help="Update plugins (nvim, fish)")
 @click.option("--all", "update_all", is_flag=True, help="Update everything")
 @click.option(
     "--dry-run",

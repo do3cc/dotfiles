@@ -82,12 +82,11 @@ uv run dotfiles-pkgstatus --refresh        # Force cache refresh
 
 - **Shell**: Fish with Starship prompt
 - **Editor**: Neovim with LazyVim configuration
-- **Multiplexer**: Tmux with vim integration
 - **Version Managers**: NVM (Node.js), Pyenv (Python)
 
 ### Configuration Structure
 
-- Each tool has its own directory (e.g., `alacritty/`, `fish/`, `tmux/`)
+- Each tool has its own directory (e.g., `alacritty/`, `fish/`)
 - Configurations symlinked to `~/.config/`
 - XDG Base Directory compliant
 

@@ -102,7 +102,6 @@ aur:
   base:
     - google-java-format
     - nodejs-markdown-toc
-    - tmux-plugin-manager
   environments:
     private: []
     work: []

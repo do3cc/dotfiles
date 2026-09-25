@@ -531,7 +531,7 @@ def test_log_file_operation_with_context(logger, unwrapped_logger):
 
 def test_log_package_operation_success(logger, unwrapped_logger):
     """log_package_operation() should log successful package operations."""
-    packages = ["git", "vim", "tmux"]
+    packages = ["git", "vim"]
     logger.log_package_operation("pacman", "install", packages, success=True)
 
     unwrapped_logger.info.assert_called_once_with(

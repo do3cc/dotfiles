@@ -301,7 +301,7 @@ def test_arch_check_packages_empty_list(mock_logging_helpers):
 def test_arch_check_packages_all_installed(mock_logging_helpers, monkeypatch):
     """Test check_packages_installed when all packages are installed."""
     arch = init.Arch("minimal", False)
-    packages = ["git", "vim", "tmux"]
+    packages = ["git", "vim"]
 
     # Mock run_command_with_error_handling to return success
     def mock_run(*args):
@@ -508,7 +508,7 @@ def test_debian_check_packages_empty_list(mock_logging_helpers):
 def test_debian_check_packages_all_installed(mock_logging_helpers, monkeypatch):
     """Test Debian check_packages_installed when all packages are installed."""
     debian = init.Debian("minimal", False)
-    packages = ["git", "vim", "tmux"]
+    packages = ["git", "vim"]
 
     def mock_run(cmd, *args):
         result = MagicMock()
