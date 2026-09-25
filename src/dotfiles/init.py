@@ -945,7 +945,9 @@ class Arch(Linux):
         # Perform system update if needed
         self.update_system(logger, output)
 
-        def pacman(*args: str, **kwargs: Any) -> CompletedProcess[str]:
+        def pacman(
+            *args: str, logger: LoggingHelpers, **kwargs: Any
+        ) -> CompletedProcess[str]:
             """
             Execute pacman commands with real-time output, error handling, and retry logic.
 
