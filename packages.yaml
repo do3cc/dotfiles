@@ -82,6 +82,7 @@ environments:
       - bitwarden
       - firefox
       - ghostscript
+      - ghostty
       - imagemagick
       - noto-fonts-emoji
       - otf-font-awesome
