@@ -133,7 +133,7 @@ class Linux:
         """Get environment-specific configurations."""
         return {
             "private": EnvironmentConfig(
-                config_dirs=[("irssi", "irssi")],
+                config_dirs=[("irssi", "irssi"), ("ghostty", "ghostty")],
             ),
             "work": EnvironmentConfig(
                 ssh_key_email="patrick.gerken@zumtobelgroup.com",

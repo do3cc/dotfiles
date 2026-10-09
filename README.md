@@ -86,9 +86,12 @@ uv run dotfiles-pkgstatus --refresh        # Force cache refresh
 
 ### Configuration Structure
 
-- Each tool has its own directory (e.g., `alacritty/`, `fish/`)
+- Each tool has its own directory (e.g., `ghostty/`, `fish/`)
 - Configurations symlinked to `~/.config/`
 - XDG Base Directory compliant
+- Ghostty (`ghostty/config`, private environment) is the primary terminal; its
+  splits and tabs replace tmux. `ghostty` is installed from the Arch repos only,
+  as it is not packaged for Debian/Ubuntu.
 
 ## SSH Keys
 
