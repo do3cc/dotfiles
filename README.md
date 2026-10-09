@@ -90,6 +90,32 @@ uv run dotfiles-pkgstatus --refresh        # Force cache refresh
 - Configurations symlinked to `~/.config/`
 - XDG Base Directory compliant
 
+## SSH Keys
+
+`dotfiles-init` (step "link accounts", skipped with `--no-remote`) sets up one
+SSH key per machine at the OpenSSH default path `~/.ssh/id_ed25519`:
+
+1. Logs in to GitHub via `gh auth login` if needed, and refreshes the token with
+   the `admin:public_key` scope.
+2. Creates the key if it is missing (`ssh-keygen -t ed25519`, interactive, so
+   you may set a passphrase or leave it empty). Host, email and environment are
+   stored in the key comment.
+3. Adds `Host *` / `AddKeysToAgent yes` to `~/.ssh/config` if `AddKeysToAgent`
+   is not set anywhere there, so the first use caches the key in the agent.
+4. Uploads the public key to GitHub with `gh ssh-key add`, titled
+   `"<hostname> <environment>"`, unless `gh ssh-key list` already has it.
+
+Every step is idempotent. Re-running init repairs a missing config entry or a
+missing GitHub upload.
+
+The `ssh-agent` is started by the fish plugin `danhper/fish-ssh-agent`
+(`fish/conf.d/fish-ssh-agent.fish`), which keeps its environment in
+`~/.ssh/environment`. No dotfiles code loads the key: with `AddKeysToAgent`
+ssh asks for the passphrase once per agent lifetime.
+
+Troubleshooting: `ssh-add -l` lists cached keys and `ssh -T git@github.com`
+tests the connection.
+
 ## Testing
 
 ### Quick Verification
