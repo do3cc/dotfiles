@@ -570,10 +570,7 @@ def test_main_os_detection_failure(monkeypatch):
 
     runner = CliRunner()
     result = runner.invoke(init.main, ["--quiet"])
-    # Function handled exception without crashing
-    assert result.exception is None or isinstance(
-        result.exception, (SystemExit, FileNotFoundError)
-    )
+    assert result.exit_code == 1
 
 
 def test_main_unsupported_os(monkeypatch):
@@ -588,10 +585,51 @@ def test_main_unsupported_os(monkeypatch):
 
     runner = CliRunner()
     result = runner.invoke(init.main, ["--quiet"])
-    # Function handled exception without crashing
-    assert result.exception is None or isinstance(
-        result.exception, (SystemExit, NotImplementedError)
-    )
+    assert result.exit_code == 1
+
+
+def _mock_os_with(monkeypatch, **overrides):
+    mock_os = MagicMock(spec=init.Arch)
+    mock_os.restart_required = False
+    for name in (
+        "install_dependencies",
+        "link_configs",
+        "link_local_bin",
+        "validate_git_credential_helper",
+        "setup_shell",
+        "link_accounts",
+    ):
+        setattr(mock_os, name, overrides.get(name, MagicMock()))
+    monkeypatch.setattr(init, "detect_operating_system", lambda *a, **k: mock_os)
+    return mock_os
+
+
+def test_main_exits_1_when_a_step_fails_validation(monkeypatch, tmp_path):
+    from click.testing import CliRunner
+
+    _mock_os_with(monkeypatch, install_dependencies=MagicMock(return_value=False))
+    result = CliRunner().invoke(init.main, ["--quiet"], env={"HOME": str(tmp_path)})
+    assert result.exit_code == 1
+
+
+def test_main_exits_1_on_unexpected_error(monkeypatch, tmp_path):
+    from click.testing import CliRunner
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(init, "detect_operating_system", boom)
+    result = CliRunner().invoke(init.main, ["--quiet"], env={"HOME": str(tmp_path)})
+    assert result.exit_code == 1
+
+
+def test_main_exits_130_on_keyboard_interrupt(monkeypatch, tmp_path):
+    from click.testing import CliRunner
+
+    interrupted = MagicMock(side_effect=KeyboardInterrupt)
+    _mock_os_with(monkeypatch, install_dependencies=interrupted)
+    result = CliRunner().invoke(init.main, ["--quiet"], env={"HOME": str(tmp_path)})
+    assert result.exit_code == 130
 
 
 @pytest.mark.integration

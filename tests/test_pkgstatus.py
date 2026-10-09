@@ -680,3 +680,19 @@ def test_format_interactive_output_dotfiles_not_found(tmp_path, monkeypatch):
 #
 # The cache building blocks (load, save, is_expired, invalidate) are tested with
 # real file I/O in test_status_cache.py.
+
+
+def test_pkgstatus_cli_exits_1_when_status_check_fails(monkeypatch, tmp_path):
+    """click discards main()'s return value, so a failure must sys.exit(1)."""
+    from click.testing import CliRunner
+
+    from dotfiles import pkgstatus
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("status check failed")
+
+    monkeypatch.setattr(pkgstatus, "StatusChecker", boom)
+    result = CliRunner().invoke(
+        pkgstatus.main, ["--quiet"], env={"HOME": str(tmp_path)}
+    )
+    assert result.exit_code == 1

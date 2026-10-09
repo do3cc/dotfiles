@@ -238,3 +238,44 @@ def test_pacman_check_updates_error_returncode(mock_subprocess_run):
     # Verify subprocess.run was called with check=False
     mock_subprocess_run.assert_called_once()
     assert mock_subprocess_run.call_args.kwargs["check"] is False
+
+
+# Exit codes of the CLI (click discards main()'s return value, so the code must sys.exit)
+def test_swman_cli_without_operation_is_usage_error():
+    from click.testing import CliRunner
+
+    from dotfiles import swman
+
+    result = CliRunner().invoke(swman.main, [])
+    assert result.exit_code == 2
+    assert "Must specify at least one operation" in result.output
+
+
+def test_swman_cli_exits_1_when_a_manager_fails():
+    from click.testing import CliRunner
+
+    from dotfiles import swman
+
+    failed = UpdateResult(
+        name="pacman", status=UpdateStatus.FAILED, message="boom", duration=0.0
+    )
+    with patch.object(
+        swman.SoftwareManagerOrchestrator, "update_by_type", return_value=[failed]
+    ):
+        result = CliRunner().invoke(swman.main, ["--system", "--dry-run", "--quiet"])
+    assert result.exit_code == 1
+
+
+def test_swman_cli_exits_0_when_all_succeed():
+    from click.testing import CliRunner
+
+    from dotfiles import swman
+
+    ok = UpdateResult(
+        name="pacman", status=UpdateStatus.SUCCESS, message="ok", duration=0.0
+    )
+    with patch.object(
+        swman.SoftwareManagerOrchestrator, "update_by_type", return_value=[ok]
+    ):
+        result = CliRunner().invoke(swman.main, ["--system", "--dry-run", "--quiet"])
+    assert result.exit_code == 0

@@ -1905,14 +1905,14 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
                 logger=logger,
             )
             output.info("This script only supports Linux distributions")
-            return 1
+            sys.exit(1)
         except NotImplementedError as e:
             logger.log_exception(e, "os_not_supported")
             output.error(str(e))
             output.info(
                 "This script currently supports Arch Linux, Garuda Linux, and Debian-based systems"
             )
-            return 1
+            sys.exit(1)
 
         # Execute installation steps with individual error handling
         # Track if changes require terminal restart
@@ -1971,7 +1971,7 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
                     )
             except KeyboardInterrupt:
                 output.error(f"{step_name} interrupted by user", logger=step_log)
-                return 130  # Standard exit code for SIGINT
+                sys.exit(130)
             except Exception as e:  # noqa: BLE001
                 step_log.log_exception(
                     e,
@@ -1996,7 +1996,7 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
             )
             for error in errors:
                 output.error(f"  - {error}")
-            return 1
+            sys.exit(1)
 
         logger = logger.bind(restart_required=operating_system.restart_required)
         output.success(
@@ -2017,7 +2017,7 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
             output.info("DETAILED ERROR INFORMATION:")
             traceback.print_exc()
         output.info("Please report this issue with the full error message")
-        return 1
+        sys.exit(1)
 
 
 if __name__ == "__main__":
