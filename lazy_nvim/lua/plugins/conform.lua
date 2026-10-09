@@ -4,6 +4,8 @@ return {
     formatters_by_ft = {
       java = { "google-java-format" }, -- Formatting
       json = { "prettier" },
+      html = { "prettier" },
+      htmldjango = { "prettier" },
       -- java = { "checkstyle" },      -- Linting (optional)
     },
     -- Custom formatter definition (if needed)
