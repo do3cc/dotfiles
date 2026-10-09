@@ -37,13 +37,11 @@ plan covers how to implement and verify them.
 3. **Signing config.** Add the `[gpg]`, `[gpg "ssh"]`, `[user] signingKey`,
    `[commit]`/`[tag] gpgSign` block. Safety: unconditional `commit.gpgSign`
    breaks every commit on a machine without the key or agent (for example
-   after `dotfiles-init --no-remote`). Proposed: keep the signing block in a
-   separate file that `dotfiles-init` creates only after the key exists and
-   is registered (`signing.conf`, pulled in from `git/config` with
-   `[include] path = signing.conf`; git silently ignores a missing include).
-   Note: `~/.config/git` is a symlink to the repo's `git/` directory, so
-   generated files (`signing.conf`, `allowed_signers`) land in the working
-   tree and must be added to `.gitignore`.
+   after `dotfiles-init --no-remote`). **Decided:** keep it simple, one
+   unconditional block in `git/config`. A machine without the key could not
+   push anyway, and `dotfiles-init` creates the key first. The generated
+   `allowed_signers` lives in `~/.ssh/` (not under `~/.config/git`, which is a
+   symlink into the repo), so nothing generated lands in the working tree.
 4. **`dotfiles-init`** (extend `setup_ssh_key`, idempotent like its other
    steps): request `admin:ssh_signing_key` in the `gh auth refresh` calls;
    add the public key as a signing key if `gh ssh-key list` does not show it
@@ -87,12 +85,12 @@ plan covers how to implement and verify them.
 3. **Sign tags** (`tag.gpgSign`): yes.
 4. **Optional settings** (`transfer.fsckObjects`, `help.autocorrect = prompt`,
    `rebase.updateRefs`, `push.followTags`): all of them.
-5. SSH signing, `merge.tool`/`diff.tool = nvimdiff`, drop `core.editor`
+5. **Signing block:** unconditional in `git/config` (a machine without the
+   key cannot push anyway), `allowed_signers` in `~/.ssh/`.
+6. **`tab-in-indent`:** dropped, `core.whitespace = space-before-tab,trailing-space`.
+7. SSH signing, `merge.tool`/`diff.tool = nvimdiff`, drop `core.editor`
    (`$EDITOR` is always nvim): decided earlier on the issue.
 
 ## Open Questions
 
-1. **Signing include vs unconditional block** (step 3): the issue comment
-   explains the trade-off; proposed is the separate generated include.
-2. **`tab-in-indent`** in `core.whitespace`: the issue comment explains what
-   it does; proposed is to remove it.
+None open.
