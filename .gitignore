@@ -20,3 +20,9 @@ calendar-sync/
 # Tmux plugins (installed via tpm)
 tmux/plugins/
 lazyvim.json
+
+# Syncthing conflict copies
+*.sync-conflict-*
+
+# Private Claude instructions
+CLAUDE.local.md
