@@ -67,15 +67,14 @@ new output.
 - Touches `swman.py` like #76 (exit codes), #77 (lint) and #80 (handler
   cleanup). Suggested order: #77, #80, #76, then this.
 
+## Decisions (from the owner's answers on the issue)
+
+1. **apt needs sudo for the check:** acceptable for a preview.
+2. **`uv tool list --outdated`:** no support for old uv versions;
+   `dotfiles-init` keeps the system up to date.
+3. **`--check`:** also lists the packages.
+4. **lazy.nvim / fisher:** "preview not available" is fine.
+
 ## Open Questions
 
-1. **apt needs sudo for the check** (`sudo apt update`): acceptable for a
-   preview, or use `apt list --upgradable` on the existing cache and say the
-   cache may be stale?
-2. **`uv tool list --outdated`:** minimum uv version and exact output format
-   must be confirmed on the machine; fall back to "cannot determine" on older
-   uv?
-3. **`--check`:** should it also list packages, or stay count-only?
-4. **lazy.nvim / fisher:** just "preview not available", or invest in a
-   check (for example `git fetch` + compare for lazy plugins)? Proposed:
-   not available.
+None open.
