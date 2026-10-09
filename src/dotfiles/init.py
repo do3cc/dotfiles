@@ -74,6 +74,9 @@ class EnvironmentConfig:
 
 
 class Linux:
+    # Where git's libsecret credential helper lives (Arch ships it with git)
+    LIBSECRET_HELPER = Path("/usr/lib/git-core/git-credential-libsecret")
+
     def __init__(
         self,
         no_remote_mode: bool = False,
@@ -604,7 +607,7 @@ class Linux:
         """Validate that git credential helper is properly configured"""
         try:
             # Check if libsecret binary exists
-            libsecret_path = Path("/usr/lib/git-core/git-credential-libsecret")
+            libsecret_path = self.LIBSECRET_HELPER
             logger = logger.bind(libsecret_path=libsecret_path)
             if not libsecret_path.exists():
                 output.warning(
@@ -1390,6 +1393,26 @@ class Arch(Linux):
 
 
 class Debian(Linux):
+    def validate_git_credential_helper(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> bool:
+        """Debian and Ubuntu do not package the libsecret helper as a binary.
+
+        git only ships its source under /usr/share/doc/git/contrib, so a
+        missing helper is a known limitation here, not an installation error.
+        """
+        if not self.LIBSECRET_HELPER.exists():
+            logger = logger.bind(libsecret_path=self.LIBSECRET_HELPER)
+            output.warning(
+                f"git-credential-libsecret not found at {self.LIBSECRET_HELPER}; "
+                "it is not packaged for Debian/Ubuntu (build it from "
+                "/usr/share/doc/git/contrib/credential/libsecret)",
+                logger=logger,
+            )
+            logger.log_warning("git_credential_helper_not_packaged")
+            return True
+        return super().validate_git_credential_helper(logger, output)
+
     def check_packages_installed(
         self, packages: list[str], logger: LoggingHelpers, console: ConsoleOutput
     ) -> tuple[list[str], list[str]]:

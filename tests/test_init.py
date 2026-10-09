@@ -745,3 +745,24 @@ def test_main_uses_status_messages_not_persistent_progress(monkeypatch, tmp_path
     assert len(success_calls) > 0, (
         "main() should use success() messages for completed steps"
     )
+
+
+def test_debian_missing_libsecret_helper_is_not_an_error(
+    monkeypatch, tmp_path, mock_logging_helpers
+):
+    """Debian does not package the helper binary, so a missing helper only warns."""
+    monkeypatch.setattr(init.Linux, "LIBSECRET_HELPER", tmp_path / "missing")
+    output = MagicMock()
+    assert init.Debian(False).validate_git_credential_helper(
+        mock_logging_helpers, output
+    )
+    output.warning.assert_called_once()
+
+
+def test_arch_missing_libsecret_helper_fails_validation(
+    monkeypatch, tmp_path, mock_logging_helpers
+):
+    monkeypatch.setattr(init.Linux, "LIBSECRET_HELPER", tmp_path / "missing")
+    assert not init.Arch(False).validate_git_credential_helper(
+        mock_logging_helpers, MagicMock()
+    )
