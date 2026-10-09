@@ -1,0 +1,8 @@
+[/home/do3cc/projects/dotfiles]
+checkout = git clone 'git@github.com:do3cc/dotfiles.git' 'dotfiles'
+
+[/home/do3cc/projects/kdgerken_workreport]
+checkout = git clone 'git@github.com:do3cc/kdgerken_workreport.git' 'kdgerken_workreport'
+
+[/home/do3cc/projects/stiftung-volto]
+checkout = git clone 'gitlab@git.starzel.de:stiftung_bayerische_gedenkstaetten/stiftung-volto.git' 'stiftung-volto'
