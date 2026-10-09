@@ -11,24 +11,25 @@ import os
 import subprocess
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Any
 
 import structlog
 
-from typing import Any
 
-
-def setup_logging(
-    script_name: str, log_dir: Path = Path().home() / ".cache/dotfiles/logs"
-) -> "LoggingHelpers":
+def setup_logging(script_name: str, log_dir: Path | None = None) -> "LoggingHelpers":
     """
     Configure structured logging and return ready-to-use LoggingHelpers instance.
 
     Args:
         script_name: Name of the script (e.g., "init", "swman", "pkgstatus")
+        log_dir: Directory for the log file (default: ~/.cache/dotfiles/logs)
 
     Returns:
         LoggingHelpers instance ready for use
     """
+    if log_dir is None:
+        log_dir = Path.home() / ".cache/dotfiles/logs"
+
     # Ensure log directory exists
     log_dir.mkdir(parents=True, exist_ok=True)
 

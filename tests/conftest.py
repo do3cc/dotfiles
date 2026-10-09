@@ -1,7 +1,8 @@
 """Shared pytest fixtures for all test modules."""
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 
 @pytest.fixture
@@ -52,4 +53,4 @@ def mock_logging_helpers():
 @pytest.fixture
 def output():
     """Mock ConsoleOutput for testing (None for tests that don't need it)."""
-    return None
+    return

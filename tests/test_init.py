@@ -55,7 +55,6 @@ def test_environmentconfig_merge_duplicatehandling(attribute: str, faker):
         systemd_services=systemd_services_b,
     )
     duplicate = getattr(env_config_b, attribute)[0]
-    packages_b.__class__
     getattr(env_config_a, attribute).append(duplicate)
 
     final_config = env_config_a.merge_with(env_config_b)
@@ -336,7 +335,7 @@ def test_arch_check_packages_exception(mock_logging_helpers, monkeypatch):
     packages = ["git", "vim"]
 
     def mock_run(*args):
-        raise Exception("pacman error")
+        raise RuntimeError("pacman error")
 
     monkeypatch.setattr(init, "run_command_with_error_handling", mock_run)
 
@@ -363,7 +362,7 @@ def test_arch_should_update_system_recent(tmp_path, monkeypatch):
     marker_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Write timestamp from 1 hour ago
-    recent_time = datetime.now()
+    recent_time = datetime.now()  # noqa: DTZ005
     marker_file.write_text(recent_time.isoformat())
 
     arch = init.Arch(False)
@@ -379,7 +378,7 @@ def test_arch_should_update_system_old(tmp_path, monkeypatch):
     marker_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Write timestamp from 25 hours ago
-    old_time = datetime.now() - timedelta(hours=25)
+    old_time = datetime.now() - timedelta(hours=25)  # noqa: DTZ005
     marker_file.write_text(old_time.isoformat())
 
     arch = init.Arch(False)
@@ -412,7 +411,7 @@ def test_arch_mark_system_updated(tmp_path, monkeypatch, mock_logging_helpers):
     # Verify timestamp is parseable and recent (within last minute)
     timestamp_str = marker_file.read_text().strip()
     timestamp = datetime.fromisoformat(timestamp_str)
-    age_seconds = (datetime.now() - timestamp).total_seconds()
+    age_seconds = (datetime.now() - timestamp).total_seconds()  # noqa: DTZ005
     assert age_seconds < 60  # Should be very recent
 
 
@@ -537,7 +536,7 @@ def test_debian_check_packages_exception(mock_logging_helpers, monkeypatch):
     packages = ["git", "vim"]
 
     def mock_run(*args):
-        raise Exception("dpkg error")
+        raise RuntimeError("dpkg error")
 
     monkeypatch.setattr(init, "run_command_with_error_handling", mock_run)
 

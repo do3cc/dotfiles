@@ -9,17 +9,18 @@ Separated from logging to maintain single responsibility principle.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any
+
+from rich import print as rich_print
 from rich.console import Console
 from rich.progress import (
+    BarColumn,
     Progress,
     SpinnerColumn,
-    TextColumn,
-    BarColumn,
     TaskProgressColumn,
+    TextColumn,
 )
 from rich.table import Table
-from rich import print as rich_print
-from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .logging_config import LoggingHelpers
