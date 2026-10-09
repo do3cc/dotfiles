@@ -18,8 +18,21 @@ from subprocess import CalledProcessError, CompletedProcess
 from unittest.mock import Mock, patch
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
-from dotfiles.swman import PacmanManager, UpdateResult, UpdateStatus
+from dotfiles import swman
+from dotfiles.swman import (
+    DebianSystemManager,
+    PackageUpdate,
+    PacmanManager,
+    UpdateResult,
+    UpdateStatus,
+    UvToolsManager,
+    parse_apt_upgradable,
+    parse_arrow_updates,
+    parse_uv_outdated,
+)
 
 
 @pytest.mark.parametrize(
@@ -281,3 +294,188 @@ def test_swman_cli_exits_0_when_all_succeed():
     ):
         result = CliRunner().invoke(swman.main, ["--system", "--dry-run", "--quiet"])
     assert result.exit_code == 0
+
+
+# Update preview (#33)
+_token = st.text(
+    alphabet=st.characters(
+        whitelist_categories=("Ll", "Nd"), whitelist_characters=".-_+:"
+    ),
+    min_size=1,
+    max_size=12,
+)
+
+
+@given(name=_token, old=_token, new=_token)
+def test_parse_arrow_updates_roundtrip(name, old, new):
+    assert parse_arrow_updates(f"{name} {old} -> {new}\n") == [
+        PackageUpdate(name, old, new)
+    ]
+
+
+def test_parse_arrow_updates_keeps_unparseable_lines_for_the_count():
+    parsed = parse_arrow_updates("git 1-1 -> 2-1\nweird line\n\n")
+    assert parsed == [
+        PackageUpdate("git", "1-1", "2-1"),
+        PackageUpdate("weird line", "?", "?"),
+    ]
+
+
+def test_parse_apt_upgradable():
+    stdout = (
+        "Listing... Done\n"
+        "git/noble-updates 1:2.43.0-1ubuntu7.3 amd64 [upgradable from: 1:2.43.0-1ubuntu7.1]\n"
+        "vim/noble-security 2:9.1.0016-1ubuntu7.9 amd64 [upgradable from: 2:9.1.0016-1ubuntu7.8]\n"
+    )
+    assert parse_apt_upgradable(stdout) == [
+        PackageUpdate("git", "1:2.43.0-1ubuntu7.1", "1:2.43.0-1ubuntu7.3"),
+        PackageUpdate("vim", "2:9.1.0016-1ubuntu7.8", "2:9.1.0016-1ubuntu7.9"),
+    ]
+
+
+def test_parse_uv_outdated_ignores_executable_lines():
+    # Real output of `uv tool list --outdated` (uv 0.11)
+    stdout = "ruff v0.1.0 [latest: 0.16.10]\n- ruff\nblack v23.9.0 [latest: 23.10.0]\n- black\n"
+    assert parse_uv_outdated(stdout) == [
+        PackageUpdate("ruff", "0.1.0", "0.16.10"),
+        PackageUpdate("black", "23.9.0", "23.10.0"),
+    ]
+    assert parse_uv_outdated("") == []
+
+
+def _logger_and_output():
+    logger = Mock()
+    logger.bind.return_value = logger
+    return logger, Mock()
+
+
+@patch("subprocess.run")
+def test_pacman_check_updates_records_packages(mock_run):
+    mock_run.return_value = CompletedProcess(
+        [], 0, "git 1-1 -> 2-1\nvim 3-1 -> 4-1\n", ""
+    )
+    manager = PacmanManager()
+    manager.check_updates(*_logger_and_output())
+    assert manager.last_updates == [
+        PackageUpdate("git", "1-1", "2-1"),
+        PackageUpdate("vim", "3-1", "4-1"),
+    ]
+
+
+@patch("subprocess.run")
+def test_pacman_dry_run_result_carries_the_packages_and_does_not_update(mock_run):
+    mock_run.return_value = CompletedProcess([], 0, "git 1-1 -> 2-1\n", "")
+    result = PacmanManager().update(*_logger_and_output(), dry_run=True)
+    assert result.updates == [PackageUpdate("git", "1-1", "2-1")]
+    assert result.message == "Would update 1 packages"
+    commands = [call.args[0] for call in mock_run.call_args_list]
+    assert commands == [["checkupdates"]]  # no sudo pacman -Syu
+
+
+@patch("subprocess.run")
+def test_apt_check_updates_records_packages(mock_run):
+    listing = "Listing... Done\ngit/noble 2 amd64 [upgradable from: 1]\n"
+    mock_run.side_effect = [
+        CompletedProcess([], 0, "", ""),
+        CompletedProcess([], 0, listing, ""),
+    ]
+    manager = DebianSystemManager()
+    assert manager.check_updates(*_logger_and_output()) == (True, 1)
+    assert manager.last_updates == [PackageUpdate("git", "1", "2")]
+
+
+@patch("subprocess.run")
+def test_uv_check_updates_lists_outdated_tools(mock_run):
+    mock_run.return_value = CompletedProcess(
+        [], 0, "ruff v0.1.0 [latest: 0.2.0]\n- ruff\n", ""
+    )
+    manager = UvToolsManager()
+    assert manager.check_updates(*_logger_and_output()) == (True, 1)
+    assert manager.last_updates == [PackageUpdate("ruff", "0.1.0", "0.2.0")]
+
+
+@patch("subprocess.run")
+def test_uv_check_updates_cannot_determine_on_failure(mock_run):
+    mock_run.side_effect = CalledProcessError(1, ["uv"])
+    manager = UvToolsManager()
+    assert manager.check_updates(*_logger_and_output()) == (False, -1)
+    assert manager.last_updates is None
+
+
+def test_lazy_and_fisher_dry_run_say_preview_not_available():
+    for manager in (swman.LazyNvimManager(), swman.FisherManager()):
+        result = manager.update(*_logger_and_output(), dry_run=True)
+        assert result.updates is None
+        assert "preview not available" in result.message
+
+
+def _invoke(args, results=None, managers=None):
+    from click.testing import CliRunner
+
+    patches = []
+    if results is not None:
+        patches.append(
+            patch.object(
+                swman.SoftwareManagerOrchestrator,
+                "update_by_type",
+                return_value=results,
+            )
+        )
+    if managers is not None:
+        patches.append(
+            patch.object(
+                swman.SoftwareManagerOrchestrator,
+                "check_all",
+                return_value={
+                    m.name: (True, len(m.last_updates or [])) for m in managers
+                },
+            )
+        )
+    for p in patches:
+        p.start()
+    try:
+        orchestrator_managers = managers
+        if orchestrator_managers is not None:
+            with patch.object(
+                swman.SoftwareManagerOrchestrator,
+                "__init__",
+                lambda self: setattr(self, "managers", orchestrator_managers),
+            ):
+                return CliRunner().invoke(swman.main, args)
+        return CliRunner().invoke(swman.main, args)
+    finally:
+        for p in patches:
+            p.stop()
+
+
+def test_dry_run_prints_the_package_preview():
+    result = UpdateResult(
+        "pacman",
+        UpdateStatus.SUCCESS,
+        "Would update 2 packages",
+        0.0,
+        updates=[
+            PackageUpdate("git", "2.42.0", "2.43.0"),
+            PackageUpdate("vim", "9.0.1", "9.0.2"),
+        ],
+    )
+    skipped = UpdateResult(
+        "fisher",
+        UpdateStatus.SUCCESS,
+        "Would update Fish plugins (preview not available)",
+        0.0,
+    )
+    out = _invoke(["--all", "--dry-run"], results=[result, skipped])
+    assert out.exit_code == 0
+    assert "git" in out.output and "2.43.0" in out.output and "vim" in out.output
+    assert "fisher: preview not available" in out.output
+    assert "Would update 2 packages across 1 managers" in out.output
+
+
+def test_check_lists_the_packages_too():
+    manager = PacmanManager()
+    manager.last_updates = [PackageUpdate("git", "2.42.0", "2.43.0")]
+    out = _invoke(["--check"], managers=[manager])
+    assert out.exit_code == 0
+    assert "git" in out.output and "2.43.0" in out.output
+    assert "Updates available: 1 packages across 1 managers" in out.output
