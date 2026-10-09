@@ -908,10 +908,7 @@ def main(
     logger.log_info("swman_started")
 
     if not any([check, system, tools, plugins, update_all]):
-        click.echo("Error: Must specify at least one operation")
-        ctx = click.get_current_context()
-        click.echo(ctx.get_help())
-        return 1
+        raise click.UsageError("Must specify at least one operation")
 
     orchestrator = SoftwareManagerOrchestrator()
 
@@ -996,7 +993,7 @@ def main(
         failed=failed_count,
     )
 
-    return 1 if failed_count > 0 else 0
+    sys.exit(1 if failed_count > 0 else 0)
 
 
 if __name__ == "__main__":

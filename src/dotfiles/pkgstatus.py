@@ -8,6 +8,7 @@ Handles all complex logic for package, git, and init status checking.
 """
 
 import os
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -623,7 +624,7 @@ def main(
 
             traceback.print_exc()
             output.info("Check the error details above and retry")
-        return 1
+        sys.exit(1)
 
 
 if __name__ == "__main__":

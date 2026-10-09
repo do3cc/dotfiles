@@ -74,6 +74,9 @@ class EnvironmentConfig:
 
 
 class Linux:
+    # Where git's libsecret credential helper lives (Arch ships it with git)
+    LIBSECRET_HELPER = Path("/usr/lib/git-core/git-credential-libsecret")
+
     def __init__(
         self,
         no_remote_mode: bool = False,
@@ -122,6 +125,84 @@ class Linux:
             systemd_user_services=["pkgstatus-update.timer", "syncthing.service"],
             ssh_key_email="sshkeys@patrick-gerken.de",
         )
+
+    def _reload_systemd_user_daemon(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> None:
+        """Run `systemctl --user daemon-reload`.
+
+        Containers have no systemd user session, so a failure there is a known
+        limitation and only warns. On a real system it still raises.
+        """
+        try:
+            run_command_with_error_handling(
+                ["systemctl", "--user", "daemon-reload"],
+                logger,
+                output,
+                "systemctl --user daemon-reload",
+            )
+        except CalledProcessError as e:
+            if not self._is_running_in_container(logger):
+                raise
+            logger.log_exception(e, "systemd_user_daemon_reload_in_container_failed")
+            output.warning(
+                "Cannot reload the systemd user daemon in a container environment"
+            )
+
+    def _is_running_in_container(self, logger: LoggingHelpers):
+        """
+        Detect if we're running inside a container (Docker, Podman, etc.)
+
+        This is used to determine if it's safe to modify system settings like timezone.
+        Containers often need timezone pre-configuration to prevent interactive prompts
+        during package installation, while real systems should preserve user settings.
+
+        Detection methods:
+        1. Container-specific files: /.dockerenv (Docker), /run/.containerenv (Podman)
+        2. Process tree analysis: Check /proc/1/cgroup for container runtime signatures
+        3. Virtualization indicators: /proc/vz (OpenVZ/Virtuozzo)
+
+        Returns:
+            bool: True if running in a container/virtualized environment, False otherwise
+
+        Safety note: Defaults to False if detection fails (safer for real systems)
+        """
+        try:
+            # Check for container-specific files/indicators
+            # These files are created by container runtimes and are reliable indicators
+            container_indicators = [
+                Path("/.dockerenv"),  # Docker creates this file in all containers
+                Path(
+                    "/run/.containerenv"
+                ),  # Podman creates this file in all containers
+            ]
+
+            for indicator in container_indicators:
+                if indicator.exists():
+                    return True
+
+            # Check /proc/1/cgroup for container runtime signatures
+            # Container runtimes modify the cgroup hierarchy for process 1 (init)
+            if Path("/proc/1/cgroup").exists():
+                with open("/proc/1/cgroup", "r") as f:
+                    content = f.read()
+                    # Look for container runtime signatures in the cgroup path
+                    if (
+                        "docker" in content
+                        or "containerd" in content
+                        or "podman" in content
+                    ):
+                        return True
+
+            # Check if running in virtualized environment that might need timezone setup
+            # Some virtualization systems also benefit from timezone pre-configuration
+            return Path("/proc/vz").exists()  # OpenVZ/Virtuozzo container system
+        except Exception as e:  # noqa: BLE001
+            logger.log_exception(e, "container_detection_failed")
+            # If we can't determine container status (permissions, missing files, etc.),
+            # assume we're NOT in a container. This is safer for real user systems
+            # where we don't want to accidentally modify timezone settings.
+            return False
 
     def check_systemd_service_status(
         self,
@@ -604,7 +685,7 @@ class Linux:
         """Validate that git credential helper is properly configured"""
         try:
             # Check if libsecret binary exists
-            libsecret_path = Path("/usr/lib/git-core/git-credential-libsecret")
+            libsecret_path = self.LIBSECRET_HELPER
             logger = logger.bind(libsecret_path=libsecret_path)
             if not libsecret_path.exists():
                 output.warning(
@@ -656,6 +737,21 @@ class Linux:
                 return True
             except TimeoutExpired:
                 output.warning("Git credential helper test timed out", logger=logger)
+                return False
+            except CalledProcessError as e:
+                # Without D-Bus and a secret service (containers) the helper
+                # exits 1 even for a valid query; the binary itself is fine.
+                if self._is_running_in_container(logger):
+                    logger.log_exception(e, "git_credential_helper_in_container_failed")
+                    output.warning(
+                        "Git credential helper cannot reach a secret service in a "
+                        "container; skipping the functional check",
+                        logger=logger,
+                    )
+                    return True
+                output.warning(
+                    f"Error testing git credential helper: {e}", logger=logger
+                )
                 return False
             except Exception as e:  # noqa: BLE001
                 output.warning(
@@ -1306,12 +1402,7 @@ class Arch(Linux):
                     output.success(f"{target} → {unit_file}", logger=logger)
 
                 # Reload systemd user daemon to pick up new unit files
-                run_command_with_error_handling(
-                    ["systemctl", "--user", "daemon-reload"],
-                    logger,
-                    output,
-                    "systemctl --user daemon-reload",
-                )
+                self._reload_systemd_user_daemon(logger, output)
 
                 for service in user_services:
                     try:
@@ -1390,6 +1481,26 @@ class Arch(Linux):
 
 
 class Debian(Linux):
+    def validate_git_credential_helper(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> bool:
+        """Debian and Ubuntu do not package the libsecret helper as a binary.
+
+        git only ships its source under /usr/share/doc/git/contrib, so a
+        missing helper is a known limitation here, not an installation error.
+        """
+        if not self.LIBSECRET_HELPER.exists():
+            logger = logger.bind(libsecret_path=self.LIBSECRET_HELPER)
+            output.warning(
+                f"git-credential-libsecret not found at {self.LIBSECRET_HELPER}; "
+                "it is not packaged for Debian/Ubuntu (build it from "
+                "/usr/share/doc/git/contrib/credential/libsecret)",
+                logger=logger,
+            )
+            logger.log_warning("git_credential_helper_not_packaged")
+            return True
+        return super().validate_git_credential_helper(logger, output)
+
     def check_packages_installed(
         self, packages: list[str], logger: LoggingHelpers, console: ConsoleOutput
     ) -> tuple[list[str], list[str]]:
@@ -1417,61 +1528,6 @@ class Debian(Linux):
             logger.log_exception(e, "dpkg_check_failed", packages=packages)
             # If dpkg check fails, assume all packages need installation
             return [], packages
-
-    def _is_running_in_container(self, logger: LoggingHelpers):
-        """
-        Detect if we're running inside a container (Docker, Podman, etc.)
-
-        This is used to determine if it's safe to modify system settings like timezone.
-        Containers often need timezone pre-configuration to prevent interactive prompts
-        during package installation, while real systems should preserve user settings.
-
-        Detection methods:
-        1. Container-specific files: /.dockerenv (Docker), /run/.containerenv (Podman)
-        2. Process tree analysis: Check /proc/1/cgroup for container runtime signatures
-        3. Virtualization indicators: /proc/vz (OpenVZ/Virtuozzo)
-
-        Returns:
-            bool: True if running in a container/virtualized environment, False otherwise
-
-        Safety note: Defaults to False if detection fails (safer for real systems)
-        """
-        try:
-            # Check for container-specific files/indicators
-            # These files are created by container runtimes and are reliable indicators
-            container_indicators = [
-                Path("/.dockerenv"),  # Docker creates this file in all containers
-                Path(
-                    "/run/.containerenv"
-                ),  # Podman creates this file in all containers
-            ]
-
-            for indicator in container_indicators:
-                if indicator.exists():
-                    return True
-
-            # Check /proc/1/cgroup for container runtime signatures
-            # Container runtimes modify the cgroup hierarchy for process 1 (init)
-            if Path("/proc/1/cgroup").exists():
-                with open("/proc/1/cgroup", "r") as f:
-                    content = f.read()
-                    # Look for container runtime signatures in the cgroup path
-                    if (
-                        "docker" in content
-                        or "containerd" in content
-                        or "podman" in content
-                    ):
-                        return True
-
-            # Check if running in virtualized environment that might need timezone setup
-            # Some virtualization systems also benefit from timezone pre-configuration
-            return Path("/proc/vz").exists()  # OpenVZ/Virtuozzo container system
-        except Exception as e:  # noqa: BLE001
-            logger.log_exception(e, "container_detection_failed")
-            # If we can't determine container status (permissions, missing files, etc.),
-            # assume we're NOT in a container. This is safer for real user systems
-            # where we don't want to accidentally modify timezone settings.
-            return False
 
     @property
     def apt_packages(self) -> list[str]:
@@ -1905,14 +1961,14 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
                 logger=logger,
             )
             output.info("This script only supports Linux distributions")
-            return 1
+            sys.exit(1)
         except NotImplementedError as e:
             logger.log_exception(e, "os_not_supported")
             output.error(str(e))
             output.info(
                 "This script currently supports Arch Linux, Garuda Linux, and Debian-based systems"
             )
-            return 1
+            sys.exit(1)
 
         # Execute installation steps with individual error handling
         # Track if changes require terminal restart
@@ -1971,7 +2027,7 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
                     )
             except KeyboardInterrupt:
                 output.error(f"{step_name} interrupted by user", logger=step_log)
-                return 130  # Standard exit code for SIGINT
+                sys.exit(130)
             except Exception as e:  # noqa: BLE001
                 step_log.log_exception(
                     e,
@@ -1996,7 +2052,7 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
             )
             for error in errors:
                 output.error(f"  - {error}")
-            return 1
+            sys.exit(1)
 
         logger = logger.bind(restart_required=operating_system.restart_required)
         output.success(
@@ -2017,7 +2073,7 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
             output.info("DETAILED ERROR INFORMATION:")
             traceback.print_exc()
         output.info("Please report this issue with the full error message")
-        return 1
+        sys.exit(1)
 
 
 if __name__ == "__main__":

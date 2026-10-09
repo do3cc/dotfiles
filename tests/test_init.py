@@ -569,10 +569,7 @@ def test_main_os_detection_failure(monkeypatch):
 
     runner = CliRunner()
     result = runner.invoke(init.main, ["--quiet"])
-    # Function handled exception without crashing
-    assert result.exception is None or isinstance(
-        result.exception, (SystemExit, FileNotFoundError)
-    )
+    assert result.exit_code == 1
 
 
 def test_main_unsupported_os(monkeypatch):
@@ -587,10 +584,51 @@ def test_main_unsupported_os(monkeypatch):
 
     runner = CliRunner()
     result = runner.invoke(init.main, ["--quiet"])
-    # Function handled exception without crashing
-    assert result.exception is None or isinstance(
-        result.exception, (SystemExit, NotImplementedError)
-    )
+    assert result.exit_code == 1
+
+
+def _mock_os_with(monkeypatch, **overrides):
+    mock_os = MagicMock(spec=init.Arch)
+    mock_os.restart_required = False
+    for name in (
+        "install_dependencies",
+        "link_configs",
+        "link_local_bin",
+        "validate_git_credential_helper",
+        "setup_shell",
+        "link_accounts",
+    ):
+        setattr(mock_os, name, overrides.get(name, MagicMock()))
+    monkeypatch.setattr(init, "detect_operating_system", lambda *a, **k: mock_os)
+    return mock_os
+
+
+def test_main_exits_1_when_a_step_fails_validation(monkeypatch, tmp_path):
+    from click.testing import CliRunner
+
+    _mock_os_with(monkeypatch, install_dependencies=MagicMock(return_value=False))
+    result = CliRunner().invoke(init.main, ["--quiet"], env={"HOME": str(tmp_path)})
+    assert result.exit_code == 1
+
+
+def test_main_exits_1_on_unexpected_error(monkeypatch, tmp_path):
+    from click.testing import CliRunner
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(init, "detect_operating_system", boom)
+    result = CliRunner().invoke(init.main, ["--quiet"], env={"HOME": str(tmp_path)})
+    assert result.exit_code == 1
+
+
+def test_main_exits_130_on_keyboard_interrupt(monkeypatch, tmp_path):
+    from click.testing import CliRunner
+
+    interrupted = MagicMock(side_effect=KeyboardInterrupt)
+    _mock_os_with(monkeypatch, install_dependencies=interrupted)
+    result = CliRunner().invoke(init.main, ["--quiet"], env={"HOME": str(tmp_path)})
+    assert result.exit_code == 130
 
 
 @pytest.mark.integration
@@ -706,3 +744,72 @@ def test_main_uses_status_messages_not_persistent_progress(monkeypatch, tmp_path
     assert len(success_calls) > 0, (
         "main() should use success() messages for completed steps"
     )
+
+
+def test_debian_missing_libsecret_helper_is_not_an_error(
+    monkeypatch, tmp_path, mock_logging_helpers
+):
+    """Debian does not package the helper binary, so a missing helper only warns."""
+    monkeypatch.setattr(init.Linux, "LIBSECRET_HELPER", tmp_path / "missing")
+    output = MagicMock()
+    assert init.Debian(False).validate_git_credential_helper(
+        mock_logging_helpers, output
+    )
+    output.warning.assert_called_once()
+
+
+def test_arch_missing_libsecret_helper_fails_validation(
+    monkeypatch, tmp_path, mock_logging_helpers
+):
+    monkeypatch.setattr(init.Linux, "LIBSECRET_HELPER", tmp_path / "missing")
+    assert not init.Arch(False).validate_git_credential_helper(
+        mock_logging_helpers, MagicMock()
+    )
+
+
+def _fake_helper(tmp_path, exit_code):
+    helper = tmp_path / "git-credential-libsecret"
+    helper.write_text(f"#!/bin/sh\nexit {exit_code}\n")
+    helper.chmod(0o755)
+    return helper
+
+
+@pytest.mark.parametrize("in_container,expected", [(True, True), (False, False)])
+def test_libsecret_helper_failing_without_secret_service(
+    monkeypatch, tmp_path, mock_logging_helpers, in_container, expected
+):
+    """In a container the helper exits 1 (no D-Bus); on a real system that is an error."""
+    monkeypatch.setattr(init.Linux, "LIBSECRET_HELPER", _fake_helper(tmp_path, 1))
+    arch = init.Arch(False)
+    monkeypatch.setattr(arch, "_is_running_in_container", lambda logger: in_container)
+    assert (
+        arch.validate_git_credential_helper(mock_logging_helpers, MagicMock())
+        is expected
+    )
+
+
+def test_libsecret_helper_working_passes(monkeypatch, tmp_path, mock_logging_helpers):
+    monkeypatch.setattr(init.Linux, "LIBSECRET_HELPER", _fake_helper(tmp_path, 0))
+    arch = init.Arch(False)
+    assert arch.validate_git_credential_helper(mock_logging_helpers, MagicMock())
+
+
+@pytest.mark.parametrize("in_container", [True, False])
+def test_reload_systemd_user_daemon_failure(
+    monkeypatch, mock_logging_helpers, in_container
+):
+    """No systemd user session in containers: warn there, raise on a real system."""
+
+    def fail(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, ["systemctl"])
+
+    monkeypatch.setattr(init, "run_command_with_error_handling", fail)
+    arch = init.Arch(False)
+    monkeypatch.setattr(arch, "_is_running_in_container", lambda logger: in_container)
+    output = MagicMock()
+    if in_container:
+        arch._reload_systemd_user_daemon(mock_logging_helpers, output)
+        output.warning.assert_called_once()
+    else:
+        with pytest.raises(subprocess.CalledProcessError):
+            arch._reload_systemd_user_daemon(mock_logging_helpers, output)
