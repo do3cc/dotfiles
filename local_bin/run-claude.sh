@@ -964,6 +964,9 @@ generate_dockerfile_content() {
 		"git"
 		"python3"
 		"python3-yaml"
+		"zsh"
+		"unzip"
+		"sudo"
 	)
 
 	# Generate the package installation lines for bootstrap
@@ -1044,7 +1047,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 # Install Go
 RUN ARCH=$(dpkg --print-architecture) && \
 	if [ "$ARCH" = "amd64" ]; then GOARCH="amd64"; else GOARCH="arm64"; fi && \
-	wget -O go.tar.gz "https://go.dev/dl/go1.21.5.linux-${GOARCH}.tar.gz" \
+	curl -L -o go.tar.gz "https://go.dev/dl/go1.21.5.linux-${GOARCH}.tar.gz" \
 	&& tar -C /usr/local -xzf go.tar.gz \
 	&& rm go.tar.gz
 ENV PATH=/usr/local/go/bin:$PATH
