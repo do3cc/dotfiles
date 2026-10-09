@@ -29,8 +29,8 @@ plan covers how to implement and verify them.
 ## Implementation Approach
 
 1. **Config edits** in `git/config`, in the order of the issue: remove
-   obsolete settings and colour blocks, fix `commit.template`, replace the
-   stale aliases, set `merge.tool`/`diff.tool = nvimdiff`, add the modern
+   obsolete settings and colour blocks, fix `commit.template`, remove the
+   unused aliases `lt`, `llt`, `lm`, `llm` (decided: never used), set `merge.tool`/`diff.tool = nvimdiff`, add the modern
    settings. Drop `core.editor`.
 2. **EDITOR:** if nothing else sets it, add `set -gx EDITOR nvim` (and
    `VISUAL`) to `fish/config.fish`.
@@ -38,14 +38,21 @@ plan covers how to implement and verify them.
    `[commit]`/`[tag] gpgSign` block. Safety: unconditional `commit.gpgSign`
    breaks every commit on a machine without the key or agent (for example
    after `dotfiles-init --no-remote`). Proposed: keep the signing block in a
-   separate file that `dotfiles-init` creates only after the key exists
-   (`~/.config/git/signing.conf`, pulled in with `[include]`/`[includeIf]`).
+   separate file that `dotfiles-init` creates only after the key exists and
+   is registered (`signing.conf`, pulled in from `git/config` with
+   `[include] path = signing.conf`; git silently ignores a missing include).
+   Note: `~/.config/git` is a symlink to the repo's `git/` directory, so
+   generated files (`signing.conf`, `allowed_signers`) land in the working
+   tree and must be added to `.gitignore`.
 4. **`dotfiles-init`** (extend `setup_ssh_key`, idempotent like its other
    steps): request `admin:ssh_signing_key` in the `gh auth refresh` calls;
    add the public key as a signing key if `gh ssh-key list` does not show it
    with type signing (verify the column format at implementation time);
    write `~/.config/git/allowed_signers` with
    `<git user.email> namespaces="git" <pubkey>`; write the signing include.
+   The principal list should contain the keys of all machines so commits made
+   elsewhere verify locally; `gh api users/<login>/ssh_signing_keys` can
+   supply them.
 5. **Verification** in a scratch repo with a throw-away key:
    `GIT_CONFIG_GLOBAL=<repo>/git/config` (or `-c include.path`), commit,
    `git verify-commit HEAD`, `git log --show-signature`. Check that `~/` is
@@ -73,14 +80,19 @@ plan covers how to implement and verify them.
 - Needs a real `gh` login for the GitHub part; cannot be tested in a
   container run with `--no-remote`.
 
+## Decisions (from the owner)
+
+1. **Aliases `lt/llt/lm/llm`:** removed, never used.
+2. **Custom colour blocks:** dropped, git defaults plus `diff.colorMoved`.
+3. **Sign tags** (`tag.gpgSign`): yes.
+4. **Optional settings** (`transfer.fsckObjects`, `help.autocorrect = prompt`,
+   `rebase.updateRefs`, `push.followTags`): all of them.
+5. SSH signing, `merge.tool`/`diff.tool = nvimdiff`, drop `core.editor`
+   (`$EDITOR` is always nvim): decided earlier on the issue.
+
 ## Open Questions
 
-1. **Signing include vs unconditional block** (step 3): separate file created
-   by init (proposed), or one block in `git/config`?
-2. **Custom colour blocks:** drop to git defaults (proposed) or keep?
-3. **`tab-in-indent`** in `core.whitespace`: remove (proposed) or keep?
-4. **Replacement for `lt/llt/lm/llm`:** `@{upstream}..` or `origin/HEAD..`?
-5. **Sign tags too** (`tag.gpgSign`)?
-6. **Which of the optional settings** (`transfer.fsckObjects`,
-   `help.autocorrect = prompt`, `rebase.updateRefs`, `push.followTags`) do
-   you want? Proposed: all of them.
+1. **Signing include vs unconditional block** (step 3): the issue comment
+   explains the trade-off; proposed is the separate generated include.
+2. **`tab-in-indent`** in `core.whitespace`: the issue comment explains what
+   it does; proposed is to remove it.
