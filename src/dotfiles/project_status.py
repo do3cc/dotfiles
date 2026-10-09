@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # pyright: strict
 """
 Project Status Tool for Dotfiles Repository
@@ -14,9 +13,9 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from .logging_config import setup_logging, LoggingHelpers
+from .logging_config import LoggingHelpers, setup_logging
 from .output_formatting import ConsoleOutput
 from .process_helper import run_command_with_error_handling
 
@@ -28,8 +27,8 @@ class IssueInfo:
     number: int
     title: str
     state: str
-    labels: List[str]
-    assignee: Optional[str]
+    labels: list[str]
+    assignee: str | None
     url: str
 
 
@@ -56,7 +55,7 @@ class BranchInfo:
     behind: int
     last_commit_date: str
     has_worktree: bool
-    worktree_path: Optional[str]
+    worktree_path: str | None
 
 
 @dataclass
@@ -75,7 +74,7 @@ class ProjectStatusChecker:
 
     def get_github_issues(
         self, logger: LoggingHelpers, output: ConsoleOutput
-    ) -> List[IssueInfo]:
+    ) -> list[IssueInfo]:
         """Fetch open GitHub issues
 
         Raises:
@@ -101,8 +100,8 @@ class ProjectStatusChecker:
         )
 
         try:
-            issues_data: List[Any] = json.loads(result.stdout)
-            issues: List[IssueInfo] = []
+            issues_data: list[Any] = json.loads(result.stdout)
+            issues: list[IssueInfo] = []
 
             for issue in issues_data:
                 assignee = None
@@ -138,7 +137,7 @@ class ProjectStatusChecker:
 
     def get_github_prs(
         self, logger: LoggingHelpers, output: ConsoleOutput
-    ) -> List[PRInfo]:
+    ) -> list[PRInfo]:
         """Fetch open GitHub pull requests
 
         Raises:
@@ -164,8 +163,8 @@ class ProjectStatusChecker:
         )
 
         try:
-            prs_data: List[Any] = json.loads(result.stdout)
-            prs: List[PRInfo] = []
+            prs_data: list[Any] = json.loads(result.stdout)
+            prs: list[PRInfo] = []
 
             for pr in prs_data:
                 prs.append(
@@ -196,7 +195,7 @@ class ProjectStatusChecker:
 
     def get_local_branches(
         self, logger: LoggingHelpers, output: ConsoleOutput
-    ) -> List[BranchInfo]:
+    ) -> list[BranchInfo]:
         """Get information about local branches
 
         Raises:
@@ -220,9 +219,9 @@ class ProjectStatusChecker:
                 timeout=30,
             )
 
-            branches: List[BranchInfo] = []
+            branches: list[BranchInfo] = []
             worktrees = self.get_worktrees(logger, output)
-            worktree_branches: Dict[str, WorktreeInfo] = {
+            worktree_branches: dict[str, WorktreeInfo] = {
                 wt.branch: wt for wt in worktrees
             }
 
@@ -274,7 +273,7 @@ class ProjectStatusChecker:
 
     def get_worktrees(
         self, logger: LoggingHelpers, output: ConsoleOutput
-    ) -> List[WorktreeInfo]:
+    ) -> list[WorktreeInfo]:
         """Get information about git worktrees
 
         Raises:
@@ -292,8 +291,8 @@ class ProjectStatusChecker:
                 timeout=30,
             )
 
-            worktrees: List[WorktreeInfo] = []
-            current_worktree: Dict[str, Any] = {}
+            worktrees: list[WorktreeInfo] = []
+            current_worktree: dict[str, Any] = {}
 
             for line in result.stdout.strip().split("\n"):
                 if not line:
@@ -331,7 +330,7 @@ class ProjectStatusChecker:
             raise
 
     def _process_worktree_info(
-        self, wt_data: Dict[str, Any], logger: LoggingHelpers, output: ConsoleOutput
+        self, wt_data: dict[str, Any], logger: LoggingHelpers, output: ConsoleOutput
     ) -> WorktreeInfo:
         """Process raw worktree data into WorktreeInfo object"""
         path: str = wt_data.get("path", "")
@@ -341,7 +340,7 @@ class ProjectStatusChecker:
         # Determine type category from path
         type_category: str = "main"
         if "worktrees/" in path:
-            path_parts: List[str] = path.split("worktrees/")
+            path_parts: list[str] = path.split("worktrees/")
             if len(path_parts) > 1:
                 remaining: str = path_parts[1]
                 if "/" in remaining:
@@ -359,7 +358,7 @@ class ProjectStatusChecker:
                     timeout=10,
                 )
                 has_uncommitted = bool(result.stdout.strip())
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # status check is non-fatal, degrade to has_uncommitted=False
             logger.log_exception(e, "worktree_status_check_failed", path=path)
 
         return WorktreeInfo(
@@ -372,10 +371,10 @@ class ProjectStatusChecker:
 
     def format_status_report(
         self,
-        issues: List[IssueInfo],
-        prs: List[PRInfo],
-        branches: List[BranchInfo],
-        worktrees: List[WorktreeInfo],
+        issues: list[IssueInfo],
+        prs: list[PRInfo],
+        branches: list[BranchInfo],
+        worktrees: list[WorktreeInfo],
         format_type: str = "text",
     ) -> str:
         """Format the status report"""
@@ -387,14 +386,14 @@ class ProjectStatusChecker:
 
     def _format_text_report(
         self,
-        issues: List[IssueInfo],
-        prs: List[PRInfo],
-        branches: List[BranchInfo],
-        worktrees: List[WorktreeInfo],
+        issues: list[IssueInfo],
+        prs: list[PRInfo],
+        branches: list[BranchInfo],
+        worktrees: list[WorktreeInfo],
     ) -> str:
         """Format as human-readable text report"""
 
-        lines: List[str] = []
+        lines: list[str] = []
         lines.append("🔍 DOTFILES PROJECT STATUS")
         lines.append("=" * 50)
         lines.append("")
@@ -434,7 +433,7 @@ class ProjectStatusChecker:
         organized_worktrees = [wt for wt in worktrees if wt.type_category != "main"]
         if organized_worktrees:
             # Group by type
-            by_type: Dict[str, List[WorktreeInfo]] = {}
+            by_type: dict[str, list[WorktreeInfo]] = {}
             for wt in organized_worktrees:
                 if wt.type_category not in by_type:
                     by_type[wt.type_category] = []
@@ -444,7 +443,7 @@ class ProjectStatusChecker:
                 lines.append(f"  {wt_type.upper()}:")
                 for wt in wt_list:
                     wt_name: str = wt.path.split("/")[-1]
-                    status_indicators: List[str] = []
+                    status_indicators: list[str] = []
                     if wt.has_uncommitted:
                         status_indicators.append("*modified*")
                     status_str: str = (
@@ -469,7 +468,7 @@ class ProjectStatusChecker:
         lines.append("-" * 21)
         if active_branches:
             for branch in active_branches:
-                indicators: List[str] = []
+                indicators: list[str] = []
                 if branch.ahead > 0:
                     indicators.append(f"+{branch.ahead}")
                 if branch.behind > 0:
@@ -501,14 +500,14 @@ class ProjectStatusChecker:
 
     def _format_json_report(
         self,
-        issues: List[IssueInfo],
-        prs: List[PRInfo],
-        branches: List[BranchInfo],
-        worktrees: List[WorktreeInfo],
+        issues: list[IssueInfo],
+        prs: list[PRInfo],
+        branches: list[BranchInfo],
+        worktrees: list[WorktreeInfo],
     ) -> str:
         """Format as JSON report"""
 
-        data: Dict[str, List[Dict[str, Any]]] = {
+        data: dict[str, list[dict[str, Any]]] = {
             "issues": [
                 {
                     "number": issue.number,

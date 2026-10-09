@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from subprocess import CalledProcessError, TimeoutExpired
+from subprocess import CalledProcessError, SubprocessError, TimeoutExpired
 
 import click
 
@@ -82,7 +82,7 @@ class StatusChecker:
             )
             value = result.stdout.strip()
             return value if value else default
-        except Exception as e:
+        except (SubprocessError, OSError) as e:
             logger.log_exception(e, "fish_config_read_failed", key=key)
             return default
 
@@ -171,7 +171,7 @@ class StatusChecker:
                 last_check=timestamp,
             )
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # a failing manager must not break the status check
             logger.log_exception(e, "packages_cache_refresh_failed")
             data = UpdateCheckCache()
 
@@ -273,7 +273,7 @@ class StatusChecker:
             # Git command timed out
             git_data.status = CheckStatus.FAILED
             logger.log_exception(e, "git_timeout")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # degrade to FAILED status instead of crashing
             # Unexpected error (git not installed, permissions, etc.)
             git_data.status = CheckStatus.FAILED
             logger.log_exception(e, "git_check_failed")
@@ -307,7 +307,7 @@ class StatusChecker:
                     # Parse ISO format timestamp
                     last_run_dt = datetime.fromisoformat(last_run_str)
                     last_run = int(last_run_dt.timestamp())
-                except Exception as e:
+                except (OSError, ValueError) as e:
                     logger.log_exception(e, "init_cache_timestamp_parse_failed")
 
             init_data.last_run = last_run
@@ -495,7 +495,7 @@ class StatusChecker:
                 "systemd_timer_check", timer=timer_name, is_active=is_active
             )
             return is_active, status_msg
-        except Exception as e:
+        except (SubprocessError, OSError) as e:
             msg = f"Timer {timer_name} not found or error checking status"
             logger.log_exception(e, "systemd_timer_check_failed", timer=timer_name)
             return False, msg
@@ -615,7 +615,7 @@ def main(
 
         return 0
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # top-level handler: report and exit
         logger.log_exception(e, "status_check_failed")
         output.error(f"Failed to check status: {e}")
         if verbose:

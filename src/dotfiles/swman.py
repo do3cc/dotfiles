@@ -225,7 +225,7 @@ class PacmanManager(PackageManager):
                 message=f"Update timed out after {e.timeout}s",
                 duration=time.time() - start_time,
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # one failing manager must not abort the others
             logger.log_exception(e, "unexpected_exception")
             return UpdateResult(
                 name=self.name,
@@ -333,7 +333,7 @@ class YayManager(PackageManager):
                 message="AUR update timed out",
                 duration=time.time() - start_time,
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # one failing manager must not abort the others
             logger.log_exception(e, "unexpected_exception")
             return UpdateResult(
                 name=self.name,
@@ -484,7 +484,7 @@ class DebianSystemManager(PackageManager):
                 message="Update timed out",
                 duration=time.time() - start_time,
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # one failing manager must not abort the others
             logger.log_exception(e, "unexpected_exception")
             return UpdateResult(
                 name=self.name,
@@ -569,7 +569,7 @@ class UvToolsManager(PackageManager):
                     message=f"UV tools update failed: {result.stderr}",
                     duration=time.time() - start_time,
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # one failing manager must not abort the others
             logger.log_exception(e, "unexpected_exception")
             return UpdateResult(
                 name=self.name,
@@ -647,7 +647,7 @@ class LazyNvimManager(PackageManager):
                 message="Neovim plugins updated",
                 duration=time.time() - start_time,
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # one failing manager must not abort the others
             logger.log_exception(e, "unexpected_exception")
             return UpdateResult(
                 name=self.name,
@@ -729,7 +729,7 @@ class FisherManager(PackageManager):
                 message="Fish plugins updated",
                 duration=duration,
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # one failing manager must not abort the others
             logger.log_exception(e, "unexpected_exception")
             return UpdateResult(
                 name=self.name,
@@ -774,7 +774,7 @@ class SoftwareManagerOrchestrator:
             logger = logger.bind(manager=manager.name)
             try:
                 results[manager.name] = manager.check_updates(logger, output)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001  # one failing manager must not abort the others
                 logger.log_exception(e, "Error checking for updates")
                 results[manager.name] = (False, 0)
         return results
@@ -795,7 +795,7 @@ class SoftwareManagerOrchestrator:
                     result = manager.update(logger, output, dry_run)
                     results.append(result)
                     logger = logger.bind(results=results)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001  # one failing manager must not abort the others
                     logger.log_exception(e, "Unexpected exception")
                     results.append(
                         UpdateResult(
@@ -817,7 +817,7 @@ class SoftwareManagerOrchestrator:
             try:
                 result = manager.update(logger=logger, output=output, dry_run=dry_run)
                 results.append(result)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001  # one failing manager must not abort the others
                 results.append(
                     UpdateResult(
                         name=manager.name,

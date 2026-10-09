@@ -1,9 +1,11 @@
 """Tests for output_formatting.py - Rich-based console output."""
 
-from dotfiles.output_formatting import ConsoleOutput
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from rich.table import Table
+
+from dotfiles.output_formatting import ConsoleOutput
 
 
 @pytest.fixture

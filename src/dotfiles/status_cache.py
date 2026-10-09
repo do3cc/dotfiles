@@ -279,7 +279,7 @@ class CacheEntry[T: CacheRecord]:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             temp_file.write_text(data.to_json())
             temp_file.replace(self.path)
-        except Exception as e:
+        except (OSError, TypeError, ValueError) as e:
             logger.log_exception(e, "cache_save_failed", cache_file=str(self.path))
             if temp_file.exists():
                 temp_file.unlink()

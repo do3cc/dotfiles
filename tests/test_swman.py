@@ -14,10 +14,12 @@ To run only unit tests: pytest -m "not integration"
 To run integration tests: pytest -m integration
 """
 
-import pytest
-from unittest.mock import Mock, patch
 from subprocess import CalledProcessError, CompletedProcess
-from dotfiles.swman import UpdateStatus, UpdateResult, PacmanManager
+from unittest.mock import Mock, patch
+
+import pytest
+
+from dotfiles.swman import PacmanManager, UpdateResult, UpdateStatus
 
 
 @pytest.mark.parametrize(

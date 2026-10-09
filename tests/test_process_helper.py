@@ -1,10 +1,12 @@
 """Tests for process_helper.py - subprocess command execution with error handling."""
 
-from dotfiles import process_helper
-from dotfiles.output_formatting import ConsoleOutput
-import pytest
 import subprocess
 from unittest.mock import MagicMock, patch
+
+import pytest
+
+from dotfiles import process_helper
+from dotfiles.output_formatting import ConsoleOutput
 
 
 @pytest.fixture
