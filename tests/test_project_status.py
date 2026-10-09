@@ -14,7 +14,6 @@ from dotfiles.project_status import (
     WorktreeInfo,
 )
 
-
 # ==============================================================================
 # IssueInfo Dataclass Tests
 # ==============================================================================
@@ -120,12 +119,14 @@ def test_get_github_issues_propagates_exceptions(real_logging_helpers, output):
     """get_github_issues() should propagate exceptions to caller."""
     checker = ProjectStatusChecker()
 
-    with patch(
-        "dotfiles.project_status.run_command_with_error_handling",
-        side_effect=Exception("Command failed"),
+    with (
+        patch(
+            "dotfiles.project_status.run_command_with_error_handling",
+            side_effect=Exception("Command failed"),
+        ),
+        pytest.raises(Exception, match="Command failed"),
     ):
-        with pytest.raises(Exception, match="Command failed"):
-            checker.get_github_issues(real_logging_helpers, output)
+        checker.get_github_issues(real_logging_helpers, output)
 
 
 # ==============================================================================
@@ -181,12 +182,14 @@ def test_get_github_prs_propagates_exceptions(real_logging_helpers, output):
     """get_github_prs() should propagate exceptions to caller."""
     checker = ProjectStatusChecker()
 
-    with patch(
-        "dotfiles.project_status.run_command_with_error_handling",
-        side_effect=Exception("Command failed"),
+    with (
+        patch(
+            "dotfiles.project_status.run_command_with_error_handling",
+            side_effect=Exception("Command failed"),
+        ),
+        pytest.raises(Exception, match="Command failed"),
     ):
-        with pytest.raises(Exception, match="Command failed"):
-            checker.get_github_prs(real_logging_helpers, output)
+        checker.get_github_prs(real_logging_helpers, output)
 
 
 # ==============================================================================
@@ -228,12 +231,14 @@ def test_get_worktrees_propagates_exceptions(real_logging_helpers, output):
     """get_worktrees() should propagate exceptions to caller."""
     checker = ProjectStatusChecker()
 
-    with patch(
-        "dotfiles.project_status.run_command_with_error_handling",
-        side_effect=Exception("Command failed"),
+    with (
+        patch(
+            "dotfiles.project_status.run_command_with_error_handling",
+            side_effect=Exception("Command failed"),
+        ),
+        pytest.raises(Exception, match="Command failed"),
     ):
-        with pytest.raises(Exception, match="Command failed"):
-            checker.get_worktrees(real_logging_helpers, output)
+        checker.get_worktrees(real_logging_helpers, output)
 
 
 # ==============================================================================
@@ -413,12 +418,14 @@ def test_get_local_branches_propagates_exceptions(real_logging_helpers, output):
     """get_local_branches() should propagate exceptions to caller."""
     checker = ProjectStatusChecker()
 
-    with patch(
-        "dotfiles.project_status.run_command_with_error_handling",
-        side_effect=Exception("Command failed"),
+    with (
+        patch(
+            "dotfiles.project_status.run_command_with_error_handling",
+            side_effect=Exception("Command failed"),
+        ),
+        pytest.raises(Exception, match="Command failed"),
     ):
-        with pytest.raises(Exception, match="Command failed"):
-            checker.get_local_branches(real_logging_helpers, output)
+        checker.get_local_branches(real_logging_helpers, output)
 
 
 # ==============================================================================
