@@ -11,14 +11,19 @@ base:
   arch:
     - ast-grep
     - bat
+    - bitwarden
     - direnv
     - eza
     - fd
+    - firefox
     - fish
+    - ghostscript
+    - ghostty
     - git
     - github-cli
     - glab
     - htop
+    - imagemagick
     - jdk-openjdk
     - jq
     - texlive-latex
@@ -31,14 +36,19 @@ base:
     - mermaid-cli
     - neovim
     - nmap
+    - noto-fonts-emoji
     - npm
+    - otf-font-awesome
     - pacman-contrib
     - prettier
+    - python-gobject
     - python-pip
     - rsync
     - shfmt
     - starship
     - stylua
+    - syncthing
+    - tailscale
     - tectonic
     - the_silver_searcher
     - tig
@@ -70,42 +80,14 @@ base:
     - nmap
     - npm
     - silversearcher-ag
+    - syncthing
     - tig
     - tk-dev
     - xz-utils
     - zlib1g-dev
-
-# Environment-specific packages
-environments:
-  private:
-    arch:
-      - bitwarden
-      - firefox
-      - ghostscript
-      - ghostty
-      - imagemagick
-      - noto-fonts-emoji
-      - otf-font-awesome
-      - python-gobject
-      - syncthing
-      - tailscale
-    debian:
-      - syncthing
-
-  work:
-    arch: []
-    debian: []
-
-  minimal:
-    arch: []
-    debian: []
 
 # AUR packages (Arch only)
 aur:
   base:
     - google-java-format
     - nodejs-markdown-toc
-  environments:
-    private: []
-    work: []
-    minimal: []

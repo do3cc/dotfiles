@@ -26,12 +26,10 @@ from .swman import DebianSystemManager, PacmanManager
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-VALID_ENVIRONMENTS = ["minimal", "work", "private"]
-
 
 @dataclass
 class EnvironmentConfig:
-    """Type-safe configuration for a specific environment."""
+    """Type-safe installation configuration."""
 
     # Package management
     packages: list[str] = field(default_factory=list[str])
@@ -49,7 +47,7 @@ class EnvironmentConfig:
     # User services to enable (uses systemctl --user)
     systemd_user_services: list[str] = field(default_factory=list[str])
 
-    # Environment-specific overrides
+    # Email used in the SSH key comment
     ssh_key_email: str | None = None
 
     def merge_with(self, base_config: "EnvironmentConfig") -> "EnvironmentConfig":
@@ -78,27 +76,21 @@ class EnvironmentConfig:
 class Linux:
     def __init__(
         self,
-        environment: str = "minimal",
         no_remote_mode: bool = False,
         homedir: Path | None = None,
     ):
-        if environment not in VALID_ENVIRONMENTS:
-            raise AttributeError(
-                f"Unknown Environment {environment}, must be one of {VALID_ENVIRONMENTS}"
-            )
-        self.environment = environment
         self.no_remote_mode = no_remote_mode
         # Load package manifest BEFORE building config
         self.package_manifest = self._load_package_manifest()
-        # Single source of truth for this environment's configuration
-        self.config = self._build_environment_config(environment)
+        # Single source of truth for the configuration
+        self.config = self._get_base_config()
         self.homedir = homedir if homedir is not None else Path("~").expanduser()
 
     def _load_package_manifest(self) -> dict[str, Any]:
         """Load package manifest from packages.yaml
 
         Returns:
-            dict: Package manifest with 'base', 'environments', and 'aur' keys
+            dict: Package manifest with 'base' and 'aur' keys
 
         Raises:
             FileNotFoundError: If packages.yaml doesn't exist
@@ -123,30 +115,13 @@ class Linux:
                 ("fish", "fish"),
                 ("lazy_nvim", "nvim"),
                 ("git", "git"),
+                ("irssi", "irssi"),
+                ("ghostty", "ghostty"),
             ],
             local_bin_files=["*"],
-            systemd_user_services=["pkgstatus-update.timer"],
+            systemd_user_services=["pkgstatus-update.timer", "syncthing.service"],
             ssh_key_email="sshkeys@patrick-gerken.de",
         )
-
-    def _get_environment_configs(self) -> dict[str, EnvironmentConfig]:
-        """Get environment-specific configurations."""
-        return {
-            "private": EnvironmentConfig(
-                config_dirs=[("irssi", "irssi"), ("ghostty", "ghostty")],
-                systemd_user_services=["syncthing.service"],
-            ),
-            "work": EnvironmentConfig(
-                ssh_key_email="patrick.gerken@zumtobelgroup.com",
-            ),
-        }
-
-    def _build_environment_config(self, environment: str) -> EnvironmentConfig:
-        """Build complete configuration for an environment."""
-        base = self._get_base_config()
-        env_configs = self._get_environment_configs()
-        env_specific = env_configs.get(environment, EnvironmentConfig())
-        return env_specific.merge_with(base)
 
     def check_systemd_service_status(
         self,
@@ -726,7 +701,7 @@ class Linux:
         """Ensure ~/.ssh/id_ed25519 exists, is cached by the agent and is on GitHub.
 
         Every step is idempotent, so re-running repairs a partial setup.
-        Host and environment are recorded in the key comment and GitHub title.
+        Host is recorded in the key comment and GitHub title.
         """
         hostname = socket.gethostname()
         ssh_dir = self.homedir / ".ssh"
@@ -742,7 +717,7 @@ class Linux:
                     "-t",
                     "ed25519",
                     "-C",
-                    f"{hostname} {self.config.ssh_key_email} {self.environment}",
+                    f"{hostname} {self.config.ssh_key_email}",
                     "-f",
                     str(key),
                 ],
@@ -776,7 +751,7 @@ class Linux:
                     "add",
                     str(pub_key),
                     "-t",
-                    f"{hostname} {self.environment}",
+                    hostname,
                 ],
                 logger,
                 output,
@@ -833,30 +808,27 @@ class Linux:
 
         self.setup_ssh_key(logger, output)
 
-        if self.environment in ["private"]:
-            try:
-                result = run_command_with_error_handling(
-                    ["tailscale", "status"], logger, output, "Check Tailscale status"
-                )
-                logger = logger.bind(tailscale_status=result.stdout)
-                # Check if we have an IP address (connected) or if we're logged out
-                if "100." not in result.stdout or "Logged out" in result.stdout:
-                    output.status(
-                        "Tailscale not connected, running setup...", logger=logger
-                    )
-                    # Use 'tailscale up' for locked tailnets instead of login
-                    run_interactive_command(
-                        ["sudo", "tailscale", "up", "--operator=do3cc"], logger, output
-                    )
-                else:
-                    output.success("Tailscale is connected", logger=logger)
-            except CalledProcessError:
+        try:
+            result = run_command_with_error_handling(
+                ["tailscale", "status"], logger, output, "Check Tailscale status"
+            )
+            logger = logger.bind(tailscale_status=result.stdout)
+            # Check if we have an IP address (connected) or if we're logged out
+            if "100." not in result.stdout or "Logged out" in result.stdout:
                 output.status(
-                    "Tailscale not available, running setup...", logger=logger
+                    "Tailscale not connected, running setup...", logger=logger
                 )
+                # Use 'tailscale up' for locked tailnets instead of login
                 run_interactive_command(
                     ["sudo", "tailscale", "up", "--operator=do3cc"], logger, output
                 )
+            else:
+                output.success("Tailscale is connected", logger=logger)
+        except CalledProcessError:
+            output.status("Tailscale not available, running setup...", logger=logger)
+            run_interactive_command(
+                ["sudo", "tailscale", "up", "--operator=do3cc"], logger, output
+            )
 
 
 class Arch(Linux):
@@ -875,44 +847,9 @@ class Arch(Linux):
         arch_config = EnvironmentConfig(
             packages=base_packages,
             aur_packages=aur_packages,
+            systemd_services=["tailscaled"],
         )
         return arch_config.merge_with(base)
-
-    def _get_environment_configs(self) -> dict[str, EnvironmentConfig]:
-        """Get environment-specific configurations for Arch Linux."""
-        base_configs = super()._get_environment_configs()
-
-        # Read environment-specific packages from manifest
-        arch_configs: dict[str, EnvironmentConfig] = {}
-        environments = cast(
-            dict[str, Any], self.package_manifest.get("environments", {})
-        )
-
-        for env_name, env_data in environments.items():
-            arch_packages = cast(
-                list[str], cast(dict[str, Any], env_data).get("arch", [])
-            )
-
-            # Only create config if there are packages or systemd services
-            if arch_packages or env_name == "private":
-                arch_config = EnvironmentConfig(
-                    packages=arch_packages,
-                )
-
-                # Add systemd services for private environment
-                if env_name == "private":
-                    arch_config.systemd_services = ["tailscaled"]
-
-                arch_configs[env_name] = arch_config
-
-        # Merge with base configurations
-        merged_configs: dict[str, EnvironmentConfig] = {}
-        for env_name in set(base_configs.keys()) | set(arch_configs.keys()):
-            base_env = base_configs.get(env_name, EnvironmentConfig())
-            arch_env = arch_configs.get(env_name, EnvironmentConfig())
-            merged_configs[env_name] = arch_env.merge_with(base_env)
-
-        return merged_configs
 
     def check_packages_installed(
         self, packages: list[str], logger: LoggingHelpers, output: ConsoleOutput
@@ -1881,9 +1818,7 @@ class Debian(Linux):
             raise
 
 
-def detect_operating_system(
-    logger: LoggingHelpers, environment: str = "minimal", no_remote_mode: bool = False
-):
+def detect_operating_system(logger: LoggingHelpers, no_remote_mode: bool = False):
     """Detect and return the appropriate operating system class"""
     with open("/etc/os-release") as release_file:
         content = release_file.read()
@@ -1893,56 +1828,12 @@ def detect_operating_system(
             or 'NAME="CachyOS Linux"' in content
             or 'NAME="Garuda Linux"' in content
         ):
-            return Arch(environment=environment, no_remote_mode=no_remote_mode)
+            return Arch(no_remote_mode=no_remote_mode)
         elif "ID=debian" in content or "ID_LIKE=debian" in content:
-            return Debian(environment=environment, no_remote_mode=no_remote_mode)
+            return Debian(no_remote_mode=no_remote_mode)
         else:
             logger.log_error("Unknown OS")
             raise NotImplementedError(f"Unknown operating system, found {content}")
-
-
-def show_help():
-    """Display detailed help information"""
-    help_text = """
-Dotfiles Installation Script
-
-USAGE:
-    uv run init.py [OPTIONS]
-
-OPTIONS:
-    --environment {minimal,work,private}
-                        Environment configuration to install (default: minimal)
-    --no-remote        Skip remote activities (GitHub, SSH keys, Tailscale)
-    --help             Show this help message and exit
-
-ENVIRONMENTS:
-    minimal            Basic development tools and CLI utilities
-    work               Minimal environment + work-specific configurations
-    private            Full desktop environment with window manager and GUI apps
-
-WHAT THIS SCRIPT DOES:
-    1. Detects your operating system (Arch/Garuda or Debian-based)
-    2. Installs required packages via package managers
-    3. Creates symlinks for configuration directories to ~/.config/
-    4. Sets up development tools (NVM, Pyenv)
-    5. Configures shell (fish) and prompt (starship)
-    6. Sets up GitHub authentication and SSH keys
-    7. Configures Tailscale (private environment only)
-
-EXAMPLES:
-    export DOTFILES_ENVIRONMENT=minimal && uv run init.py   # Install minimal environment
-    export DOTFILES_ENVIRONMENT=work && uv run init.py      # Install work environment
-    export DOTFILES_ENVIRONMENT=private && uv run init.py   # Install full desktop environment
-    DOTFILES_ENVIRONMENT=minimal uv run init.py --no-remote # Install without remote activities
-
-ENVIRONMENT VARIABLE:
-    DOTFILES_ENVIRONMENT    Required. Must be set to: minimal, work, or private
-                           This prevents accidentally running the wrong environment configuration
-
-For more information, see the README or CLAUDE.md files.
-"""
-    # This function is for displaying help text, so print is appropriate here
-    print(help_text)
 
 
 @click.command()
@@ -1962,16 +1853,10 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
     """Install and configure dotfiles for Linux systems
 
     \\b
-    Environment must be set via DOTFILES_ENVIRONMENT environment variable.
-
-    \\b
     Examples:
-      export DOTFILES_ENVIRONMENT=minimal && dotfiles-init
-      export DOTFILES_ENVIRONMENT=work && dotfiles-init --no-remote
-      export DOTFILES_ENVIRONMENT=private && dotfiles-init --verbose
-
-    \\b
-    Valid environments: minimal, work, private
+      dotfiles-init
+      dotfiles-init --no-remote
+      dotfiles-init --verbose
     """
     # Initialize logging and console output
     logger = setup_logging("init").bind(
@@ -1996,44 +1881,23 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
             output.status("No cache to clear", logger=logger)
 
     try:
-        # Get environment from environment variable
-        environment = os.environ.get("DOTFILES_ENVIRONMENT")
-        logger = logger.bind(environment=environment)
-        if not environment:
+        if "DOTFILES_ENVIRONMENT" in os.environ:
             output.error(
-                "DOTFILES_ENVIRONMENT environment variable is not set", logger=logger
+                "DOTFILES_ENVIRONMENT is no longer supported: there are no profiles",
+                logger=logger,
             )
-            output.info(
-                "You must set the environment variable to one of: minimal, work, private"
-            )
-            output.info("Examples:")
-            output.info("   export DOTFILES_ENVIRONMENT=minimal && dotfiles-init")
-            output.info("   export DOTFILES_ENVIRONMENT=work && dotfiles-init")
-            output.info("   export DOTFILES_ENVIRONMENT=private && dotfiles-init")
-            output.info(
-                "This prevents accidentally running the wrong environment configuration"
-            )
-            return 1
+            output.info("Unset it and run dotfiles-init again", emoji="💡")
+            sys.exit(1)
 
-        # Validate environment value
-        if environment not in VALID_ENVIRONMENTS:
-            output.error(f"Invalid DOTFILES_ENVIRONMENT '{environment}'", logger=logger)
-            output.info(f"Must be one of: {', '.join(VALID_ENVIRONMENTS)}")
-            return 1
-
-        logger.log_info(
-            "environment_validated", environment=environment, no_remote_mode=no_remote
-        )
+        logger.log_info("init_started", no_remote_mode=no_remote)
 
         output.status(
-            f"Installing dotfiles for {environment} environment{' (no-remote mode)' if no_remote else ''}",
+            f"Installing dotfiles{' (no-remote mode)' if no_remote else ''}",
             "🚀",
         )
 
         try:
-            operating_system = detect_operating_system(
-                logger, environment=environment, no_remote_mode=no_remote
-            )
+            operating_system = detect_operating_system(logger, no_remote_mode=no_remote)
         except FileNotFoundError as e:
             logger.log_exception(e, "os_detection_file_missing")
             output.error(

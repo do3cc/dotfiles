@@ -11,20 +11,13 @@ First, install the project and its dependencies:
 uv sync
 ```
 
-Then run the installation with the required environment variable:
+Then run the installation:
 
 ```bash
-# Minimal environment (default)
-export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init
-
-# Work environment with additional packages
-export DOTFILES_ENVIRONMENT=work && uv run dotfiles-init
-
-# Private environment with full desktop setup
-export DOTFILES_ENVIRONMENT=private && uv run dotfiles-init
+uv run dotfiles-init
 
 # Test mode (skip remote activities like GitHub auth)
-export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init --no-remote
+uv run dotfiles-init --no-remote
 ```
 
 **Alternative using entry points:**
@@ -89,7 +82,7 @@ uv run dotfiles-pkgstatus --refresh        # Force cache refresh
 - Each tool has its own directory (e.g., `ghostty/`, `fish/`)
 - Configurations symlinked to `~/.config/`
 - XDG Base Directory compliant
-- Ghostty (`ghostty/config`, private environment) is the primary terminal; its
+- Ghostty (`ghostty/config`) is the primary terminal; its
   splits and tabs replace tmux. `ghostty` is installed from the Arch repos only,
   as it is not packaged for Debian/Ubuntu.
 
@@ -101,12 +94,12 @@ SSH key per machine at the OpenSSH default path `~/.ssh/id_ed25519`:
 1. Logs in to GitHub via `gh auth login` if needed, and refreshes the token with
    the `admin:public_key` scope.
 2. Creates the key if it is missing (`ssh-keygen -t ed25519`, interactive, so
-   you may set a passphrase or leave it empty). Host, email and environment are
+   you may set a passphrase or leave it empty). Host and email are
    stored in the key comment.
 3. Adds `Host *` / `AddKeysToAgent yes` to `~/.ssh/config` if `AddKeysToAgent`
    is not set anywhere there, so the first use caches the key in the agent.
 4. Uploads the public key to GitHub with `gh ssh-key add`, titled
-   `"<hostname> <environment>"`, unless `gh ssh-key list` already has it.
+   `"<hostname>"`, unless `gh ssh-key list` already has it.
 
 Every step is idempotent. Re-running init repairs a missing config entry or a
 missing GitHub upload.
@@ -121,7 +114,7 @@ tests the connection.
 
 ## Syncthing
 
-In the `private` environment `dotfiles-init`:
+`dotfiles-init`:
 
 1. Installs the `syncthing` package (see `packages.yaml`).
 2. Enables the packaged `syncthing.service` as a systemd user service.

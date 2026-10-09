@@ -104,5 +104,3 @@
 	rebase = true
 [credential]
 	helper = /usr/lib/git-core/git-credential-libsecret
-[http "https://git.dev.zgrp.net/"]
-	sslVerify = false

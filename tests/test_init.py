@@ -1,11 +1,14 @@
 # pyright: reportMissingImports=false, reportArgumentType=false
-from dotfiles import init
+import random
 import subprocess
 from unittest.mock import MagicMock
-from hypothesis import given, strategies, settings as h_settings, HealthCheck
-import random
+
 import faker
 import pytest
+from hypothesis import HealthCheck, given, strategies
+from hypothesis import settings as h_settings
+
+from dotfiles import init
 
 m_faker = faker.Faker()
 
@@ -105,50 +108,26 @@ def test_environmentconfig_merge(faker: faker.Faker):
     assert email_a == final_config.ssh_key_email
 
 
-def test_help():
-    assert init.show_help() is None
-
-
-@pytest.mark.parametrize(
-    "environment,no_remote_mode,should_succeed",
-    (
-        ("illegal", False, False),
-        ("minimal", False, True),
-        ("minimal", True, True),
-    ),
-)
-def test_LinuxInit(environment, no_remote_mode, should_succeed):
-    if should_succeed:
-        obj = init.Linux(environment, no_remote_mode)
-        assert isinstance(obj, init.Linux)
-    else:
-        with pytest.raises(AttributeError):
-            init.Linux(environment, no_remote_mode)
+@pytest.mark.parametrize("no_remote_mode", (False, True))
+def test_LinuxInit(no_remote_mode):
+    obj = init.Linux(no_remote_mode)
+    assert isinstance(obj, init.Linux)
 
 
 def test_Linux_getBaseConfig():
-    assert isinstance(
-        init.Linux("minimal", False)._get_base_config(), init.EnvironmentConfig
-    )
+    assert isinstance(init.Linux(False)._get_base_config(), init.EnvironmentConfig)
 
 
-def test_getEnvironmentConfigs():
-    for config in init.Linux("minimal", False)._get_environment_configs().values():
-        assert isinstance(config, init.EnvironmentConfig)
+def test_base_config_contains_desktop_setup():
+    config = init.Linux(False).config
+    assert ("irssi", "irssi") in config.config_dirs
+    assert ("ghostty", "ghostty") in config.config_dirs
+    assert "syncthing.service" in config.systemd_user_services
+    assert config.ssh_key_email == "sshkeys@patrick-gerken.de"
 
 
-@given(
-    environments=strategies.lists(
-        strategies.sampled_from(init.VALID_ENVIRONMENTS),
-        min_size=2,
-        max_size=2,
-        unique=True,
-    )
-)
-def test_buildEnvironmentConfig(environments):
-    a = init.Linux(environments[0], False)
-    b = init.Linux(environments[1], False)
-    assert str(a) != str(b)
+def test_arch_enables_tailscaled():
+    assert "tailscaled" in init.Arch(False).config.systemd_services
 
 
 @h_settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
@@ -167,7 +146,7 @@ def test_checkSystemdServiceStatusNetworkFail(
     remove redundant returncode == 0 checks since run_command_with_error_handling
     uses check=True, making returncode always 0 when it returns successfully.
     """
-    obj = init.Linux("minimal", False)
+    obj = init.Linux(False)
 
     def mockrun(*_):
         raise subprocess.TimeoutExpired("", 0)
@@ -205,7 +184,7 @@ def test_checkSystemdServiceStatus(
     output,
     monkeypatch,
 ):
-    obj = init.Linux("minimal", False)
+    obj = init.Linux(False)
 
     def mockrun(*args):
         retval = MagicMock()
@@ -261,9 +240,7 @@ def test_detect_operating_system_success(
 
     monkeypatch.setattr(builtins, "open", mock_open)
 
-    result = init.detect_operating_system(
-        mock_logging_helpers, environment="minimal", no_remote_mode=False
-    )
+    result = init.detect_operating_system(mock_logging_helpers, no_remote_mode=False)
     assert isinstance(result, expected_class)
 
 
@@ -285,14 +262,12 @@ def test_detect_operating_system_unknown(tmp_path, mock_logging_helpers, monkeyp
     monkeypatch.setattr(builtins, "open", mock_open)
 
     with pytest.raises(NotImplementedError, match="Unknown operating system"):
-        init.detect_operating_system(
-            mock_logging_helpers, environment="minimal", no_remote_mode=False
-        )
+        init.detect_operating_system(mock_logging_helpers, no_remote_mode=False)
 
 
 def test_arch_check_packages_empty_list(mock_logging_helpers):
     """Test check_packages_installed returns empty lists for empty input."""
-    arch = init.Arch("minimal", False)
+    arch = init.Arch(False)
     installed, missing = arch.check_packages_installed([], mock_logging_helpers, None)
     assert installed == []
     assert missing == []
@@ -300,7 +275,7 @@ def test_arch_check_packages_empty_list(mock_logging_helpers):
 
 def test_arch_check_packages_all_installed(mock_logging_helpers, monkeypatch):
     """Test check_packages_installed when all packages are installed."""
-    arch = init.Arch("minimal", False)
+    arch = init.Arch(False)
     packages = ["git", "vim"]
 
     # Mock run_command_with_error_handling to return success
@@ -320,7 +295,7 @@ def test_arch_check_packages_all_installed(mock_logging_helpers, monkeypatch):
 
 def test_arch_check_packages_some_missing(mock_logging_helpers, monkeypatch):
     """Test check_packages_installed when some packages are missing."""
-    arch = init.Arch("minimal", False)
+    arch = init.Arch(False)
     packages = ["git", "nonexistent", "vim"]
 
     call_count = [0]
@@ -357,7 +332,7 @@ def test_arch_check_packages_some_missing(mock_logging_helpers, monkeypatch):
 
 def test_arch_check_packages_exception(mock_logging_helpers, monkeypatch):
     """Test check_packages_installed handles exceptions by returning all missing."""
-    arch = init.Arch("minimal", False)
+    arch = init.Arch(False)
     packages = ["git", "vim"]
 
     def mock_run(*args):
@@ -375,7 +350,7 @@ def test_arch_check_packages_exception(mock_logging_helpers, monkeypatch):
 def test_arch_should_update_system_no_marker(tmp_path, monkeypatch):
     """Test should_update_system returns True when marker file doesn't exist."""
     monkeypatch.setenv("HOME", str(tmp_path))
-    arch = init.Arch("minimal", False)
+    arch = init.Arch(False)
     assert arch.should_update_system() is True
 
 
@@ -391,7 +366,7 @@ def test_arch_should_update_system_recent(tmp_path, monkeypatch):
     recent_time = datetime.now()
     marker_file.write_text(recent_time.isoformat())
 
-    arch = init.Arch("minimal", False)
+    arch = init.Arch(False)
     assert arch.should_update_system() is False
 
 
@@ -407,7 +382,7 @@ def test_arch_should_update_system_old(tmp_path, monkeypatch):
     old_time = datetime.now() - timedelta(hours=25)
     marker_file.write_text(old_time.isoformat())
 
-    arch = init.Arch("minimal", False)
+    arch = init.Arch(False)
     assert arch.should_update_system() is True
 
 
@@ -418,7 +393,7 @@ def test_arch_should_update_system_invalid_timestamp(tmp_path, monkeypatch):
     marker_file.parent.mkdir(parents=True, exist_ok=True)
     marker_file.write_text("invalid timestamp")
 
-    arch = init.Arch("minimal", False)
+    arch = init.Arch(False)
     assert arch.should_update_system() is True
 
 
@@ -427,7 +402,7 @@ def test_arch_mark_system_updated(tmp_path, monkeypatch, mock_logging_helpers):
     from datetime import datetime
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    arch = init.Arch("minimal", False)
+    arch = init.Arch(False)
 
     arch.mark_system_updated(mock_logging_helpers)
 
@@ -499,7 +474,7 @@ def test_environmentconfig_merge_preserves_all_items(config_dirs, systemd_servic
 
 def test_debian_check_packages_empty_list(mock_logging_helpers):
     """Test Debian check_packages_installed returns empty lists for empty input."""
-    debian = init.Debian("minimal", False)
+    debian = init.Debian(False)
     installed, missing = debian.check_packages_installed([], mock_logging_helpers, None)
     assert installed == []
     assert missing == []
@@ -507,7 +482,7 @@ def test_debian_check_packages_empty_list(mock_logging_helpers):
 
 def test_debian_check_packages_all_installed(mock_logging_helpers, monkeypatch):
     """Test Debian check_packages_installed when all packages are installed."""
-    debian = init.Debian("minimal", False)
+    debian = init.Debian(False)
     packages = ["git", "vim"]
 
     def mock_run(cmd, *args):
@@ -529,7 +504,7 @@ def test_debian_check_packages_all_installed(mock_logging_helpers, monkeypatch):
 
 def test_debian_check_packages_some_missing(mock_logging_helpers, monkeypatch):
     """Test Debian check_packages_installed when some packages are missing."""
-    debian = init.Debian("minimal", False)
+    debian = init.Debian(False)
     packages = ["git", "nonexistent", "vim"]
 
     def mock_run(cmd, *args):
@@ -558,7 +533,7 @@ def test_debian_check_packages_some_missing(mock_logging_helpers, monkeypatch):
 
 def test_debian_check_packages_exception(mock_logging_helpers, monkeypatch):
     """Test Debian check_packages_installed handles exceptions."""
-    debian = init.Debian("minimal", False)
+    debian = init.Debian(False)
     packages = ["git", "vim"]
 
     def mock_run(*args):
@@ -573,31 +548,17 @@ def test_debian_check_packages_exception(mock_logging_helpers, monkeypatch):
     assert missing == packages
 
 
-def test_main_no_environment_variable():
-    """Test main() handles missing DOTFILES_ENVIRONMENT without crashing."""
+def test_main_rejects_dotfiles_environment():
+    """A leftover DOTFILES_ENVIRONMENT must fail loudly, not be ignored."""
     from click.testing import CliRunner
 
-    runner = CliRunner()
-    # Note: Click's CliRunner with quiet mode may not propagate exit codes correctly
-    # This test verifies the function doesn't crash
-    result = runner.invoke(init.main, ["--quiet"], env={})
-    # Function executed without raising unhandled exceptions
-    assert result.exception is None or isinstance(result.exception, SystemExit)
-
-
-def test_main_invalid_environment():
-    """Test main() handles invalid environment without crashing."""
-    from click.testing import CliRunner
-
-    runner = CliRunner()
-    result = runner.invoke(
-        init.main, ["--quiet"], env={"DOTFILES_ENVIRONMENT": "invalid_env"}
+    result = CliRunner().invoke(
+        init.main, ["--quiet"], env={"DOTFILES_ENVIRONMENT": "private"}
     )
-    # Function executed without raising unhandled exceptions
-    assert result.exception is None or isinstance(result.exception, SystemExit)
+    assert result.exit_code == 1
 
 
-def test_main_valid_environment_os_detection_failure(monkeypatch):
+def test_main_os_detection_failure(monkeypatch):
     """Test main() handles OS detection failures without crashing."""
     from click.testing import CliRunner
 
@@ -608,9 +569,7 @@ def test_main_valid_environment_os_detection_failure(monkeypatch):
     monkeypatch.setattr(init, "detect_operating_system", mock_detect)
 
     runner = CliRunner()
-    result = runner.invoke(
-        init.main, ["--quiet"], env={"DOTFILES_ENVIRONMENT": "minimal"}
-    )
+    result = runner.invoke(init.main, ["--quiet"])
     # Function handled exception without crashing
     assert result.exception is None or isinstance(
         result.exception, (SystemExit, FileNotFoundError)
@@ -628,9 +587,7 @@ def test_main_unsupported_os(monkeypatch):
     monkeypatch.setattr(init, "detect_operating_system", mock_detect)
 
     runner = CliRunner()
-    result = runner.invoke(
-        init.main, ["--quiet"], env={"DOTFILES_ENVIRONMENT": "minimal"}
-    )
+    result = runner.invoke(init.main, ["--quiet"])
     # Function handled exception without crashing
     assert result.exception is None or isinstance(
         result.exception, (SystemExit, NotImplementedError)
@@ -638,7 +595,7 @@ def test_main_unsupported_os(monkeypatch):
 
 
 @pytest.mark.integration
-def test_main_successful_execution_minimal(monkeypatch, tmp_path):
+def test_main_successful_execution(monkeypatch, tmp_path):
     """Integration test: main() executes successfully with all steps mocked."""
     from click.testing import CliRunner
 
@@ -662,7 +619,7 @@ def test_main_successful_execution_minimal(monkeypatch, tmp_path):
     result = runner.invoke(
         init.main,
         ["--quiet"],
-        env={"DOTFILES_ENVIRONMENT": "minimal", "HOME": str(tmp_path)},
+        env={"HOME": str(tmp_path)},
     )
 
     # Should succeed (exit code 0 or None)
@@ -684,6 +641,7 @@ def test_main_uses_status_messages_not_persistent_progress(monkeypatch, tmp_path
     simple status messages for each step.
     """
     from click.testing import CliRunner
+
     from dotfiles.output_formatting import ConsoleOutput
 
     # Mock OS detection to return Arch
@@ -729,7 +687,7 @@ def test_main_uses_status_messages_not_persistent_progress(monkeypatch, tmp_path
     result = runner.invoke(
         init.main,
         [],
-        env={"DOTFILES_ENVIRONMENT": "minimal", "HOME": str(tmp_path)},
+        env={"HOME": str(tmp_path)},
     )
 
     # Verify the invocation succeeded (no unhandled exceptions)

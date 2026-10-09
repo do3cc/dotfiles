@@ -2,14 +2,7 @@
 set -e
 
 echo "🧪 Starting dotfiles test in $(uname -a)"
-echo "📋 Environment: DOTFILES_ENVIRONMENT=${DOTFILES_ENVIRONMENT}"
 echo "🐧 Container runtime: Podman"
-
-# Validate environment variable is set
-if [ -z "$DOTFILES_ENVIRONMENT" ]; then
-	echo "❌ ERROR: DOTFILES_ENVIRONMENT not set"
-	exit 1
-fi
 
 # Run the dotfiles installation in test mode
 echo "🚀 Running dotfiles installation..."
@@ -24,7 +17,7 @@ uv run init.py --help >/dev/null || {
 
 echo "🚀 Running actual dotfiles installation..."
 # Run with timeout to prevent hanging
-timeout 300 uv run init.py --environment "$DOTFILES_ENVIRONMENT" || {
+timeout 300 uv run init.py || {
 	echo "❌ ERROR: Dotfiles installation failed or timed out"
 	exit 1
 }

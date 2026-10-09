@@ -9,7 +9,7 @@ inside Docker containers. Manual testing must be performed on a real system.
 
 1. **Fresh System Without Cached Sudo**
    - Log out and log back in (clears sudo cache)
-   - Run: `DOTFILES_ENVIRONMENT=minimal uv run dotfiles-init`
+   - Run: `uv run dotfiles-init`
    - Verify: Sudo password prompt appears and is visible
    - Verify: Can type password successfully
    - Verify: Installation proceeds after password entry

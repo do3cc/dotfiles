@@ -97,7 +97,6 @@ test-arch:
 	fi
 	@echo "🚀 Running Arch test with improved logging..."
 	@podman run --rm \
-		-e DOTFILES_ENVIRONMENT=minimal \
 		-e PYTHONUNBUFFERED=1 \
 		-v $(PWD):/dotfiles:O \
 		-v $(CACHE_DIR)/uv-cache:/cache/uv-cache:Z \
@@ -109,7 +108,6 @@ test-arch:
 			echo '📦 Installing project dependencies...' && \
 			UV_LINK_MODE=copy uv sync && \
 			echo '🚀 Starting dotfiles installation...' && \
-			export DOTFILES_ENVIRONMENT=minimal && \
 			timeout 900 uv run dotfiles-init --no-remote || echo '⚠️ Test timed out after 15 minutes'"
 	@echo "✅ Arch Linux test completed"
 
@@ -126,7 +124,6 @@ test-debian:
 	fi
 	@echo "🚀 Running Debian test with improved logging..."
 	@podman run --rm \
-		-e DOTFILES_ENVIRONMENT=minimal \
 		-e PYTHONUNBUFFERED=1 \
 		-v $(PWD):/dotfiles:O \
 		-v $(CACHE_DIR)/uv-cache:/cache/uv-cache:Z \
@@ -138,7 +135,6 @@ test-debian:
 			echo '📦 Installing project dependencies...' && \
 			UV_LINK_MODE=copy uv sync && \
 			echo '🚀 Starting dotfiles installation...' && \
-			export DOTFILES_ENVIRONMENT=minimal && \
 			timeout 900 uv run dotfiles-init --no-remote || echo '⚠️ Test timed out after 15 minutes'"
 	@echo "✅ Debian test completed"
 
@@ -155,7 +151,6 @@ test-ubuntu:
 	fi
 	@echo "🚀 Running Ubuntu test with improved logging..."
 	podman run --rm \
-		-e DOTFILES_ENVIRONMENT=minimal \
 		-e PYTHONUNBUFFERED=1 \
 		-v $(PWD):/dotfiles:O \
 		-v $(CACHE_DIR)/uv-cache:/cache/uv-cache:Z \
@@ -167,7 +162,6 @@ test-ubuntu:
 			echo '📦 Installing project dependencies...' && \
 			UV_LINK_MODE=copy uv sync && \
 			echo '🚀 Starting dotfiles installation...' && \
-			export DOTFILES_ENVIRONMENT=minimal && \
 			timeout 900 uv run dotfiles-init --no-remote || echo '⚠️ Test timed out after 15 minutes'"
 	@echo "✅ Ubuntu test completed"
 
