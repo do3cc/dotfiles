@@ -3,13 +3,12 @@
 	name = Patrick Gerken
 [core]
 	editor = /usr/bin/nvim
-	whitespace = cr-at-eol
-    autocrlf = input
-    whitespace = fix,space-before-tab,tab-in-indent,trailing-space
+	autocrlf = input
+	whitespace = space-before-tab,tab-in-indent,trailing-space
 	excludesFile = ~/.config/git/ignore
 
 [apply]
-    whitespace = fix
+	whitespace = fix
 
 [color]
 	branch = true
@@ -49,15 +48,22 @@
 	help = normal
 	error = normal
 
+[init]
+	defaultBranch = main
+
 [diff]
 	renames = true
 	tool = meld
+	algorithm = histogram
+
+[merge]
+	conflictStyle = zdiff3
 
 [alias]
 	ai = add -i
 	ap = add -p
 	b = branch -a
-    br = branch
+	br = branch
 	cf = config
 	ci = commit -v
 	cia = commit -v -a
@@ -76,7 +82,7 @@
 	llt = log -p trunk..
 	lm = log master..
 	llm = log -p master..
-    pp = !"echo 'Pull'; git pull; echo 'Push'; git push"
+	pp = !"echo 'Pull'; git pull; echo 'Push'; git push"
 	resh1 = reset HEAD^
 	s = !git --no-pager status
 	sm = submodule
@@ -88,18 +94,17 @@
 	wtadd = worktree add
 	wtremove = worktree remove
 
+[fetch]
+	prune = true
+
 [push]
 	default = simple
 	autoSetupRemote = true
 
-[http]
-
 [rerere]
-	enabled = 1
+	enabled = true
 [commit]
 	template = /home/do3cc/.config/git/message.txt
-[branch]
-	autosetuprebase = always
 [pull]
 	rebase = true
 [credential]
