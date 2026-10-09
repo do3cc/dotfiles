@@ -27,7 +27,7 @@ repos:
         files: \.py$
       - id: pyright
         name: pyright
-        entry: pyright
+        entry: uv run pyright
         language: system
         files: \.py$
         pass_filenames: false
