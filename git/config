@@ -48,9 +48,16 @@
 	help = normal
 	error = normal
 
+[init]
+	defaultBranch = main
+
 [diff]
 	renames = true
 	tool = meld
+	algorithm = histogram
+
+[merge]
+	conflictStyle = zdiff3
 
 [alias]
 	ai = add -i
@@ -86,6 +93,9 @@
 	wtprune = worktree prune
 	wtadd = worktree add
 	wtremove = worktree remove
+
+[fetch]
+	prune = true
 
 [push]
 	default = simple
