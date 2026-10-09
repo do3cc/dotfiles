@@ -1,3 +1,6 @@
+set -gx EDITOR nvim
+set -gx VISUAL nvim
+
 if status is-interactive
     # Commands to run in interactive sessions can go here
     # Set default value for fish_prompt_pwd_dir_length to avoid errors

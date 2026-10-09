@@ -1,63 +1,47 @@
 [user]
 	email = do3cc@patrick-gerken.de
 	name = Patrick Gerken
+	signingKey = ~/.ssh/id_ed25519.pub
 [core]
-	editor = /usr/bin/nvim
 	autocrlf = input
-	whitespace = space-before-tab,tab-in-indent,trailing-space
-	excludesFile = ~/.config/git/ignore
+	whitespace = space-before-tab,trailing-space
 
 [apply]
 	whitespace = fix
 
-[color]
-	branch = true
-	diff = auto
-	status = auto
-	ui = auto
-
-[color "diff"]
-	plain = normal
-	meta = bold
-	frag = cyan
-	old = white red
-	new = white green
-	commit = yellow
-	whitespace = normal red
-
-[color "branch"]
-	current = normal
-	local = normal
-	remote = red
-	plain = normal
-
-[color "status"]
-	header = normal
-	added = red
-	updated = green
-	changed = white red
-	untracked = white red
-	nobranch = white red
-
-[color "grep"]
-	match = normal
-
-[color "interactive"]
-	prompt = normal
-	header = normal
-	help = normal
-	error = normal
-
 [init]
 	defaultBranch = main
 
+[column]
+	ui = auto
+
+[branch]
+	sort = -committerdate
+
+[tag]
+	sort = version:refname
+	gpgSign = true
+
 [diff]
-	renames = true
-	tool = meld
+	tool = nvimdiff
 	algorithm = histogram
+	colorMoved = default
+	mnemonicPrefix = true
 
 [merge]
+	tool = nvimdiff
 	conflictStyle = zdiff3
+
+[commit]
+	template = ~/.config/git/message.txt
+	verbose = true
+	gpgSign = true
+
+[gpg]
+	format = ssh
+
+[gpg "ssh"]
+	allowedSignersFile = ~/.ssh/allowed_signers
 
 [alias]
 	ai = add -i
@@ -65,8 +49,8 @@
 	b = branch -a
 	br = branch
 	cf = config
-	ci = commit -v
-	cia = commit -v -a
+	ci = commit
+	cia = commit -a
 	cam = commit -a -m
 	co = checkout
 	cp = cherry-pick
@@ -78,10 +62,6 @@
 	llf = log -p --follow
 	l = log
 	ll = log -p
-	lt = log trunk..
-	llt = log -p trunk..
-	lm = log master..
-	llm = log -p master..
 	pp = !"echo 'Pull'; git pull; echo 'Push'; git push"
 	resh1 = reset HEAD^
 	s = !git --no-pager status
@@ -97,15 +77,26 @@
 [fetch]
 	prune = true
 
+[transfer]
+	fsckObjects = true
+
 [push]
-	default = simple
 	autoSetupRemote = true
+	followTags = true
+
+[pull]
+	rebase = true
+
+[rebase]
+	autoStash = true
+	autoSquash = true
+	updateRefs = true
 
 [rerere]
 	enabled = true
-[commit]
-	template = /home/do3cc/.config/git/message.txt
-[pull]
-	rebase = true
+
+[help]
+	autocorrect = prompt
+
 [credential]
 	helper = /usr/lib/git-core/git-credential-libsecret
