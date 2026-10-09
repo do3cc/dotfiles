@@ -287,7 +287,7 @@ class StatusChecker:
 
         # Get dotfiles directory from environment or use default
         dotfiles_dir = Path(
-            os.environ.get("DOTFILES_DIR", "/home/do3cc/projects/dotfiles")
+            os.environ.get("DOTFILES_DIR", "~/projects/dotfiles")
         ).expanduser()
         init_script = dotfiles_dir / "src" / "dotfiles" / "init.py"
 
