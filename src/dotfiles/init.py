@@ -686,6 +686,68 @@ class Linux:
             logger.log_exception(e, "shell_setup_failed")
             output.warning(f"Could not check/change shell: {e}")
 
+    def setup_ssh_key(self, logger: LoggingHelpers, output: ConsoleOutput):
+        """Ensure ~/.ssh/id_ed25519 exists, is cached by the agent and is on GitHub.
+
+        Every step is idempotent, so re-running repairs a partial setup.
+        Host and environment are recorded in the key comment and GitHub title.
+        """
+        hostname = socket.gethostname()
+        ssh_dir = self.homedir / ".ssh"
+        ssh_dir.mkdir(mode=0o700, exist_ok=True)
+        key = ssh_dir / "id_ed25519"
+        pub_key = ssh_dir / "id_ed25519.pub"
+
+        if not key.exists():
+            # Interactive so a passphrase can be entered (empty is allowed)
+            run_interactive_command(
+                [
+                    "ssh-keygen",
+                    "-t",
+                    "ed25519",
+                    "-C",
+                    f"{hostname} {self.config.ssh_key_email} {self.environment}",
+                    "-f",
+                    str(key),
+                ],
+                logger,
+                output,
+                "Generate SSH key",
+                timeout=600,
+            )
+            output.success(f"Created SSH key {key}", logger=logger)
+
+        # Let ssh cache the key in the running agent on first use
+        ssh_config = ssh_dir / "config"
+        existing = ssh_config.read_text() if ssh_config.exists() else ""
+        if "AddKeysToAgent" not in existing:
+            with open(ssh_config, "a") as f:
+                f.write("\nHost *\n    AddKeysToAgent yes\n")
+            ssh_config.chmod(0o600)
+            output.success("Enabled AddKeysToAgent in ~/.ssh/config", logger=logger)
+
+        key_blob = pub_key.read_text().split()[1]
+        listed = run_command_with_error_handling(
+            ["/usr/bin/gh", "ssh-key", "list"], logger, output, "List GitHub SSH keys"
+        )
+        if key_blob in listed.stdout:
+            output.success("SSH key already on GitHub", logger=logger)
+        else:
+            run_command_with_error_handling(
+                [
+                    "/usr/bin/gh",
+                    "ssh-key",
+                    "add",
+                    str(pub_key),
+                    "-t",
+                    f"{hostname} {self.environment}",
+                ],
+                logger,
+                output,
+                "Add SSH key to GitHub",
+            )
+            output.success("Uploaded SSH key to GitHub", logger=logger)
+
     def link_accounts(self, logger: LoggingHelpers, output: ConsoleOutput):
         if self.no_remote_mode:
             output.info(
@@ -733,52 +795,7 @@ class Linux:
                 "Refresh GitHub auth",
             )
 
-        # Use permanent SSH key based on hostname and environment
-        key_suffix = f"{socket.gethostname()}_{self.environment}"
-        current_key = self.homedir / f".ssh/id_ed25519_{key_suffix}"
-
-        if not current_key.exists():
-            ssh_key_email = self.config.ssh_key_email
-            run_command_with_error_handling(
-                [
-                    "ssh-keygen",
-                    "-t",
-                    "ed25519",
-                    "-C",
-                    f"'Patrick Gerken {socket.gethostname()} {ssh_key_email} {self.environment}'",
-                    "-f",
-                    str(current_key),
-                    "-N",
-                    "",  # No passphrase
-                ],
-                logger,
-                output,
-                "Generate SSH key",
-            )
-            run_command_with_error_handling(
-                ["ssh-add", str(current_key)], logger, output, "Add SSH key to agent"
-            )
-
-            # Create default SSH key symlink for automatic loading
-            default_key_link = self.homedir / ".ssh/id_ed25519_default"
-            if not default_key_link.exists():
-                try:
-                    os.symlink(current_key, default_key_link)
-                    output.success(
-                        f"Created SSH key symlink: id_ed25519_default -> {os.path.basename(current_key)}",
-                        logger=logger,
-                    )
-                except OSError as e:
-                    logger.log_exception(e, "ssh_key_symlink_creation_failed")
-                    output.error(f"Could not create SSH key symlink: {e}")
-
-            key_name = f'"{socket.gethostname()} {self.environment}"'
-            run_command_with_error_handling(
-                ["/usr/bin/gh", "ssh-key", "add", f"{current_key}.pub", "-t", key_name],
-                logger,
-                output,
-                "Add SSH key to GitHub",
-            )
+        self.setup_ssh_key(logger, output)
 
         if self.environment in ["private"]:
             try:

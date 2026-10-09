@@ -653,7 +653,7 @@ The CI workflow automatically detects cache directory context via the `CACHE_DIR
 - Configuration files are designed for Wayland environments (Hyprland)
 - Git configuration includes global gitignore patterns
 - Shell integration includes direnv for project-specific environments
-- SSH key generation uses permanent keys per hostname and environment (e.g., `id_ed25519_hostname_private`)
+- SSH setup uses one key per machine at `~/.ssh/id_ed25519`; host and environment are in the key comment and the GitHub key title (see README, "SSH Keys")
 - Always use branches for implementation so that I can review them in isolation in github
 
 ## Claude Code Slash Commands
