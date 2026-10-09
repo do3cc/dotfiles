@@ -1,26 +1,27 @@
 # pyright: strict
-from subprocess import CalledProcessError, TimeoutExpired, CompletedProcess
-from dataclasses import dataclass, field
-from datetime import datetime
 import os
-from .process_helper import run_command_with_error_handling, run_interactive_command
-from pathlib import Path
 import socket
 import sys
 import time
 import traceback
-import urllib.request
 import urllib.error
+import urllib.request
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired
+from typing import TYPE_CHECKING, Any, cast
+
 import click
 import yaml
+
 from .logging_config import (
-    setup_logging,
     LoggingHelpers,
+    setup_logging,
 )
 from .output_formatting import ConsoleOutput
+from .process_helper import run_command_with_error_handling, run_interactive_command
 from .swman import DebianSystemManager, PacmanManager
-
-from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -79,7 +80,7 @@ class Linux:
         self,
         environment: str = "minimal",
         no_remote_mode: bool = False,
-        homedir: Path = Path("~").expanduser(),
+        homedir: Path | None = None,
     ):
         if environment not in VALID_ENVIRONMENTS:
             raise AttributeError(
@@ -91,7 +92,7 @@ class Linux:
         self.package_manifest = self._load_package_manifest()
         # Single source of truth for this environment's configuration
         self.config = self._build_environment_config(environment)
-        self.homedir = homedir
+        self.homedir = homedir if homedir is not None else Path("~").expanduser()
 
     def _load_package_manifest(self) -> dict[str, Any]:
         """Load package manifest from packages.yaml
@@ -122,6 +123,7 @@ class Linux:
                 ("fish", "fish"),
                 ("lazy_nvim", "nvim"),
                 ("git", "git"),
+                ("mr", "mr"),
             ],
             local_bin_files=["*"],
             systemd_user_services=["pkgstatus-update.timer"],
@@ -463,7 +465,7 @@ class Linux:
                             f"{config_dir_target} exists as a file, but should be a symlink to {source_path}",
                             logger=logger,
                         )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.log_exception(e, "config_linking_unexpected_error")
                 output.error(f"Unexpected error processing {config_dir_target}: {e}")
                 continue
@@ -644,13 +646,13 @@ class Linux:
             except TimeoutExpired:
                 output.warning("Git credential helper test timed out", logger=logger)
                 return False
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 output.warning(
                     f"Error testing git credential helper: {e}", logger=logger
                 )
                 return False
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.log_exception(e, "git_credential_helper_validation_failed")
             output.error(f"Failed to validate git credential helper: {e}")
             return False
@@ -680,7 +682,7 @@ class Linux:
                     output.success("Shell is already set to fish", logger=logger)
             else:
                 output.success("Shell is already set to fish", logger=logger)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.log_exception(e, "shell_setup_failed")
             output.warning(f"Could not check/change shell: {e}")
 
@@ -904,7 +906,7 @@ class Arch(Linux):
                 "package_check_completed",
             )
             return installed, missing
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.log_exception(e, "pacman_package_check_failed")
             # If pacman check fails, assume all packages need installation
             return [], packages
@@ -918,7 +920,8 @@ class Arch(Linux):
 
         try:
             last_update = datetime.fromisoformat(marker_file.read_text().strip())
-            return (datetime.now() - last_update).total_seconds() > 86400  # 24 hours
+            age = datetime.now() - last_update  # noqa: DTZ005
+            return age.total_seconds() > 86400  # 24 hours
         except (ValueError, OSError):
             return True
 
@@ -926,7 +929,7 @@ class Arch(Linux):
         """Mark system as updated with current timestamp"""
         marker_file = Path.home() / ".cache" / "dotfiles_last_update"
         marker_file.parent.mkdir(exist_ok=True)
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now().isoformat()  # noqa: DTZ005
         marker_file.write_text(timestamp)
         logger.log_info("Updated timestamp set", timestamp=timestamp)
 
@@ -1049,7 +1052,7 @@ class Arch(Linux):
                     output.info(f"Command: sudo pacman {' '.join(args)}", emoji="🔍")
                     # Note: No stdout/stderr available since we don't capture interactive output
                     raise
-            raise
+            raise RuntimeError("pacman retry loop exited unexpectedly")
 
         try:
             # Check and install base packages
@@ -1066,7 +1069,7 @@ class Arch(Linux):
                 output.status(
                     f"Installing {len(missing)} base development tools: {', '.join(missing)}"
                 )
-                pacman("-S", "--needed", "--noconfirm", *missing)
+                pacman("-S", "--needed", "--noconfirm", *missing, logger=logger)
                 output.success("Base development tools installed", logger=logger)
                 self.restart_required = True
             else:
@@ -1172,7 +1175,7 @@ class Arch(Linux):
                     output.info(
                         "Try: Check package names and update system", emoji="💡"
                     )
-                    raise e
+                    raise
             else:
                 output.success("All pacman packages already installed", logger=logger)
 
@@ -1420,7 +1423,7 @@ class Debian(Linux):
                     missing.append(package)
 
             return installed, missing
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.log_exception(e, "dpkg_check_failed", packages=packages)
             # If dpkg check fails, assume all packages need installation
             return [], packages
@@ -1472,11 +1475,8 @@ class Debian(Linux):
 
             # Check if running in virtualized environment that might need timezone setup
             # Some virtualization systems also benefit from timezone pre-configuration
-            if Path("/proc/vz").exists():  # OpenVZ/Virtuozzo container system
-                return True
-
-            return False
-        except Exception as e:
+            return Path("/proc/vz").exists()  # OpenVZ/Virtuozzo container system
+        except Exception as e:  # noqa: BLE001
             logger.log_exception(e, "container_detection_failed")
             # If we can't determine container status (permissions, missing files, etc.),
             # assume we're NOT in a container. This is safer for real user systems
@@ -1540,7 +1540,7 @@ class Debian(Linux):
                 )
 
                 output.success("Timezone pre-configured to UTC", logger=logger)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.log_exception(e, "timezone_preconfiguration_failed")
                 output.warning(f"Could not pre-configure timezone: {e}")
                 output.info(
@@ -1700,14 +1700,16 @@ class Debian(Linux):
                             headers={"User-Agent": "dotfiles-installer/1.0"},
                         )
 
-                        with urllib.request.urlopen(request, timeout=300) as response:
-                            with open(nvim_appimage, "wb") as f:
-                                # Download in chunks to handle large files
-                                while True:
-                                    chunk = response.read(8192)
-                                    if not chunk:
-                                        break
-                                    f.write(chunk)
+                        with (
+                            urllib.request.urlopen(request, timeout=300) as response,
+                            open(nvim_appimage, "wb") as f,
+                        ):
+                            # Download in chunks to handle large files
+                            while True:
+                                chunk = response.read(8192)
+                                if not chunk:
+                                    break
+                                f.write(chunk)
 
                         output.success(
                             "Neovim AppImage downloaded successfully", logger=logger
@@ -1833,11 +1835,11 @@ def detect_operating_system(
     with open("/etc/os-release") as release_file:
         content = release_file.read()
         logger = logger.bind(release_data=content)
-        if 'NAME="Arch Linux"' in content:
-            return Arch(environment=environment, no_remote_mode=no_remote_mode)
-        elif 'NAME="CachyOS Linux"' in content:
-            return Arch(environment=environment, no_remote_mode=no_remote_mode)
-        elif 'NAME="Garuda Linux"' in content:
+        if (
+            'NAME="Arch Linux"' in content
+            or 'NAME="CachyOS Linux"' in content
+            or 'NAME="Garuda Linux"' in content
+        ):
             return Arch(environment=environment, no_remote_mode=no_remote_mode)
         elif "ID=debian" in content or "ID_LIKE=debian" in content:
             return Debian(environment=environment, no_remote_mode=no_remote_mode)
@@ -2053,7 +2055,7 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
             except KeyboardInterrupt:
                 output.error(f"{step_name} interrupted by user", logger=step_log)
                 return 130  # Standard exit code for SIGINT
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 step_log.log_exception(
                     e,
                     "step_failed",
@@ -2091,7 +2093,7 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
             )
         return 0
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.log_exception(e, "init_script_unexpected_error")
         output.error(f"UNEXPECTED ERROR: {e}")
         if verbose:
