@@ -126,6 +126,84 @@ class Linux:
             ssh_key_email="sshkeys@patrick-gerken.de",
         )
 
+    def _reload_systemd_user_daemon(
+        self, logger: LoggingHelpers, output: ConsoleOutput
+    ) -> None:
+        """Run `systemctl --user daemon-reload`.
+
+        Containers have no systemd user session, so a failure there is a known
+        limitation and only warns. On a real system it still raises.
+        """
+        try:
+            run_command_with_error_handling(
+                ["systemctl", "--user", "daemon-reload"],
+                logger,
+                output,
+                "systemctl --user daemon-reload",
+            )
+        except CalledProcessError as e:
+            if not self._is_running_in_container(logger):
+                raise
+            logger.log_exception(e, "systemd_user_daemon_reload_in_container_failed")
+            output.warning(
+                "Cannot reload the systemd user daemon in a container environment"
+            )
+
+    def _is_running_in_container(self, logger: LoggingHelpers):
+        """
+        Detect if we're running inside a container (Docker, Podman, etc.)
+
+        This is used to determine if it's safe to modify system settings like timezone.
+        Containers often need timezone pre-configuration to prevent interactive prompts
+        during package installation, while real systems should preserve user settings.
+
+        Detection methods:
+        1. Container-specific files: /.dockerenv (Docker), /run/.containerenv (Podman)
+        2. Process tree analysis: Check /proc/1/cgroup for container runtime signatures
+        3. Virtualization indicators: /proc/vz (OpenVZ/Virtuozzo)
+
+        Returns:
+            bool: True if running in a container/virtualized environment, False otherwise
+
+        Safety note: Defaults to False if detection fails (safer for real systems)
+        """
+        try:
+            # Check for container-specific files/indicators
+            # These files are created by container runtimes and are reliable indicators
+            container_indicators = [
+                Path("/.dockerenv"),  # Docker creates this file in all containers
+                Path(
+                    "/run/.containerenv"
+                ),  # Podman creates this file in all containers
+            ]
+
+            for indicator in container_indicators:
+                if indicator.exists():
+                    return True
+
+            # Check /proc/1/cgroup for container runtime signatures
+            # Container runtimes modify the cgroup hierarchy for process 1 (init)
+            if Path("/proc/1/cgroup").exists():
+                with open("/proc/1/cgroup", "r") as f:
+                    content = f.read()
+                    # Look for container runtime signatures in the cgroup path
+                    if (
+                        "docker" in content
+                        or "containerd" in content
+                        or "podman" in content
+                    ):
+                        return True
+
+            # Check if running in virtualized environment that might need timezone setup
+            # Some virtualization systems also benefit from timezone pre-configuration
+            return Path("/proc/vz").exists()  # OpenVZ/Virtuozzo container system
+        except Exception as e:  # noqa: BLE001
+            logger.log_exception(e, "container_detection_failed")
+            # If we can't determine container status (permissions, missing files, etc.),
+            # assume we're NOT in a container. This is safer for real user systems
+            # where we don't want to accidentally modify timezone settings.
+            return False
+
     def check_systemd_service_status(
         self,
         service: str,
@@ -659,6 +737,21 @@ class Linux:
                 return True
             except TimeoutExpired:
                 output.warning("Git credential helper test timed out", logger=logger)
+                return False
+            except CalledProcessError as e:
+                # Without D-Bus and a secret service (containers) the helper
+                # exits 1 even for a valid query; the binary itself is fine.
+                if self._is_running_in_container(logger):
+                    logger.log_exception(e, "git_credential_helper_in_container_failed")
+                    output.warning(
+                        "Git credential helper cannot reach a secret service in a "
+                        "container; skipping the functional check",
+                        logger=logger,
+                    )
+                    return True
+                output.warning(
+                    f"Error testing git credential helper: {e}", logger=logger
+                )
                 return False
             except Exception as e:  # noqa: BLE001
                 output.warning(
@@ -1309,12 +1402,7 @@ class Arch(Linux):
                     output.success(f"{target} → {unit_file}", logger=logger)
 
                 # Reload systemd user daemon to pick up new unit files
-                run_command_with_error_handling(
-                    ["systemctl", "--user", "daemon-reload"],
-                    logger,
-                    output,
-                    "systemctl --user daemon-reload",
-                )
+                self._reload_systemd_user_daemon(logger, output)
 
                 for service in user_services:
                     try:
@@ -1440,61 +1528,6 @@ class Debian(Linux):
             logger.log_exception(e, "dpkg_check_failed", packages=packages)
             # If dpkg check fails, assume all packages need installation
             return [], packages
-
-    def _is_running_in_container(self, logger: LoggingHelpers):
-        """
-        Detect if we're running inside a container (Docker, Podman, etc.)
-
-        This is used to determine if it's safe to modify system settings like timezone.
-        Containers often need timezone pre-configuration to prevent interactive prompts
-        during package installation, while real systems should preserve user settings.
-
-        Detection methods:
-        1. Container-specific files: /.dockerenv (Docker), /run/.containerenv (Podman)
-        2. Process tree analysis: Check /proc/1/cgroup for container runtime signatures
-        3. Virtualization indicators: /proc/vz (OpenVZ/Virtuozzo)
-
-        Returns:
-            bool: True if running in a container/virtualized environment, False otherwise
-
-        Safety note: Defaults to False if detection fails (safer for real systems)
-        """
-        try:
-            # Check for container-specific files/indicators
-            # These files are created by container runtimes and are reliable indicators
-            container_indicators = [
-                Path("/.dockerenv"),  # Docker creates this file in all containers
-                Path(
-                    "/run/.containerenv"
-                ),  # Podman creates this file in all containers
-            ]
-
-            for indicator in container_indicators:
-                if indicator.exists():
-                    return True
-
-            # Check /proc/1/cgroup for container runtime signatures
-            # Container runtimes modify the cgroup hierarchy for process 1 (init)
-            if Path("/proc/1/cgroup").exists():
-                with open("/proc/1/cgroup", "r") as f:
-                    content = f.read()
-                    # Look for container runtime signatures in the cgroup path
-                    if (
-                        "docker" in content
-                        or "containerd" in content
-                        or "podman" in content
-                    ):
-                        return True
-
-            # Check if running in virtualized environment that might need timezone setup
-            # Some virtualization systems also benefit from timezone pre-configuration
-            return Path("/proc/vz").exists()  # OpenVZ/Virtuozzo container system
-        except Exception as e:  # noqa: BLE001
-            logger.log_exception(e, "container_detection_failed")
-            # If we can't determine container status (permissions, missing files, etc.),
-            # assume we're NOT in a container. This is safer for real user systems
-            # where we don't want to accidentally modify timezone settings.
-            return False
 
     @property
     def apt_packages(self) -> list[str]:

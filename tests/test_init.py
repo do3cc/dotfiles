@@ -765,3 +765,51 @@ def test_arch_missing_libsecret_helper_fails_validation(
     assert not init.Arch(False).validate_git_credential_helper(
         mock_logging_helpers, MagicMock()
     )
+
+
+def _fake_helper(tmp_path, exit_code):
+    helper = tmp_path / "git-credential-libsecret"
+    helper.write_text(f"#!/bin/sh\nexit {exit_code}\n")
+    helper.chmod(0o755)
+    return helper
+
+
+@pytest.mark.parametrize("in_container,expected", [(True, True), (False, False)])
+def test_libsecret_helper_failing_without_secret_service(
+    monkeypatch, tmp_path, mock_logging_helpers, in_container, expected
+):
+    """In a container the helper exits 1 (no D-Bus); on a real system that is an error."""
+    monkeypatch.setattr(init.Linux, "LIBSECRET_HELPER", _fake_helper(tmp_path, 1))
+    arch = init.Arch(False)
+    monkeypatch.setattr(arch, "_is_running_in_container", lambda logger: in_container)
+    assert (
+        arch.validate_git_credential_helper(mock_logging_helpers, MagicMock())
+        is expected
+    )
+
+
+def test_libsecret_helper_working_passes(monkeypatch, tmp_path, mock_logging_helpers):
+    monkeypatch.setattr(init.Linux, "LIBSECRET_HELPER", _fake_helper(tmp_path, 0))
+    arch = init.Arch(False)
+    assert arch.validate_git_credential_helper(mock_logging_helpers, MagicMock())
+
+
+@pytest.mark.parametrize("in_container", [True, False])
+def test_reload_systemd_user_daemon_failure(
+    monkeypatch, mock_logging_helpers, in_container
+):
+    """No systemd user session in containers: warn there, raise on a real system."""
+
+    def fail(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, ["systemctl"])
+
+    monkeypatch.setattr(init, "run_command_with_error_handling", fail)
+    arch = init.Arch(False)
+    monkeypatch.setattr(arch, "_is_running_in_container", lambda logger: in_container)
+    output = MagicMock()
+    if in_container:
+        arch._reload_systemd_user_daemon(mock_logging_helpers, output)
+        output.warning.assert_called_once()
+    else:
+        with pytest.raises(subprocess.CalledProcessError):
+            arch._reload_systemd_user_daemon(mock_logging_helpers, output)
