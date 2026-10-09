@@ -42,10 +42,10 @@ in `tests/test_init.py`), which is why this was never caught.
    0 ok, 1 failure, 130 SIGINT.
    - `init.py`: all `return 1` / `return 130`; `sys` is already imported.
    - `pkgstatus.py`: the `except` branch; add `import sys` if missing.
-   - `swman.py`: the "must specify at least one operation" branch (consider
-     `2` for usage errors, the Click convention, or raise `click.UsageError`
-     which prints help and exits 2), and the final
-     `sys.exit(1 if failed_count > 0 else 0)`.
+   - `swman.py`: the "must specify at least one operation" branch raises
+     `click.UsageError` (prints usage, exits 2, the Click convention; this
+     replaces the manual `click.echo` of the error and help text), and the
+     final result becomes `sys.exit(1 if failed_count > 0 else 0)`.
 2. Remove the now-redundant `sys.exit(main())` wrappers only if they exist
    next to Click commands; harmless otherwise.
 3. Tests: add `CliRunner` tests asserting `result.exit_code` for each failure
@@ -65,7 +65,7 @@ in `tests/test_init.py`), which is why this was never caught.
 
 - New exit-code tests (above), `make test-unit`, `make test-compile`.
 - `make test-arch` / `make test-debian` for the hidden-failure sweep.
-- Manual: `dotfiles-swman` (no args) -> `echo $?` is non-zero.
+- Manual: `dotfiles-swman` (no args) -> `echo $?` is 2.
 
 ## Dependencies
 
@@ -73,11 +73,14 @@ in `tests/test_init.py`), which is why this was never caught.
   (`project_status.py`, `pkgstatus.py`, `swman.py`), to avoid conflicts. Not a
   hard blocker.
 
+## Decisions (from the owner's answers on the issue)
+
+1. **swman usage errors:** follow the Click convention: `click.UsageError`,
+   exit code 2.
+2. **`pkgstatus --refresh` failures:** fail loudly. The tool exits non-zero and
+   the systemd unit is marked failed.
+3. **SIGINT:** keep exit code 130.
+
 ## Open Questions
 
-1. **Usage errors in swman:** exit 1 (today's intent) or 2 (Click convention
-   via `click.UsageError`)?
-2. **`pkgstatus --refresh` failures:** should the systemd unit fail loudly, or
-   should the tool stay exit 0 for refresh failures so the timer is not
-   marked failed (it already logs the error)?
-3. **SIGINT:** keep 130 (shell convention)?
+None open.
