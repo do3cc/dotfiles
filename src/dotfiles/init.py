@@ -123,7 +123,6 @@ class Linux:
                 ("fish", "fish"),
                 ("lazy_nvim", "nvim"),
                 ("git", "git"),
-                ("mr", "mr"),
             ],
             local_bin_files=["*"],
             systemd_user_services=["pkgstatus-update.timer"],
