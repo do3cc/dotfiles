@@ -837,7 +837,8 @@ class Linux:
         listed = run_command_with_error_handling(
             ["/usr/bin/gh", "ssh-key", "list"], logger, output, "List GitHub SSH keys"
         )
-        if key_blob in listed.stdout:
+        has_auth, has_signing = parse_ssh_key_list(listed.stdout, key_blob)
+        if has_auth:
             output.success("SSH key already on GitHub", logger=logger)
         else:
             run_command_with_error_handling(
@@ -854,6 +855,94 @@ class Linux:
                 "Add SSH key to GitHub",
             )
             output.success("Uploaded SSH key to GitHub", logger=logger)
+
+        self.setup_ssh_signing(logger, output, pub_key, has_signing)
+
+    def setup_ssh_signing(
+        self,
+        logger: LoggingHelpers,
+        output: ConsoleOutput,
+        pub_key: Path,
+        registered: bool,
+    ) -> None:
+        """Register the SSH key as a GitHub signing key and write allowed_signers.
+
+        git/config signs commits and tags with this key (gpg.format = ssh).
+        GitHub needs it as a separate "signing" key to show "Verified", and
+        git needs ~/.ssh/allowed_signers to verify signatures locally.
+        """
+        hostname = socket.gethostname()
+        if registered:
+            output.success("SSH signing key already on GitHub", logger=logger)
+        else:
+            # The token needs an extra scope; this opens the browser flow
+            run_interactive_command(
+                [
+                    "/usr/bin/gh",
+                    "auth",
+                    "refresh",
+                    "-h",
+                    "github.com",
+                    "-s",
+                    "admin:ssh_signing_key",
+                ],
+                logger,
+                output,
+                "Add GitHub scope for SSH signing keys",
+                timeout=600,
+            )
+            run_command_with_error_handling(
+                [
+                    "/usr/bin/gh",
+                    "ssh-key",
+                    "add",
+                    str(pub_key),
+                    "--type",
+                    "signing",
+                    "-t",
+                    f"{hostname} signing",
+                ],
+                logger,
+                output,
+                "Add SSH signing key to GitHub",
+            )
+            output.success("Uploaded SSH signing key to GitHub", logger=logger)
+
+        try:
+            email = run_command_with_error_handling(
+                ["git", "config", "--get", "user.email"],
+                logger,
+                output,
+                "Read git user.email",
+            ).stdout.strip()
+        except CalledProcessError:
+            output.warning(
+                "git user.email is not set, skipping ~/.ssh/allowed_signers",
+                logger=logger,
+            )
+            return
+
+        keys = [" ".join(pub_key.read_text().split()[:2])]
+        try:
+            api = run_command_with_error_handling(
+                [
+                    "/usr/bin/gh",
+                    "api",
+                    "user/ssh_signing_keys",
+                    "--jq",
+                    ".[].key",
+                ],
+                logger,
+                output,
+                "List GitHub signing keys",
+            )
+            keys.extend(api.stdout.split("\n"))
+        except CalledProcessError:
+            logger.log_warning("github_signing_keys_unavailable")
+
+        allowed_signers = self.homedir / ".ssh" / "allowed_signers"
+        if write_allowed_signers(allowed_signers, email, keys):
+            output.success(f"Updated {allowed_signers}", logger=logger)
 
     def link_accounts(self, logger: LoggingHelpers, output: ConsoleOutput):
         if self.no_remote_mode:
@@ -1872,6 +1961,44 @@ class Debian(Linux):
             logger.log_exception(e, "system_update_failed")
             output.error(f"ERROR during system update: {e}")
             raise
+
+
+def parse_ssh_key_list(stdout: str, key_blob: str) -> tuple[bool, bool]:
+    """Return (authentication key present, signing key present) for a key blob.
+
+    `gh ssh-key list` prints one line per registered key; the same public key can
+    appear twice, once as authentication and once as signing key.
+    """
+    has_auth = has_signing = False
+    for line in stdout.splitlines():
+        if key_blob not in line:
+            continue
+        if "signing" in line.lower().split():
+            has_signing = True
+        else:
+            has_auth = True
+    return has_auth, has_signing
+
+
+def write_allowed_signers(path: Path, email: str, keys: list[str]) -> bool:
+    """Make sure every key is listed for `email` in an ssh allowed_signers file.
+
+    Existing lines are kept. Returns True if the file changed.
+    """
+    existing = path.read_text().splitlines() if path.exists() else []
+    lines = list(existing)
+    for key in keys:
+        key = key.strip()
+        if not key:
+            continue
+        line = f'{email} namespaces="git" {key}'
+        if line not in lines:
+            lines.append(line)
+    if lines == existing:
+        return False
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n")
+    return True
 
 
 def detect_operating_system(logger: LoggingHelpers, no_remote_mode: bool = False):

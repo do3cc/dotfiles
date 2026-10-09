@@ -101,8 +101,19 @@ SSH key per machine at the OpenSSH default path `~/.ssh/id_ed25519`:
 4. Uploads the public key to GitHub with `gh ssh-key add`, titled
    `"<hostname>"`, unless `gh ssh-key list` already has it.
 
+5. Registers the same key on GitHub as a **signing** key
+   (`gh ssh-key add --type signing`, titled `"<hostname> signing"`; the first
+   time this asks for the extra `admin:ssh_signing_key` token scope in the
+   browser) and writes `~/.ssh/allowed_signers` with your `user.email` and the
+   signing keys GitHub knows about, so `git log --show-signature` and
+   `git verify-commit` work on every machine.
+
 Every step is idempotent. Re-running init repairs a missing config entry or a
 missing GitHub upload.
+
+`git/config` signs every commit and tag with this key (`gpg.format = ssh`,
+`commit.gpgSign`, `tag.gpgSign`). Without the key, `git commit` fails; run
+`dotfiles-init` first on a new machine.
 
 The `ssh-agent` is started by the fish plugin `danhper/fish-ssh-agent`
 (`fish/conf.d/fish-ssh-agent.fish`), which keeps its environment in
