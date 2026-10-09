@@ -15,8 +15,9 @@ on changed files only) fails on any commit touching an affected file.
 - The repository has **no ruff configuration** (no `[tool.ruff]` in
   `pyproject.toml`, no `ruff.toml`) and does not pin ruff, so the rule set is
   whatever the installed ruff version enables by default. A newer ruff can
-  therefore add new violations without any code change. The hook runs
-  `ruff check --fix` with `language: system`, so developers' versions differ.
+  therefore add new violations without any code change. **Decided (issue
+  comment): keep ruff's defaults and do not pin; the risk of new failures with
+  newer versions is accepted.**
 - Breakdown:
 
 | Rule                               | Count | Fix                                              |
@@ -42,32 +43,42 @@ on changed files only) fails on any commit touching an affected file.
 
 ## Implementation Approach
 
-1. **Config first.** Add a `[tool.ruff]` section to `pyproject.toml` that
-   makes the current rule set explicit (`lint.select`), so the result no
-   longer depends on the ruff version, and pin ruff in the `dev`/`test`
-   dependency group (or the hook's `entry`). Which rules to keep is Open
-   Question 1.
-2. **Auto-fixes, one commit:** `uvx ruff check --fix .` then
+Decisions from the issue comment are folded in (see "Decisions" below).
+
+1. **Auto-fixes, one commit:** `uvx ruff check --fix .` then
    `ruff format .`; review the diff (annotation-only changes in
    `project_status.py`, import order elsewhere). `make test-unit` and pyright
-   must still pass.
-3. **Manual fixes, one commit:**
+   must still pass. No config or version pin is added.
+2. **Manual fixes, one commit:**
    - `B008` `logging_config.py:21`: move the call out of the default.
    - Tests: `B018` (assign or delete the expression), `TRY002` (use a custom
      exception class or `RuntimeError`), `DTZ005` (`datetime.now(tz=UTC)`).
-   - `EXE001`: pick one (see Open Question 3).
-4. **BLE001 decisions, one commit:** for each of the 17 sites, either narrow
-   the exception (for example `OSError`, `subprocess.SubprocessError`,
-   `json.JSONDecodeError`) or keep it with `# noqa: BLE001  # <reason>` where
-   the tool must never crash (status checks that fall back to a degraded
-   result). Log through `logger.log_exception` in every kept site (already the
-   pattern).
-5. Verify: `uvx ruff check .` and `uvx ruff format --check .` clean; pyright;
+   - `EXE001`: remove the shebang from `project_status.py`.
+3. **BLE001, one commit, decided per site by reading the context.** None of
+   the 17 flagged sites re-raises (ruff already exempts catch-and-re-raise),
+   so there is no "log and re-raise" case to mark. Proposed classification,
+   to be confirmed against the surrounding code while implementing:
+
+   | Site                                          | What the handler does                                                | Proposed                                                                                        |
+   | --------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+   | `swman.py` 228, 336, 487, 572, 650, 732       | per-manager `update()`: log, return `UpdateResult(FAILED)`           | keep, `# noqa: BLE001  # one failing manager must not abort the others`                         |
+   | `swman.py` 777, 798, 820 (orchestrator loops) | log, record `(False, 0)` / FAILED result                             | keep, same reason; 820 does **not** log, so add `logger.log_exception`                          |
+   | `pkgstatus.py` 173, 275, 497                  | cache refresh / status probes: log and fall back to a degraded value | keep with `noqa` and reason                                                                     |
+   | `pkgstatus.py` 84 (read fish config)          | log, return default                                                  | narrow to the errors the read can raise (`OSError`) if the body allows                          |
+   | `pkgstatus.py` 309                            | parse ISO timestamp                                                  | narrow to `ValueError` / `OSError`                                                              |
+   | `pkgstatus.py` 617                            | top-level `main()` catch (same pattern as `init.py`)                 | keep with `noqa` (like `init.py`); coordinate with #76                                          |
+   | `project_status.py` 362                       | worktree status via subprocess                                       | narrow to `OSError` / `subprocess.SubprocessError` if that covers what the body calls           |
+   | `status_cache.py` 282                         | cache write failed: log, clean temp file                             | narrow to `OSError` / `TypeError` / `ValueError` if that covers the body, else keep with `noqa` |
+
+   Any site where narrowing would change behaviour (an exception that used to
+   be swallowed would now propagate) stays as `noqa` with a reason instead.
+
+4. Verify: `uvx ruff check .` and `uvx ruff format --check .` clean; pyright;
    `make test-unit`; `make test-compile`.
 
 ## Files to Modify
 
-`pyproject.toml`, `src/dotfiles/project_status.py`, `swman.py`,
+`src/dotfiles/project_status.py`, `swman.py`,
 `pkgstatus.py`, `status_cache.py`, `logging_config.py`,
 `output_formatting.py`, `process_helper.py`, and the test files listed above.
 
@@ -84,16 +95,18 @@ narrowing an `except` is deliberately decided.
 - Narrowed exceptions in `swman.py` can change failure behaviour; consider
   doing those after #76 so exit codes make failures visible.
 
+## Decisions (from the owner's answers on the issue)
+
+1. **Rule set:** use ruff's defaults. No explicit `select`, no config section.
+2. **BLE001:** decide per site from context; sites that only log (and
+   re-raise) may be kept with `noqa`. Finding while preparing this plan: no
+   site re-raises, all 17 log and degrade; see the table above.
+3. **`EXE001`:** remove the shebang from `project_status.py`.
+4. **Pinning ruff:** do not pin; accept that newer ruff versions may add
+   failures later.
+
 ## Open Questions
 
-1. **Rule set:** keep everything ruff 0.16 enables by default (current
-   behaviour), or choose an explicit smaller set (for example `E,F,I,UP,B`)
-   and drop the opinionated ones (`BLE`, `DTZ`, `TRY`)?
-2. **BLE001:** narrow all 17 sites, or keep deliberate ones with `noqa` and a
-   reason? A tool-specific default ("never crash, log and degrade") would let
-   us ignore the rule for `src/dotfiles/{swman,pkgstatus,status_cache}.py`
-   via `per-file-ignores` instead of 17 inline comments.
-3. **`EXE001`:** make `project_status.py` executable or remove the shebang
-   (it runs through the `dotfiles-status` entry point)? Removing is simpler.
-4. **Pinning ruff:** pin in the dependency group (and run the hook via
-   `uv run ruff`) so everyone, including prek and CI, uses one version?
+None open. One note for review: `swman.py:820` swallows an exception without
+logging it; the plan adds a `log_exception` call there, which is a small
+behaviour addition beyond pure lint cleanup.
