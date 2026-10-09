@@ -108,5 +108,5 @@ narrowing an `except` is deliberately decided.
 ## Open Questions
 
 None open. One note for review: `swman.py:820` swallows an exception without
-logging it; the plan adds a `log_exception` call there, which is a small
-behaviour addition beyond pure lint cleanup.
+logging it. That method (`update_all`) is unused and is handled in #80, so
+this ticket only adds the `noqa` there and does not add logging.
