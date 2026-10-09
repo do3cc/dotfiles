@@ -1881,6 +1881,14 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
             output.status("No cache to clear", logger=logger)
 
     try:
+        if "DOTFILES_ENVIRONMENT" in os.environ:
+            output.error(
+                "DOTFILES_ENVIRONMENT is no longer supported: there are no profiles",
+                logger=logger,
+            )
+            output.info("Unset it and run dotfiles-init again", emoji="💡")
+            sys.exit(1)
+
         logger.log_info("init_started", no_remote_mode=no_remote)
 
         output.status(

@@ -548,6 +548,16 @@ def test_debian_check_packages_exception(mock_logging_helpers, monkeypatch):
     assert missing == packages
 
 
+def test_main_rejects_dotfiles_environment():
+    """A leftover DOTFILES_ENVIRONMENT must fail loudly, not be ignored."""
+    from click.testing import CliRunner
+
+    result = CliRunner().invoke(
+        init.main, ["--quiet"], env={"DOTFILES_ENVIRONMENT": "private"}
+    )
+    assert result.exit_code == 1
+
+
 def test_main_os_detection_failure(monkeypatch):
     """Test main() handles OS detection failures without crashing."""
     from click.testing import CliRunner
