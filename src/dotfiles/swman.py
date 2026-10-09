@@ -7,10 +7,11 @@ A unified interface to manage updates across multiple package managers
 and tools. Designed to work with any system, not just dotfiles.
 """
 
+import re
 import sys
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
 from subprocess import CalledProcessError, SubprocessError, TimeoutExpired
@@ -39,17 +40,76 @@ class UpdateStatus(Enum):
 
 
 @dataclass
+class PackageUpdate:
+    name: str
+    old: str
+    new: str
+
+
+@dataclass
 class UpdateResult:
     name: str
     status: UpdateStatus
     message: str
     duration: float
+    # Packages a dry run would update; None = this manager cannot preview
+    updates: list[PackageUpdate] | None = None
+
+
+_ARROW_RE = re.compile(r"^(\S+)\s+(\S+)\s+->\s+(\S+)")
+_APT_RE = re.compile(r"^([^/\s]+)/\S+\s+(\S+)\s+\S+\s+\[upgradable from: ([^\]]+)\]")
+_UV_RE = re.compile(r"^(\S+)\s+v?(\S+)\s+\[latest: v?([^\]]+)\]")
+
+
+def _parse_lines(
+    lines: list[str], pattern: re.Pattern[str], old_first: bool
+) -> list[PackageUpdate]:
+    """One PackageUpdate per non-empty line; unparseable lines keep the raw text.
+
+    Keeping a fallback entry means the number of updates always equals the
+    number of lines, so counts do not depend on the output format.
+    """
+    updates: list[PackageUpdate] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        match = pattern.match(line)
+        if match is None:
+            updates.append(PackageUpdate(line, "?", "?"))
+        elif old_first:
+            updates.append(PackageUpdate(match[1], match[2], match[3]))
+        else:
+            updates.append(PackageUpdate(match[1], match[3], match[2]))
+    return updates
+
+
+def parse_arrow_updates(stdout: str) -> list[PackageUpdate]:
+    """`name old -> new` lines, as printed by `checkupdates` and `yay -Qu`."""
+    return _parse_lines(stdout.splitlines(), _ARROW_RE, old_first=True)
+
+
+def parse_apt_upgradable(stdout: str) -> list[PackageUpdate]:
+    """Lines of `apt list --upgradable`: `name/suite new arch [upgradable from: old]`."""
+    lines = [line for line in stdout.splitlines() if "/" in line]
+    return _parse_lines(lines, _APT_RE, old_first=False)
+
+
+def parse_uv_outdated(stdout: str) -> list[PackageUpdate]:
+    """Lines of `uv tool list --outdated`: `name vOLD [latest: NEW]`.
+
+    The `- executable` lines uv prints below each tool are ignored.
+    """
+    lines = [line for line in stdout.splitlines() if "[latest:" in line]
+    return _parse_lines(lines, _UV_RE, old_first=True)
 
 
 class PackageManager(ABC):
     def __init__(self, name: str, manager_type: ManagerType) -> None:
         self.name: str = name
         self.type: ManagerType = manager_type
+        # Filled by check_updates(); None = unknown / cannot be determined
+        self.last_updates: list[PackageUpdate] | None = None
 
     @abstractmethod
     def is_available(self, logger: LoggingHelpers, output: ConsoleOutput) -> bool:
@@ -119,16 +179,14 @@ class PacmanManager(PackageManager):
 
             if result.returncode == 0:
                 # Updates available
-                count = (
-                    len(result.stdout.strip().split("\n"))
-                    if result.stdout.strip()
-                    else 0
-                )
+                self.last_updates = parse_arrow_updates(result.stdout)
+                count = len(self.last_updates)
                 logger = logger.bind(updates_count=count)
                 logger.log_info("update_check_completed")
                 return count > 0, count
             elif result.returncode == 2:
                 # No updates available (checkupdates returns 2 when no updates)
+                self.last_updates = []
                 logger.log_info("update_check_completed", updates_count=0)
                 return False, 0
             else:
@@ -156,6 +214,7 @@ class PacmanManager(PackageManager):
                 status=UpdateStatus.SUCCESS,
                 message=f"Would update {count} packages",
                 duration=time.time() - start_time,
+                updates=self.last_updates,
             )
 
         try:
@@ -259,11 +318,8 @@ class YayManager(PackageManager):
             )
             logger = logger.bind(returncode=result.returncode, stderr=result.stderr)
             if result.returncode == 0:
-                count = (
-                    len(result.stdout.strip().split("\n"))
-                    if result.stdout.strip()
-                    else 0
-                )
+                self.last_updates = parse_arrow_updates(result.stdout)
+                count = len(self.last_updates)
                 logger = logger.bind(updates_count=count)
                 logger.log_info("update_check_completed")
                 return count > 0, count
@@ -288,6 +344,7 @@ class YayManager(PackageManager):
                 status=UpdateStatus.SUCCESS,
                 message=f"Would update {count} AUR packages",
                 duration=time.time() - start_time,
+                updates=self.last_updates,
             )
 
         try:
@@ -385,9 +442,9 @@ class DebianSystemManager(PackageManager):
             )
             logger = logger.bind(returncode=result.returncode, stderr=result.stderr)
             if result.returncode == 0:
-                # Count lines excluding header
-                lines = result.stdout.strip().split("\n")
-                count = len([line for line in lines if "/" in line]) if lines else 0
+                # The "Listing..." header has no "/", package lines do
+                self.last_updates = parse_apt_upgradable(result.stdout)
+                count = len(self.last_updates)
                 logger = logger.bind(updates_count=count)
                 logger.log_info("update_check_completed")
                 return count > 0, count
@@ -415,6 +472,7 @@ class DebianSystemManager(PackageManager):
                 status=UpdateStatus.SUCCESS,
                 message=f"Would update {count} packages",
                 duration=time.time() - start_time,
+                updates=self.last_updates,
             )
 
         try:
@@ -508,21 +566,24 @@ class UvToolsManager(PackageManager):
         self, logger: LoggingHelpers, output: ConsoleOutput
     ) -> tuple[bool, int]:
         logger = self.bind_log(logger)
-        # UV doesn't have a direct "check updates" command yet
-        # We'd need to parse `uv tool list` and check each tool
-        # Return cannot_determine status instead of false positive
-        result = (False, -1)  # -1 indicates "cannot determine"
-        del output
-
-        logger.log_info(
-            "manager_check_result",
-            can_check=False,
-            has_updates=result[0],
-            count=result[1],
-            reason="no_outdated_command_available",
-        )
-
-        return result
+        try:
+            result = run_command_with_error_handling(
+                ["uv", "tool", "list", "--outdated"],
+                logger,
+                output,
+                description="List outdated uv tools",
+                timeout=60,
+            )
+        except (SubprocessError, OSError) as e:
+            # No network or uv problem: report "cannot determine", do not fail
+            logger.log_exception(e, "update_check_failed")
+            self.last_updates = None
+            return False, -1
+        self.last_updates = parse_uv_outdated(result.stdout)
+        count = len(self.last_updates)
+        logger = logger.bind(updates_count=count)
+        logger.log_info("update_check_completed")
+        return count > 0, count
 
     def update(
         self, logger: LoggingHelpers, output: ConsoleOutput, dry_run: bool = False
@@ -531,12 +592,20 @@ class UvToolsManager(PackageManager):
         start_time = time.time()
 
         if dry_run:
+            has_updates, count = self.check_updates(logger, output)
+            logger = logger.bind(has_updates=has_updates, count=count)
             logger.log_info("update_simulated")
+            message = (
+                f"Would upgrade {count} uv tools"
+                if count >= 0
+                else "Would upgrade all uv tools (preview not available)"
+            )
             return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.SUCCESS,
-                message="Would upgrade all uv tools",
+                message=message,
                 duration=time.time() - start_time,
+                updates=self.last_updates,
             )
 
         try:
@@ -625,7 +694,7 @@ class LazyNvimManager(PackageManager):
             return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.SUCCESS,
-                message="Would update Neovim plugins",
+                message="Would update Neovim plugins (preview not available)",
                 duration=time.time() - start_time,
             )
 
@@ -703,7 +772,7 @@ class FisherManager(PackageManager):
             return UpdateResult(
                 name=self.name,
                 status=UpdateStatus.SUCCESS,
-                message="Would update Fish plugins",
+                message="Would update Fish plugins (preview not available)",
                 duration=time.time() - start_time,
             )
 
@@ -842,6 +911,31 @@ def print_status_table(
     output.table("Software Manager Status", ["Manager", "Status", "Updates"], rows)
 
 
+def print_update_preview(
+    updates_by_manager: dict[str, list[PackageUpdate] | None],
+    output: ConsoleOutput,
+    summary: str,
+) -> None:
+    """Print one table of packages per manager and a total line.
+
+    `summary` is the wording of the total, for example "Would update"; managers
+    that cannot preview (updates is None) are listed as such.
+    """
+    total = 0
+    managers = 0
+    for name, updates in updates_by_manager.items():
+        if updates is None:
+            output.status(f"{name}: preview not available", emoji="⚠️")
+            continue
+        if not updates:
+            continue
+        rows = [[u.name, u.old, u.new] for u in updates]
+        output.table(name, ["Package", "Current", "New"], rows, emoji="📦")
+        total += len(updates)
+        managers += 1
+    output.status(f"{summary} {total} packages across {managers} managers", emoji="📦")
+
+
 def print_results_summary(results: list[UpdateResult], output: ConsoleOutput) -> None:
     """Print update results summary using Rich."""
     rows: list[list[str]] = []
@@ -934,6 +1028,15 @@ def main(
             output.json(check_results)
         else:
             print_status_table(check_results, output)
+            print_update_preview(
+                {
+                    m.name: m.last_updates
+                    for m in orchestrator.managers
+                    if m.name in check_results
+                },
+                output,
+                "Updates available:",
+            )
         return 0
 
     results: list[UpdateResult] = []
@@ -975,12 +1078,19 @@ def main(
                     "status": r.status.value,
                     "message": r.message,
                     "duration": r.duration,
+                    "updates": (
+                        None if r.updates is None else [asdict(u) for u in r.updates]
+                    ),
                 }
                 for r in results
             ]
         )
     else:
         print_results_summary(results, output)
+        if dry_run:
+            print_update_preview(
+                {r.name: r.updates for r in results}, output, "Would update"
+            )
 
     # Log completion and return appropriate exit code
     failed_count = sum(1 for r in results if r.status == UpdateStatus.FAILED)

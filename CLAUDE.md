@@ -258,8 +258,11 @@ uv run dotfiles-swman --system    # pacman, yay
 uv run dotfiles-swman --tools     # uv tools
 uv run dotfiles-swman --plugins   # neovim, fish plugins
 
-# Update everything with preview
+# Update everything with preview (lists package, current and new version per manager)
 uv run dotfiles-swman --all --dry-run
+
+# --check lists the available updates per package too
+uv run dotfiles-swman --check
 
 # Legacy direct execution
 ./swman.py --check
