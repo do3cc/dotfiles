@@ -580,6 +580,14 @@ This test:
 - ✅ Tests `dotfiles-pkgstatus --help`
 - ✅ Ensures all imports and CLI interfaces work
 
+### Unit Tests
+
+```bash
+make test-unit    # uv run --group test pytest
+```
+
+Test dependencies live in the `test` dependency group, which plain `uv sync` does not install. Always use `uv run --group test ...` (or `make test-unit`).
+
 ### Full Integration Testing
 
 The repository includes comprehensive integration tests using containers:

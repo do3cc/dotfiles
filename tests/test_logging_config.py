@@ -1,10 +1,13 @@
 """Tests for logging_config.py - structured logging with LoggingHelpers."""
 
 # pyright: reportMissingImports=false
-from dotfiles import logging_config
-import pytest
 import subprocess
-from hypothesis import given, strategies as st, settings, HealthCheck
+
+import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
+
+from dotfiles import logging_config
 
 
 @pytest.fixture
@@ -464,7 +467,7 @@ def test_log_exception_with_nested_exception(logger, unwrapped_logger):
 
 def test_log_exception_with_additional_context(logger, unwrapped_logger):
     """log_exception() should include additional context in error log."""
-    exception = IOError("file not found")
+    exception = OSError("file not found")
     logger.log_exception(
         exception,
         "failed to read config",
@@ -538,7 +541,7 @@ def test_log_package_operation_success(logger, unwrapped_logger):
         "package_operation",
         manager="pacman",
         operation="install",
-        package_count=3,
+        package_count=len(packages),
         packages=packages,
         success=True,
     )

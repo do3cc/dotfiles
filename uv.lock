@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12.3"
 
 [[package]]
@@ -110,9 +110,9 @@ wheels = [
 name = "dotfiles"
 version = "0.1.0"
 source = { editable = "." }
+default-groups = ["dev", "test"]
 dependencies = [
     { name = "click" },
-    { name = "pytest-cov" },
     { name = "pyyaml" },
     { name = "rich" },
     { name = "structlog" },
@@ -126,12 +126,12 @@ test = [
     { name = "faker" },
     { name = "hypothesis" },
     { name = "pytest" },
+    { name = "pytest-cov" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.0.0" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "structlog", specifier = ">=25.4.0" },
@@ -143,6 +143,7 @@ test = [
     { name = "faker", specifier = ">=37.11.0" },
     { name = "hypothesis", specifier = ">=6.140.3" },
     { name = "pytest", specifier = ">=8.4.2" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
 ]
 
 [[package]]

@@ -1,4 +1,4 @@
-.PHONY: test test-arch test-debian test-ubuntu test-compile clean help cache-start cache-stop cache-stats cache-images
+.PHONY: test test-arch test-debian test-ubuntu test-compile test-unit clean help cache-start cache-stop cache-stats cache-images
 
 # Cache directory configuration - CI vs local
 CI_CACHE_DIR := ~/.cache/dotfiles-ci
@@ -79,6 +79,10 @@ test-compile:
 	@uv run dotfiles-pkgstatus --help > /dev/null
 	@echo "🎉 All tools can import and show help successfully!"
 	@echo "✅ Compilation test passed"
+
+# Unit and property-based tests (test dependency group is not synced by default)
+test-unit:
+	@uv run --group test pytest
 
 # Test on Arch Linux
 test-arch:

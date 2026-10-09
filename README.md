@@ -98,6 +98,16 @@ uv run dotfiles-pkgstatus --refresh        # Force cache refresh
 make test-compile    # Fast compilation test (~10 seconds)
 ```
 
+### Unit Tests
+
+```bash
+make test-unit       # uv run --group test pytest
+```
+
+Test dependencies (`pytest`, `pytest-cov`, `hypothesis`, `faker`) live in the
+`test` dependency group, which a plain `uv sync` does not install. Use
+`uv run --group test ...` to run them.
+
 ### Full Integration Testing
 
 ```bash
