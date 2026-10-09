@@ -1,0 +1,40 @@
+/homelab_paperlessngx/data
+// Build outputs
+build/
+dist/
+target/
+*.o
+*.exe
+
+// Dependencies (download fresh on each machine)
+node_modules/
+vendor/
+__pycache__/
+
+// IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+// OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+// Git internals: sync working files only; git is the transport for history
+.git
+.worktrees
+
+// Per-machine environments and caches
+.venv
+.direnv
+.ruff_cache
+.pytest_cache
+.hypothesis
+.mypy_cache
+*.pyc
+
+// Large rebuildable VM images (17 GB)
+/homelab2/testing/cache

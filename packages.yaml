@@ -86,8 +86,10 @@ environments:
       - noto-fonts-emoji
       - otf-font-awesome
       - python-gobject
+      - syncthing
       - tailscale
-    debian: []
+    debian:
+      - syncthing
 
   work:
     arch: []

@@ -116,6 +116,21 @@ ssh asks for the passphrase once per agent lifetime.
 Troubleshooting: `ssh-add -l` lists cached keys and `ssh -T git@github.com`
 tests the connection.
 
+## Syncthing
+
+In the `private` environment `dotfiles-init`:
+
+1. Installs the `syncthing` package (see `packages.yaml`).
+2. Enables the packaged `syncthing.service` as a systemd user service.
+3. Adds `#include dotfiles/syncthing/stignore` to `~/projects/.stignore`
+   (keeping any lines already there). `.stignore` is per device and is not
+   synced by Syncthing, so the shared ignore rules (`.git`, `.venv`,
+   `.direnv`, caches, ...) live in `syncthing/stignore` in this repo.
+
+Pairing devices and sharing the `~/projects` folder are still done in the web UI
+(`http://127.0.0.1:8384`). Because `.git` is ignored, treat git as the transport
+for repositories: commit and push before switching machines.
+
 ## Testing
 
 ### Quick Verification

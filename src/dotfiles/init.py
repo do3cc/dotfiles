@@ -135,6 +135,7 @@ class Linux:
         return {
             "private": EnvironmentConfig(
                 config_dirs=[("irssi", "irssi")],
+                systemd_user_services=["syncthing.service"],
             ),
             "work": EnvironmentConfig(
                 ssh_key_email="patrick.gerken@zumtobelgroup.com",
@@ -334,6 +335,42 @@ class Linux:
             raise
 
         self.install_git_hooks(dotfiles_dir, logger, output)
+        if "syncthing.service" in self.config.systemd_user_services:
+            self.setup_syncthing_ignore(dotfiles_dir, logger, output)
+
+    def setup_syncthing_ignore(
+        self, dotfiles_dir: Path, logger: LoggingHelpers, output: ConsoleOutput
+    ):
+        """Make ~/projects/.stignore include the shared patterns from the repo.
+
+        .stignore is per device and not synced by Syncthing, so the shared
+        rules live in syncthing/stignore and are pulled in via #include.
+        Existing machine-specific lines are kept.
+        """
+        logger = logger.bind(operation="setup_syncthing_ignore")
+        projects_dir = self.homedir / "projects"
+        shared = dotfiles_dir / "syncthing" / "stignore"
+        if not projects_dir.is_dir() or not shared.is_file():
+            logger.log_info("syncthing_ignore_skipped")
+            return
+        try:
+            relative = shared.relative_to(projects_dir)
+        except ValueError:
+            output.warning(
+                f"{shared} is not inside {projects_dir}; skipping Syncthing ignore setup",
+                logger=logger,
+            )
+            return
+
+        include = f"#include {relative}"
+        stignore = projects_dir / ".stignore"
+        existing = stignore.read_text() if stignore.exists() else ""
+        if include in existing.splitlines():
+            output.success("Syncthing ignore patterns already included", logger=logger)
+            return
+        stignore.write_text(f"{include}\n{existing}")
+        output.success(f"Added '{include}' to {stignore}", logger=logger)
+        logger.log_info("syncthing_ignore_included", include=include)
 
     def install_git_hooks(
         self, dotfiles_dir: Path, logger: LoggingHelpers, output: ConsoleOutput
