@@ -67,9 +67,9 @@ jobs:
             touch ~/.cache/dotfiles-ci/${{ matrix.os }}/.warmed
           fi
 
-      - name: Test ${{ matrix.os }} minimal environment
+      - name: Test ${{ matrix.os }}
         run: |
           chmod +x test/run_tests.sh
           export CI_CACHE_DIR=~/.cache/dotfiles-ci
-          ./test/run_tests.sh --${{ matrix.os }} --environment minimal --cleanup
+          ./test/run_tests.sh --${{ matrix.os }} --cleanup
         timeout-minutes: 45

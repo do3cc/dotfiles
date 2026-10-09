@@ -1,12 +1,13 @@
 """Tests for package manifest loading."""
 
 from pathlib import Path
-from dotfiles.init import Linux, Arch, Debian
+
+from dotfiles.init import Arch, Debian, Linux
 
 
 def test_package_manifest_loads():
     """Package manifest should load from packages.yaml"""
-    linux = Linux(environment="minimal")
+    linux = Linux()
 
     assert hasattr(linux, "package_manifest")
     assert "base" in linux.package_manifest
@@ -16,21 +17,17 @@ def test_package_manifest_loads():
 
 def test_package_manifest_structure():
     """Package manifest should have expected structure"""
-    linux = Linux(environment="minimal")
+    linux = Linux()
     manifest = linux.package_manifest
 
     # Check top-level keys
     assert "base" in manifest
-    assert "environments" in manifest
+    assert "environments" not in manifest
     assert "aur" in manifest
 
     # Check base has OS-specific lists
     assert isinstance(manifest["base"]["arch"], list)
     assert isinstance(manifest["base"]["debian"], list)
-
-    # Check environments
-    for env in ["minimal", "work", "private"]:
-        assert env in manifest["environments"]
 
 
 def test_package_manifest_file_exists():
@@ -41,7 +38,7 @@ def test_package_manifest_file_exists():
 
 def test_arch_reads_base_packages_from_manifest():
     """Arch class should read base packages from manifest"""
-    arch = Arch(environment="minimal")
+    arch = Arch()
 
     # Verify base packages match manifest
     base_packages = arch.config.packages
@@ -54,7 +51,7 @@ def test_arch_reads_base_packages_from_manifest():
 
 def test_arch_reads_aur_packages_from_manifest():
     """Arch class should read AUR packages from manifest"""
-    arch = Arch(environment="minimal")
+    arch = Arch()
 
     # Verify AUR packages match manifest
     aur_packages = arch.config.aur_packages
@@ -65,36 +62,12 @@ def test_arch_reads_aur_packages_from_manifest():
         assert pkg in aur_packages, f"AUR package {pkg} missing from config"
 
 
-def test_arch_environment_packages():
-    """Arch private environment should include environment-specific packages"""
-    arch = Arch(environment="private")
-
-    packages = arch.config.packages
-    env_packages = arch.package_manifest["environments"]["private"]["arch"]
-
-    # Should include environment-specific packages
-    for pkg in env_packages:
-        assert pkg in packages, f"Private env package {pkg} missing"
-
-
 def test_debian_reads_base_packages_from_manifest():
     """Debian class should read base packages from manifest"""
-    debian = Debian(environment="minimal")
+    debian = Debian()
 
     # apt_packages should come from manifest
     manifest_packages = debian.package_manifest["base"]["debian"]
 
     # Check that apt_packages matches manifest
     assert debian.apt_packages == manifest_packages
-
-
-def test_debian_environment_packages():
-    """Debian environment-specific packages should work (when defined)"""
-    # Currently all Debian environments have empty package lists
-    # This test verifies the structure works for future additions
-    debian = Debian(environment="private")
-
-    env_packages = debian.package_manifest["environments"]["private"]["debian"]
-
-    # Should be a list (even if empty)
-    assert isinstance(env_packages, list)

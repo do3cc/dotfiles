@@ -148,21 +148,13 @@ uv run dotfiles-init
 uv run init.py
 ```
 
-**Environment Configuration:**
-The script requires the `DOTFILES_ENVIRONMENT` environment variable to be set:
+There are no profiles: `dotfiles-init` always installs the full setup.
 
 ```bash
-# Minimal environment (default)
-export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init
-
-# Work environment
-export DOTFILES_ENVIRONMENT=work && uv run dotfiles-init
-
-# Private environment
-export DOTFILES_ENVIRONMENT=private && uv run dotfiles-init
+uv run dotfiles-init
 
 # No-remote mode (skip remote activities)
-export DOTFILES_ENVIRONMENT=minimal && uv run dotfiles-init --no-remote
+uv run dotfiles-init --no-remote
 ```
 
 The script handles:
@@ -212,11 +204,6 @@ base:
   arch: [...] # Arch Linux packages
   debian: [...] # Debian/Ubuntu packages
 
-environments:
-  private:
-    arch: [...]
-    debian: [...]
-
 aur:
   base: [...] # AUR packages for Arch
 ```
@@ -231,11 +218,6 @@ aur:
 1. Edit `packages.yaml`
 2. Add package to appropriate section (`base.arch`, `base.debian`, etc.)
 3. Both init.py and Dockerfile will use it automatically
-
-**To add environment-specific packages:**
-
-1. Add to `environments.<env-name>.arch` or `environments.<env-name>.debian`
-2. Will be installed when running `dotfiles-init` with that environment
 
 **Benefits:**
 
@@ -653,7 +635,7 @@ The CI workflow automatically detects cache directory context via the `CACHE_DIR
 - Configuration files are designed for Wayland environments (Hyprland)
 - Git configuration includes global gitignore patterns
 - Shell integration includes direnv for project-specific environments
-- SSH setup uses one key per machine at `~/.ssh/id_ed25519`; host and environment are in the key comment and the GitHub key title (see README, "SSH Keys")
+- SSH setup uses one key per machine at `~/.ssh/id_ed25519`; host and email are in the key comment and the host is the GitHub key title (see README, "SSH Keys")
 - Always use branches for implementation so that I can review them in isolation in github
 
 ## Claude Code Slash Commands

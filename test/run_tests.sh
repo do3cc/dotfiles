@@ -14,12 +14,11 @@ echo "📁 Project directory: $PROJECT_DIR"
 # Function to run a test
 run_test() {
 	local distro=$1
-	local environment=${2:-minimal}
 	local containerfile="$SCRIPT_DIR/Containerfile.$distro"
 	local image_name="dotfiles-test-$distro"
 	local container_name="dotfiles-test-$distro-$(date +%s)"
 
-	echo "🐧 Testing $distro with $environment environment..."
+	echo "🐧 Testing $distro..."
 
 	# Build the container image
 	echo "🔨 Building container image for $distro..."
@@ -30,7 +29,7 @@ run_test() {
 
 	# Run the test
 	echo "🚀 Running test for $distro..."
-	if podman run --rm --name "$container_name" "$image_name" sh -c "DOTFILES_ENVIRONMENT=$environment uv run dotfiles-init --no-remote"; then
+	if podman run --rm --name "$container_name" "$image_name" sh -c "uv run dotfiles-init --no-remote"; then
 		echo "✅ $distro test passed!"
 		return 0
 	else
@@ -49,7 +48,6 @@ cleanup() {
 
 # Parse command line arguments
 DISTROS=()
-ENVIRONMENT="minimal"
 CLEANUP_AFTER=false
 
 while [[ $# -gt 0 ]]; do
@@ -66,10 +64,6 @@ while [[ $# -gt 0 ]]; do
 		DISTROS=("arch" "debian")
 		shift
 		;;
-	--environment)
-		ENVIRONMENT="$2"
-		shift 2
-		;;
 	--cleanup)
 		CLEANUP_AFTER=true
 		shift
@@ -81,13 +75,12 @@ while [[ $# -gt 0 ]]; do
 		echo "  --arch                 Test Arch Linux only"
 		echo "  --debian               Test Debian only"
 		echo "  --all                  Test all distributions (default)"
-		echo "  --environment ENV      Test environment (minimal|work|private, default: minimal)"
 		echo "  --cleanup              Cleanup images after testing"
 		echo "  --help                 Show this help message"
 		echo ""
 		echo "Examples:"
-		echo "  $0 --all                           # Test all distributions with minimal environment"
-		echo "  $0 --arch --environment private    # Test Arch with private environment"
+		echo "  $0 --all                           # Test all distributions"
+		echo "  $0 --arch                          # Test Arch only"
 		echo "  $0 --debian --cleanup              # Test Debian and cleanup afterward"
 		exit 0
 		;;
@@ -115,7 +108,7 @@ FAILED_TESTS=()
 PASSED_TESTS=()
 
 for distro in "${DISTROS[@]}"; do
-	if run_test "$distro" "$ENVIRONMENT"; then
+	if run_test "$distro"; then
 		PASSED_TESTS+=("$distro")
 	else
 		FAILED_TESTS+=("$distro")
