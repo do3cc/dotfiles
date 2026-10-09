@@ -331,6 +331,34 @@ class Linux:
             output.info("Try: Install uv first or ensure it's in PATH", emoji="💡")
             raise
 
+        self.install_git_hooks(dotfiles_dir, logger, output)
+
+    def install_git_hooks(
+        self, dotfiles_dir: Path, logger: LoggingHelpers, output: ConsoleOutput
+    ):
+        """Install prek as a uv tool and activate the repo's git hooks.
+
+        Failures are reported but not fatal: hooks are a development convenience.
+        """
+        logger = logger.bind(operation="install_git_hooks")
+        try:
+            output.status("Installing prek and git hooks...", logger=logger)
+            run_command_with_error_handling(
+                ["uv", "tool", "install", "prek"], logger, output
+            )
+            run_command_with_error_handling(
+                ["prek", "install"], logger, output, cwd=str(dotfiles_dir)
+            )
+            output.success("prek installed and git hooks activated", logger=logger)
+            logger.log_info("git_hooks_installed")
+        except (CalledProcessError, TimeoutExpired, FileNotFoundError) as e:
+            logger.log_exception(e, "git_hooks_installation_failed")
+            output.warning(f"Could not set up git hooks: {e}", logger=logger)
+            output.info(
+                "Try: uv tool install prek && prek install (in the dotfiles repo)",
+                emoji="💡",
+            )
+
     def link_configs(self, logger: LoggingHelpers, output: ConsoleOutput):
         """Create symlinks with comprehensive error handling"""
         # Get dotfiles repo root directory
