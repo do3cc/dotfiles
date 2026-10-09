@@ -8,6 +8,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **ALWAYS run the pre-commit or prek check when you are done editing files**
 - When editing markdown files, follow the markdownlint rules
 
+### Cloud sessions (Claude Code on the web)
+
+The hooks in `.pre-commit-config.yaml` with `language: system` expect the tools on the machine, as `dotfiles-init` installs them. A cloud session is not provisioned that way, so install what is missing yourself before running the checks:
+
+- **pre-commit / prek**: `uvx pre-commit run --files <changed-files>` (or `uvx prek`) if neither is installed.
+- **shfmt** (shell files): `GOBIN=/tmp/gobin go install mvdan.cc/sh/v3/cmd/shfmt@latest`, then `export PATH=/tmp/gobin:$PATH`.
+- **stylua** (Lua), **fish_indent** (fish, comes with `fish`), **google-java-format**: the hooks skip with "no files to check" unless such files changed. Install the tool when you edit those file types.
+- Python tests: `uv run --group test pytest` (plain `uv sync` does not install the test group).
+- Do not report a hook as passed when it printed `Executable ... not found`; install the tool and re-run.
+
 ### TODO: REVIEW Markers for Code Changes
 
 **MANDATORY**: When modifying any code, you MUST add `# TODO: REVIEW` markers to highlight changes for human review.
