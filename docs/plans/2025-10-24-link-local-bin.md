@@ -51,9 +51,7 @@ def merge_with(self, base_config: "EnvironmentConfig") -> "EnvironmentConfig":
     """Merge this config with a base, with this taking priority."""
     return EnvironmentConfig(
         packages=list(set(base_config.packages).union(set(self.packages))),
-        aur_packages=list(
-            set(base_config.aur_packages).union(set(self.aur_packages))
-        ),
+        aur_packages=list(set(base_config.aur_packages).union(set(self.aur_packages))),
         config_dirs=list(set(base_config.config_dirs).union(set(self.config_dirs))),
         local_bin_files=list(
             set(base_config.local_bin_files).union(set(self.local_bin_files))
@@ -122,9 +120,7 @@ def link_local_bin(self, logger: LoggingHelpers, output: ConsoleOutput):
         logger.log_info("local_bin_directory_created")
     except OSError as e:
         logger.log_exception(e, "local_bin_directory_creation_failed")
-        output.error(
-            f"Cannot create {local_bin_dir} directory: {e}", logger=logger
-        )
+        output.error(f"Cannot create {local_bin_dir} directory: {e}", logger=logger)
         output.info("Try: Check home directory permissions", emoji="💡")
         raise
 
@@ -261,9 +257,7 @@ steps: list[tuple[str, Callable[[LoggingHelpers], None | bool]]] = [
     ),
     (
         "Validating git credential helper",
-        lambda logger: operating_system.validate_git_credential_helper(
-            logger, output
-        ),
+        lambda logger: operating_system.validate_git_credential_helper(logger, output),
     ),
     (
         "Setting up shell",

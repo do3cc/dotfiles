@@ -329,23 +329,15 @@ from hypothesis import strategies as st
 
 # Path strategies for init.py
 unix_paths = st.text(
-    alphabet=st.characters(blacklist_categories=("Cs",)),
-    min_size=1,
-    max_size=200
+    alphabet=st.characters(blacklist_categories=("Cs",)), min_size=1, max_size=200
 )
 
 # Package manager output strategies
-package_lists = st.lists(
-    st.text(min_size=1, max_size=50),
-    min_size=0,
-    max_size=100
-)
+package_lists = st.lists(st.text(min_size=1, max_size=50), min_size=0, max_size=100)
 
 # Log event strategies
 log_events = st.text(
-    alphabet=st.characters(whitelist_categories=("L", "N")),
-    min_size=1,
-    max_size=50
+    alphabet=st.characters(whitelist_categories=("L", "N")), min_size=1, max_size=50
 ).map(lambda s: s.lower().replace(" ", "_"))
 ```
 

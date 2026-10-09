@@ -383,7 +383,7 @@ logger.log_info("update_started")  # Context automatically included
 
 # ❌ WRONG - context is lost
 logger.bind(package_manager="pacman")  # Returns new logger but discarded!
-logger.log_info("update_started")      # Missing context
+logger.log_info("update_started")  # Missing context
 ```
 
 **Standard Event Categories:**
@@ -439,8 +439,12 @@ except Exception as e:
 
 ```python
 from logging_config import (
-    setup_logging, bind_context,
-    log_progress, log_error, log_subprocess_result, log_exception
+    setup_logging,
+    bind_context,
+    log_progress,
+    log_error,
+    log_subprocess_result,
+    log_exception,
 )
 
 # Initialize logging (sets global logger)
@@ -498,6 +502,7 @@ Use Rich (via `ConsoleOutput`) for:
 ```python
 import click
 from output_formatting import ConsoleOutput
+
 
 @click.command()
 @click.option("--verbose", is_flag=True, help="Show detailed output")
