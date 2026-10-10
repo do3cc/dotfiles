@@ -321,6 +321,15 @@ def test_parse_arrow_updates_keeps_unparseable_lines_for_the_count():
     ]
 
 
+def test_parse_arrow_updates_skips_blank_lines_between_entries():
+    # a blank line must not cut the list (mutation testing: `continue` -> `break`)
+    parsed = parse_arrow_updates("git 1-1 -> 2-1\n\nvim 3-1 -> 4-1\n")
+    assert parsed == [
+        PackageUpdate("git", "1-1", "2-1"),
+        PackageUpdate("vim", "3-1", "4-1"),
+    ]
+
+
 def test_parse_apt_upgradable():
     stdout = (
         "Listing... Done\n"
@@ -467,7 +476,9 @@ def test_dry_run_prints_the_package_preview():
     )
     out = _invoke(["--all", "--dry-run"], results=[result, skipped])
     assert out.exit_code == 0
-    assert "git" in out.output and "2.43.0" in out.output and "vim" in out.output
+    assert "git" in out.output
+    assert "2.43.0" in out.output
+    assert "vim" in out.output
     assert "fisher: preview not available" in out.output
     assert "Would update 2 packages across 1 managers" in out.output
 
@@ -477,7 +488,8 @@ def test_check_lists_the_packages_too():
     manager.last_updates = [PackageUpdate("git", "2.42.0", "2.43.0")]
     out = _invoke(["--check"], managers=[manager])
     assert out.exit_code == 0
-    assert "git" in out.output and "2.43.0" in out.output
+    assert "git" in out.output
+    assert "2.43.0" in out.output
     assert "Updates available: 1 packages across 1 managers" in out.output
 
 
@@ -532,3 +544,24 @@ def test_update_by_type_logs_and_continues_when_a_manager_raises():
 
 def test_orchestrator_has_no_unused_update_all():
     assert not hasattr(swman.SoftwareManagerOrchestrator, "update_all")
+
+
+# Property tests for the parsers added in #33 (#84)
+_package = st.from_regex(r"[a-z0-9][a-z0-9.+_-]{0,11}", fullmatch=True)
+_version_string = st.from_regex(r"[0-9][0-9a-z.+:~_-]{0,11}", fullmatch=True)
+
+
+@given(name=_package, suite=_package, old=_version_string, new=_version_string)
+def test_parse_apt_upgradable_roundtrip(name, suite, old, new):
+    line = f"{name}/{suite} {new} amd64 [upgradable from: {old}]"
+
+    parsed = parse_apt_upgradable(f"Listing... Done\n{line}\n")
+
+    assert parsed == [PackageUpdate(name, old, new)]
+
+
+@given(name=_package, old=_version_string, new=_version_string)
+def test_parse_uv_outdated_roundtrip(name, old, new):
+    stdout = f"{name} v{old} [latest: {new}]\n- {name}\n"
+
+    assert parse_uv_outdated(stdout) == [PackageUpdate(name, old, new)]

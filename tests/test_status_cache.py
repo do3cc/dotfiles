@@ -152,9 +152,14 @@ def test_invalidate_removes_only_that_entry(cache, logger):
     assert cache.packages.is_expired()
 
 
-def test_invalidate_missing_file_is_ok(cache, logger):
-    """No cache yet is not an error."""
+def test_invalidate_missing_file_is_ok(cache, logger, tmp_path):
+    """No cache yet is not an error: nothing to delete, nothing created."""
+    assert not cache.packages.path.exists()
+
     cache.packages.invalidate(logger)
+
+    assert not cache.packages.path.exists()
+    assert "cache_invalidated" in (logger.log_file).read_text()
 
 
 def test_invalidate_reraises_on_failure(cache, logger):
@@ -162,5 +167,5 @@ def test_invalidate_reraises_on_failure(cache, logger):
     # A directory in place of the file makes unlink() raise
     cache.packages.path.mkdir(parents=True)
 
-    with pytest.raises(OSError):
+    with pytest.raises(IsADirectoryError):
         cache.packages.invalidate(logger)

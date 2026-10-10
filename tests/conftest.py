@@ -5,6 +5,16 @@ from unittest.mock import MagicMock
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _isolated_home(tmp_path_factory, monkeypatch):
+    """Point HOME at a fresh directory so no test writes to the real ~/.cache.
+
+    setup_logging() without a log_dir writes to ~/.cache/dotfiles/logs; before
+    this fixture the test run appended to the developer's real log file.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
+
+
 @pytest.fixture
 def temp_home(tmp_path):
     """

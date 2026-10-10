@@ -389,25 +389,26 @@ def test_json_with_complex_data(output):
 # ==============================================================================
 
 
-def test_pause_for_interactive_context_manager():
-    """Test that pause_for_interactive context manager works."""
+def test_pause_for_interactive_stops_and_restarts_the_active_progress():
+    """The progress display must be stopped while an interactive command runs."""
     output = ConsoleOutput(verbose=False, quiet=False)
+    progress = MagicMock()
+    progress.tasks = []
+    output._active_progress = progress
 
-    # Should not raise exception
     with output.pause_for_interactive():
-        pass
+        progress.stop.assert_called_once()
+        progress.start.assert_not_called()
+
+    progress.start.assert_called_once()
 
 
-def test_pause_for_interactive_with_active_progress():
-    """Test that pause works even with active progress bars."""
+def test_pause_for_interactive_without_progress_runs_the_body():
     output = ConsoleOutput(verbose=False, quiet=False)
+    ran = []
 
-    # This should work without errors
-    with output.progress_context() as progress:
-        task = progress.add_task("Test", total=10)
+    with output.pause_for_interactive():
+        ran.append(True)
 
-        # Pause should handle active progress gracefully
-        with output.pause_for_interactive():
-            pass
-
-        progress.advance(task)
+    assert ran == [True]
+    assert output._active_progress is None

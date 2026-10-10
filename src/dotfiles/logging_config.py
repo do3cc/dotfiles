@@ -188,7 +188,7 @@ class LoggingHelpers:
         debug_log = logger.bind(
             stdout=result.stdout.strip(), stderr=result.stderr.strip()
         )
-        debug_log.debug("Subprocess output")
+        debug_log.debug("subprocess_output")
 
     def log_exception(
         self, exception: BaseException, context_msg: str, **context: object
