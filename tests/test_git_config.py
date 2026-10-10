@@ -59,6 +59,8 @@ def test_obsolete_settings_are_gone(key):
         ("tag.sort", "version:refname"),
         ("rebase.updateRefs", "true"),
         ("push.followTags", "true"),
+        ("push.useForceIfIncludes", "true"),
+        ("alias.pushf", "push --force-with-lease"),
         ("transfer.fsckObjects", "true"),
         ("help.autocorrect", "prompt"),
         ("gpg.format", "ssh"),
@@ -176,3 +178,59 @@ def test_setup_ssh_signing_survives_github_api_failure(tmp_path, monkeypatch):
     arch.setup_ssh_signing(MagicMock(), MagicMock(), pub, registered=True)
     text = (tmp_path / ".ssh" / "allowed_signers").read_text()
     assert KEY in text
+
+
+def _git(cwd, *args, env=None, check=True):
+    return subprocess.run(
+        ["git", *args], cwd=cwd, capture_output=True, text=True, check=check, env=env
+    )
+
+
+@pytestmark_git
+def test_pushf_refuses_to_overwrite_commits_fetched_in_the_background(tmp_path):
+    """--force-with-lease alone is fooled by a background fetch; the alias must not be."""
+    import os
+
+    env = {
+        **os.environ,
+        "GIT_CONFIG_GLOBAL": str(REPO / "git" / "config"),
+        "GIT_CONFIG_NOSYSTEM": "1",
+    }
+    ident = [
+        "-c",
+        "user.email=t@example.com",
+        "-c",
+        "user.name=t",
+        "-c",
+        "commit.gpgsign=false",
+    ]
+    _git(tmp_path, "init", "-q", "--bare", "remote.git", env=env)
+    for name in ("a", "b"):
+        _git(tmp_path, "clone", "-q", "remote.git", name, env=env, check=False)
+    a, b = tmp_path / "a", tmp_path / "b"
+
+    _git(a, "checkout", "-q", "-b", "feat", env=env)
+    (a / "f").write_text("1")
+    _git(a, "add", "f", env=env)
+    _git(a, *ident, "commit", "-q", "-m", "one", env=env)
+    _git(a, "push", "-q", "-u", "origin", "feat", env=env)
+    _git(b, "fetch", "-q", env=env)
+    _git(b, "checkout", "-q", "feat", env=env)
+
+    # a pushes a new commit; b fetches it (as an IDE would) without integrating it
+    (a / "f").write_text("2")
+    _git(a, *ident, "commit", "-q", "-am", "two", env=env)
+    _git(a, "push", "-q", "origin", "feat", env=env)
+    _git(b, "fetch", "-q", env=env)
+
+    (b / "g").write_text("3")
+    _git(b, "add", "g", env=env)
+    _git(b, *ident, "commit", "-q", "--amend", "-m", "rewrite", env=env)
+
+    result = _git(b, *ident, "pushf", env=env, check=False)
+
+    assert result.returncode != 0
+    remote_tip = _git(
+        tmp_path / "remote.git", "log", "-1", "--format=%s", "feat"
+    ).stdout
+    assert remote_tip.strip() == "two"
