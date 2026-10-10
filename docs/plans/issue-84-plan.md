@@ -97,6 +97,15 @@ Related: #90 (ruff 0.17 lint), #53 (closed, coverage).
 4. **Mutation testing:** run `mutmut` once on `init.py` config building, the `swman.py` parsers and `logging_config.py`; report survivors as findings, not in CI.
 5. **PR split:** PR 1 contains only the audit report (decisions per test) for review; PR 2 applies the fixes, replaces the shell test and adds the AST check.
 
+## Decisions (from the owner)
+
+1. **Guard rails:** the AST "test without assertion" check only (pre-commit and CI). No ruff `PT`/`B015` rules, no ruff config. (Measured: 18 `PT` hits, 14 of them parametrize style.) The 4 real `PT` findings (`PT017`, `PT011`, 2x `PT018`) are fixed by hand in the audit.
+2. **`test_dockerfile_manifest.sh`:** replace it with a pytest that parses `packages.yaml` and `run-claude.sh` and asserts the manifest keys the script reads (`base.debian`) exist; delete the grep script.
+3. **`integration` marker:** documentation only; document the meaning in CLAUDE.md ("drives `main()` end to end with the OS layer mocked"); CI keeps running everything.
+4. **Mutation testing:** run `mutmut` once on `init.py` config building, the `swman.py` parsers and `logging_config.py`; report survivors as findings, not in CI.
+5. **PR split:** PR 1 contains only the audit report (decisions per test) for review; PR 2 applies the fixes, replaces the shell test and adds the AST check.
+6. **CI never runs the pytest suite** (found while implementing #52: `pr.yml` runs only `dotfiles-init --help`, `ci.yml` only the container installs). Add a unit test job to `pr.yml` (`uv sync`, `make test-unit`, the AST check) in PR 2, with `fish` installed so the wt tests do not skip silently. No pre-commit job.
+
 ## Open Questions
 
 None open.
