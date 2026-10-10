@@ -329,7 +329,7 @@ All Python tools in this repository must use structured logging via the shared `
 ### Standard Setup
 
 ```python
-from logging_config import setup_logging, bind_context, log_unused_variables
+from dotfiles.logging_config import setup_logging
 
 # Initialize logging with script name
 logger = setup_logging("script_name")  # e.g. "init", "swman", "pkgstatus"
@@ -339,20 +339,22 @@ logger = setup_logging("script_name")  # e.g. "init", "swman", "pkgstatus"
 
 The logging system provides comprehensive abstractions for production debugging:
 
-- **`log_error()`, `log_warning()`, `log_info()`** - Simple severity-based logging
+`setup_logging()` returns a `LoggingHelpers` instance. Use its methods:
+
+- **`bind()`** - Returns a new logger with context attached (see "Context Binding Pattern")
+- **`log_error()`, `log_warning()`, `log_info()`, `log_debug()`** - Simple severity-based logging
 - **`log_progress()`** - Track operation progress and status
 - **`log_subprocess_result()`** - Comprehensive command execution logging with stdout/stderr
 - **`log_exception()`** - Full exception context with traceback information
-- **`log_file_operation()`** - File system operations tracking
-- **`log_package_operation()`** - Package manager operations logging
+
+There are no generic helpers for file or package operations: bind the context (`logger.bind(manager="pacman")`) and log a specific event (`update_started`, `update_completed`, ...).
 
 ### Logging Conventions
 
 - **JSON format**: All logs are structured JSON written to `~/.cache/dotfiles/logs/dotfiles.log`
 - **User interaction**: Use `print()` for user-facing messages, logs are for debugging/monitoring
-- **Context binding**: Use `bind_context()` to set operation-wide context variables
-- **Unused variables**: Use `log_unused_variables(logger, **vars)` to capture variables that would otherwise trigger linter warnings
-- **Global logger**: All abstractions automatically use the global logger set by `setup_logging()`
+- **Context binding**: Use `logger = logger.bind(...)` to attach operation-wide context (always reassign)
+- **Dependency injection**: Pass the `LoggingHelpers` instance to functions; there is no global logger
 
 ### Event-Based Logging Pattern
 
@@ -433,35 +435,31 @@ except Exception as e:
 ### Enhanced Logging Examples
 
 ```python
-from logging_config import (
-    setup_logging,
-    bind_context,
-    log_progress,
-    log_error,
-    log_subprocess_result,
-    log_exception,
-)
+from dotfiles.logging_config import setup_logging
 
-# Initialize logging (sets global logger)
+# Initialize logging and bind operation-wide context
 logger = setup_logging("mytool")
-bind_context(environment="minimal", operation="check")
+logger = logger.bind(operation="check")
 
 # Progress tracking
-log_progress("starting package installation")
+logger.log_progress("starting_package_installation")
 
 # Error logging with context
-log_error("package not found", package="nonexistent", manager="pacman")
+logger.log_error("package_not_found", package="nonexistent", manager="pacman")
 
 # Comprehensive subprocess logging (includes stdout/stderr)
-result = subprocess.run(["pacman", "-Q", "git"], capture_output=True)
-log_subprocess_result("check git package", ["pacman", "-Q", "git"], result)
+result = subprocess.run(["pacman", "-Q", "git"], capture_output=True, text=True)
+logger.log_subprocess_result("check git package", ["pacman", "-Q", "git"], result)
 
 # Exception logging with full context
 try:
     risky_operation()
 except Exception as e:
-    log_exception(e, "package installation failed", package="problematic-pkg")
+    logger.log_exception(e, "package installation failed", package="problematic-pkg")
 ```
+
+Package manager work follows the same pattern: bind `manager=...` once and log
+the standard events (`update_started`, `update_completed`, ...).
 
 This enhanced logging provides complete observability into every operation, error, and progress step for production debugging.
 
