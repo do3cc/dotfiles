@@ -89,15 +89,14 @@ None blocking. Touches many test files; do it after the open PRs (#91) are
 merged to avoid conflicts in `tests/test_init.py` / `tests/test_swman.py`.
 Related: #90 (ruff 0.17 lint), #53 (closed, coverage).
 
+## Decisions (from the owner)
+
+1. **Guard rails:** the AST "test without assertion" check only (pre-commit and CI). No ruff `PT`/`B015` rules, no ruff config. (Measured: 18 `PT` hits, 14 of them parametrize style.) The 4 real `PT` findings (`PT017`, `PT011`, 2x `PT018`) are fixed by hand in the audit.
+2. **`test_dockerfile_manifest.sh`:** replace it with a pytest that parses `packages.yaml` and `run-claude.sh` and asserts the manifest keys the script reads (`base.debian`) exist; delete the grep script.
+3. **`integration` marker:** documentation only; document the meaning in CLAUDE.md ("drives `main()` end to end with the OS layer mocked"); CI keeps running everything.
+4. **Mutation testing:** run `mutmut` once on `init.py` config building, the `swman.py` parsers and `logging_config.py`; report survivors as findings, not in CI.
+5. **PR split:** PR 1 contains only the audit report (decisions per test) for review; PR 2 applies the fixes, replaces the shell test and adds the AST check.
+
 ## Open Questions
 
-1. **Guard rails:** add the AST "test without assertion" check to pre-commit and
-   CI (proposed)? And also enable ruff `PT`/`B015` rules via a
-   `[tool.ruff.lint]` section, which contradicts "ruff defaults only" from #77?
-2. **`test_dockerfile_manifest.sh`:** wire it into `make test-unit`/CI
-   (proposed, if it still passes) or delete it?
-3. **`integration` marker:** keep it as documentation only and keep running
-   everything (proposed), or run those tests in a separate CI step/target?
-4. **Mutation testing:** run `mutmut` once and report (proposed), or skip it?
-5. **Scope of one PR:** audit and fixes together (proposed), or audit report
-   first (for your review) and the fixes in a second PR?
+None open.
