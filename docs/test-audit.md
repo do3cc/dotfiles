@@ -82,7 +82,36 @@ hide the gap.
 
 ## 8. Mutation testing
 
-MUTATION_RESULTS_PLACEHOLDER
+One run of `mutmut` 3.8 in a scratch worktree (config not committed), restricted
+to `logging_config.py` and the parsers of `swman.py` (the new, pure code from
+#33). **`init.py` was not mutated:** mutant generation for its roughly 2,100
+lines did not finish within 10 minutes, so its config building is not covered
+by this run.
+
+| Target                                                                                                  | Mutants | Killed | Survived |
+| ------------------------------------------------------------------------------------------------------- | ------- | ------ | -------- |
+| `swman.py` parsers (`parse_arrow_updates`, `parse_apt_upgradable`, `parse_uv_outdated`, `_parse_lines`) | 64      | 62     | 2        |
+| `logging_config.py`                                                                                     | 128     | 94     | 34       |
+
+**Caveat on the numbers.** mutmut reports 16 survivors in `setup_logging`, but
+that function configures process-global structlog state, and the result is not
+reliable: I applied one of them by hand (`logger_factory=None`) and the tests
+**do** fail (4 failures running `test_logging_config.py` alone). Those 16 are
+treated as tool artifacts, not as findings. The other survivors were each
+checked by hand by applying the mutation and running the tests:
+
+| Survivor                                                                   | Verdict                                                                                                                                                                         | Action in PR 2                                 |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `_parse_lines`: `continue` replaced by `break` on an empty line            | **Real gap.** No test has an empty line _between_ entries (the existing one only has a trailing empty line); a blank line in `checkupdates` output would silently cut the list. | Add the test.                                  |
+| `parse_apt_upgradable`: `old_first=False` replaced by `old_first=None`     | Equivalent mutant (`None` is falsy, same behaviour).                                                                                                                            | None.                                          |
+| `log_subprocess_result`: key `operation` renamed                           | **Real gap.** The bound key `operation=subprocess` is never asserted.                                                                                                           | Assert the full bound data once.               |
+| `log_subprocess_result`: event name `Subprocess output` replaced by `None` | **Real gap.** The debug event name is not asserted. (This event name also breaks the snake_case rule in CLAUDE.md.)                                                             | Assert the name; rename to a snake_case event. |
+| `log_debug`: `**context` dropped                                           | **Real gap.** `log_debug` has fewer tests than its siblings; none passes context.                                                                                               | Add the test.                                  |
+| `log_subprocess_result`: the remaining 14 survivors                        | Same two causes (keys of the bound dictionary and the debug event) as above.                                                                                                    | Covered by the two rows above.                 |
+
+So three real test gaps plus one naming problem, all in thin logging code; the
+parsers are well covered. This is a small sample; it does not say anything
+about `init.py`.
 
 ## 9. Changes for PR 2
 
@@ -92,4 +121,4 @@ MUTATION_RESULTS_PLACEHOLDER
 4. Add the unit test job to `pr.yml` with `fish` installed.
 5. Document the `integration` marker in CLAUDE.md.
 6. Add the property tests of section 6.
-7. Act on surviving mutants from section 8 where a test is clearly missing.
+7. Close the real gaps from section 8 (blank line between parser entries, `log_subprocess_result` keys and event name, `log_debug` context) and rename the `Subprocess output` event to snake_case.
