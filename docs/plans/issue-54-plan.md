@@ -63,13 +63,12 @@ Verified on current main:
 None. Touches `CLAUDE.md`, which #78 (cloud-session note) also edits in a
 different section; trivial merge.
 
+## Decisions (from the owner)
+
+1. **`log_file_operation()`:** remove it in the same PR too (it is also unused and logs a generic event), with its tests and its CLAUDE.md bullet.
+2. **Stale CLAUDE.md logging examples** (module-level imports that do not exist): fix them in this PR.
+3. No external queries select `event=="package_operation"`.
+
 ## Open Questions
 
-1. **`log_file_operation()`:** also unused and also a generic event. Remove it
-   in the same PR (one more bullet and its tests), or leave it for its own
-   ticket?
-2. **Stale CLAUDE.md logging examples** (module-level imports that do not
-   exist): fix in this PR, or separate ticket?
-3. **Existing log queries:** any `jq` queries or dashboards outside the repo
-   that select `event=="package_operation"`? Nothing in the code emits it, so
-   old logs only.
+None open.
