@@ -59,6 +59,12 @@ repos:
         args: [-w]
         language: system
         files: \.(sh|bash)$
+      - id: check-test-assertions
+        name: check-test-assertions
+        entry: python3 .pre-commit-hooks/check-test-assertions.py
+        language: system
+        files: ^tests/test_.*\.py$
+        pass_filenames: true
       - id: forbid-review-markers
         name: forbid-review-markers
         entry: .pre-commit-hooks/forbid-review-markers.sh

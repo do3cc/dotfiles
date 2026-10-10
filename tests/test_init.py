@@ -205,10 +205,6 @@ def test_checkSystemdServiceStatus(
     )
 
 
-def test_install_dependencies(logger, output):
-    pass  # TODO: Implement
-
-
 @pytest.mark.parametrize(
     "os_content,expected_class",
     [
@@ -660,7 +656,7 @@ def test_main_successful_execution(monkeypatch, tmp_path):
     )
 
     # Should succeed (exit code 0 or None)
-    assert result.exit_code == 0 or result.exit_code is None
+    assert result.exit_code == 0
 
     # Verify all steps were called
     mock_os.install_dependencies.assert_called_once()
@@ -728,7 +724,8 @@ def test_main_uses_status_messages_not_persistent_progress(monkeypatch, tmp_path
     )
 
     # Verify the invocation succeeded (no unhandled exceptions)
-    assert result.exception is None or isinstance(result.exception, SystemExit)
+    assert result.exit_code == 0
+    assert result.exception is None
 
     # Verify no persistent progress_context wrapper was used
     assert len(progress_context_calls) == 0, (
@@ -810,6 +807,9 @@ def test_reload_systemd_user_daemon_failure(
     if in_container:
         arch._reload_systemd_user_daemon(mock_logging_helpers, output)
         output.warning.assert_called_once()
+        assert "container" in output.warning.call_args.args[0]
+        mock_logging_helpers.log_exception.assert_called_once()
     else:
         with pytest.raises(subprocess.CalledProcessError):
             arch._reload_systemd_user_daemon(mock_logging_helpers, output)
+        output.warning.assert_not_called()

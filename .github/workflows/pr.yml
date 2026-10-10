@@ -27,3 +27,24 @@ jobs:
         run: |
           uv run dotfiles-init --help > /dev/null
           echo "✅ Help command works"
+
+  unit-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      # tests/test_wt_functions.py and tests/test_git_config.py skip without them
+      - name: Install fish and git
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fish git
+
+      - name: Run unit tests
+        run: uv run --group test pytest -rs

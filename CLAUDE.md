@@ -582,6 +582,16 @@ make test-unit    # uv run --group test pytest
 
 Test dependencies live in the `test` dependency group, which plain `uv sync` does not install. Always use `uv run --group test ...` (or `make test-unit`).
 
+Unit tests run in CI on every pull request (`unit-tests` job in `.github/workflows/pr.yml`, with `fish` and `git` installed so the shell tests do not skip). `-rs` prints the reason of every skipped test.
+
+Rules for tests:
+
+- **Every test must be able to fail.** `.pre-commit-hooks/check-test-assertions.py` (pre-commit hook, and a test in the suite) rejects a `test_*` function without an `assert`, `pytest.raises`/`warns`, `pytest.fail` or a mock assertion. A test that only checks "does not raise" needs `# no-assertion-ok: <reason>` on its `def` line.
+- **Exact assertions.** Do not write assertions that accept success and failure, like `exit_code == 0 or exit_code is None`; click commands exit with the real code (`sys.exit`).
+- **`@pytest.mark.integration`** means: drives a tool's `main()` (or several components) end to end with the OS layer mocked. It is documentation only; CI runs all tests together.
+- **No writes to the real home.** An autouse fixture in `tests/conftest.py` points `HOME` at a temporary directory, so `setup_logging()` without `log_dir` does not append to `~/.cache/dotfiles/logs`.
+- Shared helper for logfmt log lines: `tests/logfmt_helper.py` (`parse_logfmt`).
+
 ### Full Integration Testing
 
 The repository includes comprehensive integration tests using containers:
