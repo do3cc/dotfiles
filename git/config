@@ -62,6 +62,7 @@
 	llf = log -p --follow
 	l = log
 	ll = log -p
+	pushf = push --force-with-lease
 	pp = !"echo 'Pull'; git pull; echo 'Push'; git push"
 	resh1 = reset HEAD^
 	s = !git --no-pager status
@@ -83,6 +84,7 @@
 [push]
 	autoSetupRemote = true
 	followTags = true
+	useForceIfIncludes = true
 
 [pull]
 	rebase = true
