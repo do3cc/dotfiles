@@ -966,7 +966,10 @@ def main(
     """Software Manager Orchestrator - Unified package manager updates"""
 
     # Initialize logging and console output with CLI context
-    logger = setup_logging("swman").bind(
+    if verbose and quiet:
+        raise click.UsageError("--verbose and --quiet cannot be used together")
+
+    logger = setup_logging("swman", verbose=verbose).bind(
         verbose=verbose,
         quiet=quiet,
         dry_run=dry_run,
@@ -978,6 +981,7 @@ def main(
         update_all=update_all,
     )
     output = ConsoleOutput(verbose=verbose, quiet=quiet)
+    output.log_file_hint(logger)
     logger.log_info("swman_started")
 
     if not any([check, system, tools, plugins, update_all]):

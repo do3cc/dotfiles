@@ -354,6 +354,7 @@ There are no generic helpers for file or package operations: bind the context (`
 - **JSON format**: All logs are structured JSON written to `~/.cache/dotfiles/logs/dotfiles.log`
 - **User interaction**: Use `print()` for user-facing messages, logs are for debugging/monitoring
 - **Context binding**: Use `logger = logger.bind(...)` to attach operation-wide context (always reassign)
+- **`--verbose` on every tool**: every command must offer `--verbose` (and `--quiet`; both together is a usage error). All tools log to the same file, switch to debug level with `--verbose`, and print a copy-and-paste command for the log file first thing in verbose mode: `output.log_file_hint(logger)` right after creating `ConsoleOutput` (prints `tail -f <log file> | jq -c .`; the log lines are JSON)
 - **Dependency injection**: Pass the `LoggingHelpers` instance to functions; there is no global logger
 
 ### Event-Based Logging Pattern

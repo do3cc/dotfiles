@@ -85,6 +85,22 @@ class ConsoleOutput:
         if not self.quiet and self.verbose:
             self.console.print(f"{emoji} {message}", style="blue")
 
+    def log_file_hint(self, logger: LoggingHelpers) -> None:
+        """In verbose mode, tell the user where the log is as a copy & paste command.
+
+        The log lines are JSON objects, one per line, hence the jq.
+        """
+        if logger.log_file is None or self.quiet or not self.verbose:
+            return
+        # soft_wrap keeps the command on one line so it can be copied and pasted
+        self.console.print(
+            f"📄 Log file: tail -f {logger.log_file} | jq -c .",
+            style="blue",
+            soft_wrap=True,
+            markup=False,
+            highlight=False,
+        )
+
     def header(self, title: str, emoji: str = "📊") -> None:
         """Display a section header."""
         if not self.quiet:

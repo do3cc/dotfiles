@@ -9,11 +9,11 @@ Provides comprehensive status overview including:
 - Work in progress indicators
 """
 
-import argparse
 import json
-import sys
 from dataclasses import dataclass
 from typing import Any
+
+import click
 
 from .logging_config import LoggingHelpers, setup_logging
 from .output_formatting import ConsoleOutput
@@ -558,38 +558,37 @@ class ProjectStatusChecker:
         return json.dumps(data, indent=2)
 
 
-def main():
-    """Main entry point"""
-    parser = argparse.ArgumentParser(
-        description="Show comprehensive project status including issues, PRs, branches, and worktrees"
-    )
-    parser.add_argument("--json", action="store_true", help="Output in JSON format")
-    parser.add_argument(
-        "--no-github",
-        action="store_true",
-        help="Skip GitHub API calls (issues and PRs)",
-    )
+@click.command()
+@click.option("--json", "json_output", is_flag=True, help="Output in JSON format")
+@click.option(
+    "--no-github",
+    is_flag=True,
+    help="Skip GitHub API calls (issues and PRs)",
+)
+@click.option("--quiet", is_flag=True, help="Suppress non-essential output")
+@click.option("--verbose", is_flag=True, help="Show detailed output")
+def main(json_output: bool, no_github: bool, quiet: bool, verbose: bool) -> None:
+    """Show comprehensive project status including issues, PRs, branches, and worktrees"""
+    if verbose and quiet:
+        raise click.UsageError("--verbose and --quiet cannot be used together")
 
-    args = parser.parse_args()
-
-    logger = setup_logging("project_status")
-    output = ConsoleOutput()
+    logger = setup_logging("project_status", verbose=verbose)
+    output = ConsoleOutput(verbose=verbose, quiet=quiet)
+    output.log_file_hint(logger)
     checker = ProjectStatusChecker()
 
     # Gather all status information
-    issues = [] if args.no_github else checker.get_github_issues(logger, output)
-    prs = [] if args.no_github else checker.get_github_prs(logger, output)
+    issues = [] if no_github else checker.get_github_issues(logger, output)
+    prs = [] if no_github else checker.get_github_prs(logger, output)
     branches = checker.get_local_branches(logger, output)
     worktrees = checker.get_worktrees(logger, output)
 
     # Format and output report
-    format_type = "json" if args.json else "text"
+    format_type = "json" if json_output else "text"
     report = checker.format_status_report(issues, prs, branches, worktrees, format_type)
 
-    print(report)
-
-    return 0
+    click.echo(report)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
