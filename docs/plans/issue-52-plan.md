@@ -57,10 +57,12 @@ first in cloud sessions).
 
 None. #30 (worktree maintenance) was closed.
 
+## Decisions (from the owner)
+
+1. **Types:** fixed list `review feature bugfix experimental`; the directory is created on first use.
+2. **Run from anywhere:** yes, all `wt-*` functions resolve the main worktree root.
+3. **Tests:** yes, pytest runs the fish functions in a temporary git repo (skipped when fish is missing).
+
 ## Open Questions
 
-1. **Types:** fixed list (proposed) or free-form (`mkdir -p` for any name)?
-2. **Run from anywhere (step 3):** in scope, or only fix the missing
-   directories?
-3. **Fish tests via pytest subprocess:** acceptable, or skip tests for
-   shell functions?
+None open.
