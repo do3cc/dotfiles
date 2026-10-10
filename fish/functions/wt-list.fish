@@ -3,13 +3,14 @@ function wt-list --description "Enhanced worktree listing with structure"
     git worktree list
     echo ""
     echo "=== Worktree Structure ==="
-    if test -d .worktrees
+    set -l root (_wt_root)
+    if test -n "$root" -a -d "$root/.worktrees"
         if command -v tree >/dev/null
-            tree .worktrees -L 2
+            tree "$root/.worktrees" -L 2
         else
             # Fallback to ls if tree is not available
             echo ".worktrees/"
-            for type_dir in .worktrees/*
+            for type_dir in "$root"/.worktrees/*
                 if test -d "$type_dir"
                     set type_name (basename "$type_dir")
                     echo "├── $type_name/"

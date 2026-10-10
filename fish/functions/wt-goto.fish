@@ -6,8 +6,19 @@ function wt-goto --description "Quick navigation to worktrees"
         return 1
     end
 
-    set target $argv[1]
-    set found (find .worktrees -name "*$target*" -type d 2>/dev/null | head -1)
+    set -l root (_wt_root)
+    or begin
+        echo "Error: Not in a git repository"
+        return 1
+    end
+
+    if not test -d "$root/.worktrees"
+        echo "No worktrees yet. Create one with: wt-new <type> <name>"
+        return 1
+    end
+
+    set -l target $argv[1]
+    set -l found (find "$root/.worktrees" -name "*$target*" -type d 2>/dev/null | head -1)
 
     if test -n "$found"
         echo "Navigating to: $found"
