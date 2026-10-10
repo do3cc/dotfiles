@@ -362,7 +362,7 @@ def test_arch_should_update_system_recent(tmp_path, monkeypatch):
     marker_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Write timestamp from 1 hour ago
-    recent_time = datetime.now()  # noqa: DTZ005
+    recent_time = datetime.now()
     marker_file.write_text(recent_time.isoformat())
 
     arch = init.Arch(False)
@@ -378,7 +378,7 @@ def test_arch_should_update_system_old(tmp_path, monkeypatch):
     marker_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Write timestamp from 25 hours ago
-    old_time = datetime.now() - timedelta(hours=25)  # noqa: DTZ005
+    old_time = datetime.now() - timedelta(hours=25)
     marker_file.write_text(old_time.isoformat())
 
     arch = init.Arch(False)
@@ -411,7 +411,7 @@ def test_arch_mark_system_updated(tmp_path, monkeypatch, mock_logging_helpers):
     # Verify timestamp is parseable and recent (within last minute)
     timestamp_str = marker_file.read_text().strip()
     timestamp = datetime.fromisoformat(timestamp_str)
-    age_seconds = (datetime.now() - timestamp).total_seconds()  # noqa: DTZ005
+    age_seconds = (datetime.now() - timestamp).total_seconds()
     assert age_seconds < 60  # Should be very recent
 
 
