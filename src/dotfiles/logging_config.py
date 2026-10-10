@@ -6,14 +6,46 @@ Provides structured JSON logging to rotating files with context support.
 Logs go to files only - use output_formatting module for user interaction.
 """
 
+import enum
 import logging
 import os
+import shlex
 import subprocess
+from collections.abc import Sequence
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import structlog
+from structlog.typing import EventDict, WrappedLogger
+
+# The first keys of every log line, in this order; the rest follows as logged
+LOG_KEY_ORDER = ["timestamp", "level", "event", "script", "pid"]
+
+
+def _logfmt_value(key: str, value: object) -> object:
+    """Make a value readable and greppable in logfmt.
+
+    logfmt has no lists, enums or null: lists would show up as quoted Python
+    reprs, enums as ``T.SYSTEM`` and None as an empty value.
+    """
+    if value is None:
+        return "null"
+    if isinstance(value, enum.Enum):
+        return value.value
+    if isinstance(value, (list, tuple)):
+        sequence = cast("Sequence[object]", value)
+        items = [str(_logfmt_value(key, item)) for item in sequence]
+        # shlex.join keeps arguments with spaces unambiguous in a command
+        return shlex.join(items) if key == "command" else ",".join(items)
+    return value
+
+
+def normalize_logfmt_values(
+    _logger: WrappedLogger, _method_name: str, event_dict: EventDict
+) -> EventDict:
+    """structlog processor: apply _logfmt_value to every value."""
+    return {key: _logfmt_value(key, value) for key, value in event_dict.items()}
 
 
 def setup_logging(
@@ -64,7 +96,13 @@ def setup_logging(
             structlog.processors.CallsiteParameterAdder(
                 parameters=[structlog.processors.CallsiteParameter.FILENAME]
             ),
-            structlog.processors.JSONRenderer(),
+            structlog.processors.format_exc_info,
+            normalize_logfmt_values,
+            structlog.processors.LogfmtRenderer(
+                key_order=LOG_KEY_ORDER,
+                sort_keys=False,
+                bool_as_flag=False,
+            ),
         ],
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,

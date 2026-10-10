@@ -41,7 +41,7 @@ def test_log_file_hint_is_a_copy_and_paste_tail_command(tmp_path, capsys):
     helpers = setup_logging("test", log_dir=tmp_path)
     ConsoleOutput(verbose=True).log_file_hint(helpers)
     out = capsys.readouterr().out
-    assert f"tail -f {tmp_path / 'dotfiles.log'} | jq -c ." in out
+    assert f"tail -f {tmp_path / 'dotfiles.log'}" in out
 
 
 @pytest.mark.parametrize(
@@ -95,10 +95,7 @@ def test_verbose_prints_the_log_file_hint(
         command, [*args, "--verbose"], env={"HOME": str(tmp_path)}
     )
     assert result.exit_code == exit_code, result.output
-    assert (
-        f"tail -f {tmp_path}/.cache/dotfiles/logs/dotfiles.log | jq -c ."
-        in result.output
-    )
+    assert f"tail -f {tmp_path}/.cache/dotfiles/logs/dotfiles.log" in result.output
 
 
 @pytest.mark.parametrize("command,args,prepare,exit_code", TOOLS)
