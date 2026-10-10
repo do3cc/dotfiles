@@ -351,10 +351,10 @@ There are no generic helpers for file or package operations: bind the context (`
 
 ### Logging Conventions
 
-- **JSON format**: All logs are structured JSON written to `~/.cache/dotfiles/logs/dotfiles.log`
+- **logfmt format**: All logs are structured logfmt (`key=value` pairs, one line per record, starting with `timestamp level event script pid`) written to `~/.cache/dotfiles/logs/dotfiles.log`. Lists are joined (`command` shell-quoted, other lists comma-separated), enums are written by value, `None` as `null`, booleans as `true`/`false`, multi-line values (tracebacks, command output) stay on one line with `\n` escapes
 - **User interaction**: Use `print()` for user-facing messages, logs are for debugging/monitoring
 - **Context binding**: Use `logger = logger.bind(...)` to attach operation-wide context (always reassign)
-- **`--verbose` on every tool**: every command must offer `--verbose` (and `--quiet`; both together is a usage error). All tools log to the same file, switch to debug level with `--verbose`, and print a copy-and-paste command for the log file first thing in verbose mode: `output.log_file_hint(logger)` right after creating `ConsoleOutput` (prints `tail -f <log file> | jq -c .`; the log lines are JSON)
+- **`--verbose` on every tool**: every command must offer `--verbose` (and `--quiet`; both together is a usage error). All tools log to the same file, switch to debug level with `--verbose`, and print a copy-and-paste command for the log file first thing in verbose mode: `output.log_file_hint(logger)` right after creating `ConsoleOutput` (prints `tail -f <log file>`)
 - **Dependency injection**: Pass the `LoggingHelpers` instance to functions; there is no global logger
 
 ### Event-Based Logging Pattern
@@ -422,7 +422,7 @@ except Exception as e:
 
 **Benefits:**
 
-- **Queryability**: `jq 'select(.event=="update_completed")' < dotfiles.log`
+- **Queryability**: `grep 'event=update_completed' dotfiles.log`
 - **Aggregation**: Count events, measure time between events
 - **Consistency**: Standardized event names across all tools
 - **Analytics**: Track success rates, failure patterns, performance metrics
@@ -431,7 +431,7 @@ except Exception as e:
 
 - **Location**: `~/.cache/dotfiles/logs/dotfiles.log`
 - **Rotation**: Automatic via Python's RotatingFileHandler (10MB, 5 backups)
-- **Format**: JSON with timestamp, log level, message, context, and metadata
+- **Format**: logfmt with timestamp, log level, event, context, and metadata. Log files written before the switch (#48) contain JSON lines until they rotate out
 
 ### Enhanced Logging Examples
 

@@ -1,6 +1,9 @@
 """Tests for logging_config.py - structured logging with LoggingHelpers."""
 
 # pyright: reportMissingImports=false
+import enum
+import json
+import re
 import subprocess
 
 import pytest
@@ -14,6 +17,17 @@ from dotfiles import logging_config
 def logger(unwrapped_logger):
     """LoggingHelpers instance (matches production usage where logger = setup_logging(...))."""
     return logging_config.LoggingHelpers(unwrapped_logger)
+
+
+_LOGFMT_PAIR = re.compile(r'(\w+)=("(?:[^"\\]|\\.)*"|\S*)')
+
+
+def parse_logfmt(line: str) -> dict[str, str]:
+    """Parse one logfmt line into a dict of strings (quoted values are unescaped)."""
+    entry: dict[str, str] = {}
+    for key, raw in _LOGFMT_PAIR.findall(line):
+        entry[key] = json.loads(raw) if raw.startswith('"') else raw
+    return entry
 
 
 # ==============================================================================
@@ -46,8 +60,6 @@ def test_setup_logging_returns_logging_helpers(temp_home):
 
 def test_setup_logging_binds_script_name(temp_home):
     """setup_logging() should bind script name to logger context."""
-    import json
-
     log_dir = temp_home / "logs"
     logger = logging_config.setup_logging("my_script", log_dir=log_dir)
 
@@ -55,13 +67,12 @@ def test_setup_logging_binds_script_name(temp_home):
 
     log_file = log_dir / "dotfiles.log"
     with open(log_file) as f:
-        log_entry = json.loads(f.readline())
+        log_entry = parse_logfmt(f.readline())
         assert log_entry["script"] == "my_script"
 
 
 def test_setup_logging_binds_pid(temp_home):
     """setup_logging() should bind process ID to logger context."""
-    import json
     import os
 
     log_dir = temp_home / "logs"
@@ -71,8 +82,8 @@ def test_setup_logging_binds_pid(temp_home):
 
     log_file = log_dir / "dotfiles.log"
     with open(log_file) as f:
-        log_entry = json.loads(f.readline())
-        assert log_entry["pid"] == os.getpid()
+        log_entry = parse_logfmt(f.readline())
+        assert log_entry["pid"] == str(os.getpid())
 
 
 def test_setup_logging_with_custom_log_dir(temp_home):
@@ -492,8 +503,6 @@ def test_log_exception_with_additional_context(logger, unwrapped_logger):
 @pytest.mark.integration
 def test_full_logging_workflow(temp_home):
     """Test complete logging workflow from setup to logging."""
-    import json
-
     log_dir = temp_home / "logs"
     logger = logging_config.setup_logging("integration_test", log_dir=log_dir)
 
@@ -513,13 +522,13 @@ def test_full_logging_workflow(temp_home):
         assert len(lines) == 4
 
         # Check first log entry
-        entry1 = json.loads(lines[0])
+        entry1 = parse_logfmt(lines[0])
         assert entry1["event"] == "startup"
         assert entry1["version"] == "1.0"
         assert entry1["script"] == "integration_test"
 
         # Check bound context appears in subsequent logs
-        entry2 = json.loads(lines[1])
+        entry2 = parse_logfmt(lines[1])
         assert entry2["event"] == "user_action"
         assert entry2["user"] == "alice"
         assert entry2["session"] == "123"
@@ -600,3 +609,85 @@ def test_log_methods_with_various_event_names(logger, unwrapped_logger, event_na
     logger.log_info(event_name)
     # Should be callable without error
     assert unwrapped_logger.info.called
+
+
+# ==============================================================================
+# logfmt output (#48)
+# ==============================================================================
+
+
+class _Kind(enum.Enum):
+    SYSTEM = "system"
+
+
+def _log_one(temp_home, **context):
+    """Log one info event with a real logger and return the parsed line."""
+    log_dir = temp_home / "logs"
+    logger = logging_config.setup_logging("logfmt_test", log_dir=log_dir)
+    logger.log_info("the_event", **context)
+    return parse_logfmt((log_dir / "dotfiles.log").read_text().splitlines()[0])
+
+
+def test_logfmt_line_starts_with_timestamp_level_event_script_pid(temp_home):
+    log_dir = temp_home / "logs"
+    logger = logging_config.setup_logging("order_test", log_dir=log_dir)
+    logger.log_info("the_event", zzz=1)
+
+    line = (log_dir / "dotfiles.log").read_text().splitlines()[0]
+    keys = re.findall(r"(?:^| )(\w+)=", line)
+    assert keys[:5] == ["timestamp", "level", "event", "script", "pid"]
+    assert not line.startswith("{")
+
+
+def test_logfmt_joins_command_with_shell_quoting_and_lists_with_commas(temp_home):
+    entry = _log_one(
+        temp_home,
+        command=["sudo", "pacman", "-S", "name with space"],
+        packages=["git", "vim"],
+    )
+    assert entry["command"] == "sudo pacman -S 'name with space'"
+    assert entry["packages"] == "git,vim"
+
+
+def test_logfmt_renders_enum_by_value(temp_home):
+    assert _log_one(temp_home, manager_type=_Kind.SYSTEM)["manager_type"] == "system"
+
+
+def test_logfmt_renders_none_as_null_not_as_empty(temp_home):
+    entry = _log_one(temp_home, nothing=None, empty="")
+    assert entry["nothing"] == "null"
+    assert entry["empty"] == ""
+
+
+def test_logfmt_booleans_are_key_value_pairs_for_true_and_false(temp_home):
+    entry = _log_one(temp_home, yes=True, no=False)
+    assert entry["yes"] == "true"
+    assert entry["no"] == "false"
+
+
+def test_logfmt_keeps_long_multiline_values_complete_on_one_line(temp_home):
+    value = "NAME=Arch\nID=arch\n" + "x" * 5000
+    log_dir = temp_home / "logs"
+    logger = logging_config.setup_logging("long_test", log_dir=log_dir)
+    logger.log_info("the_event", release_data=value)
+
+    lines = (log_dir / "dotfiles.log").read_text().splitlines()
+    assert len(lines) == 1
+    assert parse_logfmt(lines[0])["release_data"] == value
+
+
+def test_log_exception_records_the_real_traceback(temp_home):
+    log_dir = temp_home / "logs"
+    logger = logging_config.setup_logging("exc_test", log_dir=log_dir)
+    try:
+        raise ValueError("boom")
+    except ValueError as error:
+        logger.log_exception(error, "failing", x=2)
+
+    lines = (log_dir / "dotfiles.log").read_text().splitlines()
+    assert len(lines) == 1
+    entry = parse_logfmt(lines[0])
+    assert entry["event"] == "exception_occurred"
+    assert entry["context"] == "failing"
+    assert "Traceback (most recent call last)" in entry["exception"]
+    assert "ValueError: boom" in entry["exception"]

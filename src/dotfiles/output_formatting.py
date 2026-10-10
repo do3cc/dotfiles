@@ -88,13 +88,13 @@ class ConsoleOutput:
     def log_file_hint(self, logger: LoggingHelpers) -> None:
         """In verbose mode, tell the user where the log is as a copy & paste command.
 
-        The log lines are JSON objects, one per line, hence the jq.
+        The log is logfmt, one line per record, so plain tail is enough.
         """
         if logger.log_file is None or self.quiet or not self.verbose:
             return
         # soft_wrap keeps the command on one line so it can be copied and pasted
         self.console.print(
-            f"📄 Log file: tail -f {logger.log_file} | jq -c .",
+            f"📄 Log file: tail -f {logger.log_file}",
             style="blue",
             soft_wrap=True,
             markup=False,
