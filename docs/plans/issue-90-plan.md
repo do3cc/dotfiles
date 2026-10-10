@@ -43,11 +43,10 @@ pre-commit on the two files.
 
 None. Independent of the other open PRs (#87, #88, #89 touch other lines).
 
+## Decisions (from the owner)
+
+1. Remove the 5 `# noqa: DTZ005` directives; ruff 0.16.x is considered outdated.
+
 ## Open Questions
 
-1. **Remove the directives (proposed) or keep them for older ruff?** After the
-   change, ruff 0.16.x reports `DTZ005` for these 5 lines. Alternatives: an
-   explicit `[tool.ruff.lint]` config (contradicts the "use defaults" decision
-   on #77), or making the timestamps timezone-aware (needs a marker-file
-   format migration, not worth it). Proposed: remove the directives and accept
-   that 0.16.x is outdated, as `dotfiles-swman` keeps ruff current.
+None open.
