@@ -44,8 +44,11 @@ behaviour change for users.
 
 Same file as #77, #76, #33; do #77 first so the `noqa` comments land once.
 
+## Decisions (from the owner)
+
+1. **`update_all()`:** delete it (unused and redundant).
+2. **Event names:** `update_check_failed` for `check_all`, `unexpected_exception` for `update_by_type`.
+
 ## Open Questions
 
-1. Delete `update_all()` (proposed) or keep it and add logging?
-2. Event names: `update_check_failed` and `unexpected_exception`, or
-   something else?
+None open.
