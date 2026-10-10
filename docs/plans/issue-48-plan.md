@@ -73,20 +73,14 @@ forced exception to see the traceback line.
 
 #46 / PR #91 (merged). No conflicts expected with open work.
 
+## Decisions (from the owner)
+
+1. **List values:** joined: `command` with `shlex.join`, other lists comma-joined.
+2. **Long values:** kept complete, no truncation.
+3. **Tracebacks:** add `format_exc_info`, so `log_exception` records the real traceback.
+4. **Hint and docs:** plain `tail -f <path>` and a `grep 'event=...'` example.
+5. **Existing JSON lines:** left in place, the file is mixed until rotation.
+
 ## Open Questions
 
-1. **List values** (`command`, `packages`): keep the Python repr in quotes
-   (default, zero code), or join them (`command="sudo pacman -Syu"`,
-   `packages=git,vim`) with a small processor? Proposed: join, `shlex.join` for
-   `command`, comma for the rest.
-2. **Very long values** (the whole `os-release`, command `stdout`/`stderr`):
-   keep as they are (proposed), or truncate at a limit such as 2000 characters
-   with a `...[truncated]` marker?
-3. **Tracebacks:** add `format_exc_info` so `log_exception` records the real
-   traceback in an `exception` key (proposed). Today only the exception's repr
-   is logged.
-4. **Hint and docs wording:** `tail -f <path>` and a `grep event=...` example
-   instead of the `jq` ones (proposed). OK?
-5. **Existing JSON lines** in `~/.cache/dotfiles/logs/dotfiles.log`: leave them
-   (the file is mixed until the 10 MB rotation), or rename the old file once to
-   `dotfiles.log.json` on the first logfmt write?
+None open.
