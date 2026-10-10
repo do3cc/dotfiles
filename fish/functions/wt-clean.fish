@@ -4,7 +4,8 @@ function wt-clean --description "Cleanup merged and stale worktrees"
 
     echo ""
     echo "Current worktrees (excluding main):"
-    git worktree list | grep -v "main"
+    # The first entry is the main worktree
+    git worktree list | tail -n +2
 
     echo ""
     echo "To remove a worktree: git worktree remove <path>"

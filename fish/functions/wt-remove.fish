@@ -6,8 +6,19 @@ function wt-remove --description "Safely remove a worktree after checking for un
         return 1
     end
 
-    set target $argv[1]
-    set found (find .worktrees -name "*$target*" -type d 2>/dev/null | head -1)
+    set -l root (_wt_root)
+    or begin
+        echo "Error: Not in a git repository"
+        return 1
+    end
+
+    if not test -d "$root/.worktrees"
+        echo "No worktrees yet. Create one with: wt-new <type> <name>"
+        return 1
+    end
+
+    set -l target $argv[1]
+    set -l found (find "$root/.worktrees" -name "*$target*" -type d 2>/dev/null | head -1)
 
     if test -z "$found"
         echo "Worktree matching '$target' not found"
@@ -18,21 +29,15 @@ function wt-remove --description "Safely remove a worktree after checking for un
     echo "Checking worktree: $found"
 
     # Check for uncommitted changes
-    set -l original_pwd (pwd)
-    cd "$found"
-
-    if git status --porcelain | grep -q .
+    if git -C "$found" status --porcelain | grep -q .
         echo "⚠️  Warning: Worktree has uncommitted changes:"
-        git status --short
+        git -C "$found" status --short
         echo ""
         echo "Please commit or stash changes before removing:"
         echo "  git add . && git commit -m \"Save work before removing worktree\""
         echo "  git stash push -m \"Work in progress\""
-        cd "$original_pwd"
         return 1
     end
-
-    cd "$original_pwd"
 
     echo "Removing clean worktree: $found"
     git worktree remove "$found"
