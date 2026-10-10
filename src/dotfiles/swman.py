@@ -844,7 +844,7 @@ class SoftwareManagerOrchestrator:
             try:
                 results[manager.name] = manager.check_updates(logger, output)
             except Exception as e:  # noqa: BLE001  # one failing manager must not abort the others
-                logger.log_exception(e, "Error checking for updates")
+                logger.log_exception(e, "update_check_failed")
                 results[manager.name] = (False, 0)
         return results
 
@@ -865,7 +865,7 @@ class SoftwareManagerOrchestrator:
                     results.append(result)
                     logger = logger.bind(results=results)
                 except Exception as e:  # noqa: BLE001  # one failing manager must not abort the others
-                    logger.log_exception(e, "Unexpected exception")
+                    logger.log_exception(e, "unexpected_exception")
                     results.append(
                         UpdateResult(
                             name=manager.name,
@@ -874,27 +874,6 @@ class SoftwareManagerOrchestrator:
                             duration=0.0,
                         )
                     )
-        return results
-
-    def update_all(
-        self, logger: LoggingHelpers, output: ConsoleOutput, dry_run: bool = False
-    ) -> list[UpdateResult]:
-        """Update all available managers."""
-        results: list[UpdateResult] = []
-        for manager in self.get_available_managers(logger, output):
-            logger = logger.bind(manager=manager.name)
-            try:
-                result = manager.update(logger=logger, output=output, dry_run=dry_run)
-                results.append(result)
-            except Exception as e:  # noqa: BLE001  # one failing manager must not abort the others
-                results.append(
-                    UpdateResult(
-                        name=manager.name,
-                        status=UpdateStatus.FAILED,
-                        message=f"Unexpected error: {e}",
-                        duration=0.0,
-                    )
-                )
         return results
 
 

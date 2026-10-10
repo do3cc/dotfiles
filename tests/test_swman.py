@@ -479,3 +479,56 @@ def test_check_lists_the_packages_too():
     assert out.exit_code == 0
     assert "git" in out.output and "2.43.0" in out.output
     assert "Updates available: 1 packages across 1 managers" in out.output
+
+
+# Orchestrator error handling (#80)
+def _orchestrator_with(*managers):
+    orchestrator = swman.SoftwareManagerOrchestrator()
+    orchestrator.managers = list(managers)
+    return orchestrator
+
+
+def _mock_manager(name, manager_type=swman.ManagerType.SYSTEM):
+    manager = Mock()
+    manager.name = name
+    manager.type = manager_type
+    manager.is_available.return_value = True
+    return manager
+
+
+def test_check_all_logs_and_continues_when_a_manager_raises():
+    broken = _mock_manager("broken")
+    broken.check_updates.side_effect = RuntimeError("boom")
+    working = _mock_manager("working")
+    working.check_updates.return_value = (True, 2)
+    logger, output = _logger_and_output()
+
+    results = _orchestrator_with(broken, working).check_all(logger, output)
+
+    assert results == {"broken": (False, 0), "working": (True, 2)}
+    logger.log_exception.assert_called_once()
+    assert logger.log_exception.call_args.args[1] == "update_check_failed"
+
+
+def test_update_by_type_logs_and_continues_when_a_manager_raises():
+    broken = _mock_manager("broken")
+    broken.update.side_effect = RuntimeError("boom")
+    ok_result = UpdateResult("working", UpdateStatus.SUCCESS, "ok", 0.0)
+    working = _mock_manager("working")
+    working.update.return_value = ok_result
+    logger, output = _logger_and_output()
+
+    results = _orchestrator_with(broken, working).update_by_type(
+        swman.ManagerType.SYSTEM, logger, output
+    )
+
+    assert [r.name for r in results] == ["broken", "working"]
+    assert results[0].status == UpdateStatus.FAILED
+    assert "boom" in results[0].message
+    assert results[1] is ok_result
+    logger.log_exception.assert_called_once()
+    assert logger.log_exception.call_args.args[1] == "unexpected_exception"
+
+
+def test_orchestrator_has_no_unused_update_all():
+    assert not hasattr(swman.SoftwareManagerOrchestrator, "update_all")
