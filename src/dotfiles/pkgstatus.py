@@ -545,7 +545,10 @@ def main(
     For more information, see the README or run 'dotfiles-swman --help'
     """
     # Initialize logging and console output with CLI context
-    logger = setup_logging("pkgstatus").bind(
+    if verbose and quiet:
+        raise click.UsageError("--verbose and --quiet cannot be used together")
+
+    logger = setup_logging("pkgstatus", verbose=verbose).bind(
         verbose=verbose,
         quiet=quiet,
         json_output=json_output,
@@ -554,6 +557,7 @@ def main(
         cached_only=cached_only,
     )
     output = ConsoleOutput(verbose=verbose, quiet=quiet)
+    output.log_file_hint(logger)
     logger.log_info("pkgstatus_started")
 
     try:

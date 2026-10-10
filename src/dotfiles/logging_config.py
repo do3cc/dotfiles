@@ -16,12 +16,15 @@ from typing import Any
 import structlog
 
 
-def setup_logging(script_name: str, log_dir: Path | None = None) -> "LoggingHelpers":
+def setup_logging(
+    script_name: str, verbose: bool = False, log_dir: Path | None = None
+) -> "LoggingHelpers":
     """
     Configure structured logging and return ready-to-use LoggingHelpers instance.
 
     Args:
         script_name: Name of the script (e.g., "init", "swman", "pkgstatus")
+        verbose: Log at debug level instead of info level
         log_dir: Directory for the log file (default: ~/.cache/dotfiles/logs)
 
     Returns:
@@ -49,7 +52,7 @@ def setup_logging(script_name: str, log_dir: Path | None = None) -> "LoggingHelp
             )
         ],
         format="%(message)s",
-        level=logging.INFO,
+        level=logging.DEBUG if verbose else logging.INFO,
     )
 
     # Configure structlog
@@ -73,7 +76,7 @@ def setup_logging(script_name: str, log_dir: Path | None = None) -> "LoggingHelp
     logger = logger.bind(script=script_name, pid=os.getpid())
 
     # Return LoggingHelpers instance instead of raw logger
-    return LoggingHelpers(logger)
+    return LoggingHelpers(logger, log_file)
 
 
 class LoggingHelpers:
@@ -84,12 +87,14 @@ class LoggingHelpers:
     """
 
     logger: structlog.BoundLogger
+    log_file: Path | None
 
-    def __init__(self, logger: structlog.BoundLogger):
+    def __init__(self, logger: structlog.BoundLogger, log_file: Path | None = None):
         self.logger = logger
+        self.log_file = log_file
 
     def bind(self, **kwargs: object) -> "LoggingHelpers":
-        return LoggingHelpers(self.logger.bind(**kwargs))
+        return LoggingHelpers(self.logger.bind(**kwargs), self.log_file)
 
     def log_error(self, message: str, **context: object) -> None:
         """Log error with context."""

@@ -353,6 +353,7 @@ The logging system provides comprehensive abstractions for production debugging:
 - **Context binding**: Use `bind_context()` to set operation-wide context variables
 - **Unused variables**: Use `log_unused_variables(logger, **vars)` to capture variables that would otherwise trigger linter warnings
 - **Global logger**: All abstractions automatically use the global logger set by `setup_logging()`
+- **`--verbose` on every tool**: every command must offer `--verbose` (and `--quiet`; both together is a usage error). All tools log to the same file, switch to debug level with `--verbose`, and print a copy-and-paste command for the log file first thing in verbose mode: `output.log_file_hint(logger)` right after creating `ConsoleOutput` (prints `tail -f <log file> | jq -c .`; the log lines are JSON)
 
 ### Event-Based Logging Pattern
 

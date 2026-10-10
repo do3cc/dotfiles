@@ -1095,7 +1095,7 @@ class Arch(Linux):
 
         try:
             last_update = datetime.fromisoformat(marker_file.read_text().strip())
-            age = datetime.now() - last_update  # noqa: DTZ005
+            age = datetime.now() - last_update
             return age.total_seconds() > 86400  # 24 hours
         except (ValueError, OSError):
             return True
@@ -1104,7 +1104,7 @@ class Arch(Linux):
         """Mark system as updated with current timestamp"""
         marker_file = Path.home() / ".cache" / "dotfiles_last_update"
         marker_file.parent.mkdir(exist_ok=True)
-        timestamp = datetime.now().isoformat()  # noqa: DTZ005
+        timestamp = datetime.now().isoformat()
         marker_file.write_text(timestamp)
         logger.log_info("Updated timestamp set", timestamp=timestamp)
 
@@ -2042,10 +2042,14 @@ def main(no_remote: bool, quiet: bool, verbose: bool, clear_cache: bool):
       dotfiles-init --verbose
     """
     # Initialize logging and console output
-    logger = setup_logging("init").bind(
+    if verbose and quiet:
+        raise click.UsageError("--verbose and --quiet cannot be used together")
+
+    logger = setup_logging("init", verbose=verbose).bind(
         verbose=verbose, quiet=quiet, no_remote_mode=no_remote, clear_cache=clear_cache
     )
     output = ConsoleOutput(verbose=verbose, quiet=quiet)
+    output.log_file_hint(logger)
 
     logger.log_info("init_script_started")
 
