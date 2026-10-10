@@ -60,11 +60,13 @@ file. Add this as a rule to CLAUDE.md.
 
 - Blocks #48. Touches the tool mains, like #76; do #76 first.
 
+## Decisions (from the owner)
+
+1. **`dotfiles-status`:** convert it to Click, in the same PR.
+2. **Tail hint format:** the log lines are always JSON (`structlog` `JSONRenderer` in `setup_logging`), so the hint is `tail -f <path> | jq -c .`.
+3. **`--verbose` together with `--quiet`:** error out (Click usage error).
+4. **Scope of debug logging:** the ticket is primarily about telling the user where the log file is. Verbose sets the log level to DEBUG as the ticket says, but no broad new debug logging is added. This supersedes step 4 of the approach (no new `log_debug` calls now).
+
 ## Open Questions
 
-1. **Convert `dotfiles-status` to Click?** CLAUDE.md says all tools use Click
-   and Rich; this one uses `argparse`. Converting is cleaner but bigger.
-   Proposed: convert, in the same PR.
-2. **Tail hint format:** plain `tail -f path` or with `| jq -c .`?
-3. **`--verbose` with `--quiet`:** error out, or quiet wins?
-4. **How much debug logging** to add now (process helper only, or broader)?
+None open.
