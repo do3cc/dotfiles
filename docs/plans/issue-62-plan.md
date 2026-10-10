@@ -60,10 +60,11 @@ keys. `uvx pre-commit run --files git/config`.
   trivial merge; if both are open, merge whichever is ready first and merge
   main into the other.
 
+## Decisions (from the owner)
+
+1. Plain `git push --force` is not discouraged; the plan only adds the safer path.
+2. `pushf` is not mentioned in README or CLAUDE.md.
+
 ## Open Questions
 
-1. Should plain `git push --force` also be discouraged (for example an alias
-   or a documented habit)? Git has no config switch to forbid `--force`; the
-   plan only adds the safer path.
-2. Should `README`/`CLAUDE.md` mention `pushf`? Proposed: no, the alias
-   list is not documented elsewhere.
+None open.
