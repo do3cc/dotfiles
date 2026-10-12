@@ -42,24 +42,34 @@ def test_successful_command_execution(mock_logging_helpers, mock_output):
         mock_run.assert_called_once()
 
 
-def test_binds_context_before_execution(mock_logging_helpers, mock_output):
-    """Should bind command context to logger before execution."""
+def test_command_starting_record_carries_the_command_context(tmp_path):
+    """The log record written before running has description, command and timeout."""
+    from logfmt_helper import parse_logfmt
+
+    from dotfiles.logging_config import setup_logging
+
+    logger = setup_logging("test", log_dir=tmp_path)
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = subprocess.CompletedProcess(
             args=["test"], returncode=0, stdout="", stderr=""
         )
 
         process_helper.run_command_with_error_handling(
-            ["test", "arg"],
-            mock_logging_helpers,
-            mock_output,
+            ["test", "arg with space"],
+            logger,
+            MagicMock(),
             description="Test command",
             timeout=60,
         )
 
-        mock_logging_helpers.bind.assert_called_once_with(
-            description="Test command", command=["test", "arg"], timeout=60
-        )
+    records = [
+        parse_logfmt(line)
+        for line in (tmp_path / "dotfiles.log").read_text().splitlines()
+    ]
+    starting = next(r for r in records if r["event"] == "command_starting")
+    assert starting["description"] == "Test command"
+    assert starting["command"] == "test 'arg with space'"
+    assert starting["timeout"] == "60"
 
 
 def test_logs_command_starting(mock_logging_helpers, mock_output):

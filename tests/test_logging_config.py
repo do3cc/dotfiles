@@ -2,13 +2,13 @@
 
 # pyright: reportMissingImports=false
 import enum
-import json
 import re
 import subprocess
 
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
+from logfmt_helper import parse_logfmt
 
 from dotfiles import logging_config
 
@@ -17,17 +17,6 @@ from dotfiles import logging_config
 def logger(unwrapped_logger):
     """LoggingHelpers instance (matches production usage where logger = setup_logging(...))."""
     return logging_config.LoggingHelpers(unwrapped_logger)
-
-
-_LOGFMT_PAIR = re.compile(r'(\w+)=("(?:[^"\\]|\\.)*"|\S*)')
-
-
-def parse_logfmt(line: str) -> dict[str, str]:
-    """Parse one logfmt line into a dict of strings (quoted values are unescaped)."""
-    entry: dict[str, str] = {}
-    for key, raw in _LOGFMT_PAIR.findall(line):
-        entry[key] = json.loads(raw) if raw.startswith('"') else raw
-    return entry
 
 
 # ==============================================================================
@@ -461,19 +450,18 @@ def test_log_exception_logs_error_with_exc_info(logger, unwrapped_logger):
 
 def test_log_exception_with_nested_exception(logger, unwrapped_logger):
     """log_exception() should handle nested exceptions."""
-    try:
+    with pytest.raises(RuntimeError) as excinfo:
         try:
             raise ValueError("inner error")
         except ValueError as inner:
             raise RuntimeError("outer error") from inner
-    except RuntimeError as outer:
-        logger.log_exception(outer, "nested exception occurred")
 
-        unwrapped_logger.error.assert_called_once()
-        call_args = unwrapped_logger.error.call_args
-        assert call_args.args[0] == "exception_occurred"
-        assert call_args.kwargs["context"] == "nested exception occurred"
-        assert call_args.kwargs["exc_info"] == outer
+    logger.log_exception(excinfo.value, "nested exception occurred")
+
+    unwrapped_logger.error.assert_called_once()
+    call_args = unwrapped_logger.error.call_args
+    assert call_args.args[0] == "exception_occurred"
+    assert call_args.kwargs["context"] == "nested exception occurred"
 
 
 def test_log_exception_with_additional_context(logger, unwrapped_logger):
@@ -493,6 +481,55 @@ def test_log_exception_with_additional_context(logger, unwrapped_logger):
         filename="config.yaml",
         attempt=3,
     )
+
+
+# Mutation-testing gaps (#84): the bound keys, the debug event name, log_debug
+
+
+def test_log_subprocess_result_binds_the_full_context(logger, unwrapped_logger):
+    result = subprocess.CompletedProcess(
+        args=["git", "status"], returncode=3, stdout="", stderr="boom"
+    )
+
+    logger.log_subprocess_result(
+        "Check git status", ["git", "status"], result, attempt=2
+    )
+
+    unwrapped_logger.bind.assert_called_once_with(
+        operation="subprocess",
+        description="Check git status",
+        command=["git", "status"],
+        returncode=3,
+        attempt=2,
+    )
+
+
+def test_log_subprocess_result_logs_the_output_as_a_snake_case_debug_event(
+    logger, unwrapped_logger
+):
+    result = subprocess.CompletedProcess(
+        args=["echo"], returncode=0, stdout="out\n", stderr="err\n"
+    )
+
+    logger.log_subprocess_result("Echo", ["echo"], result)
+
+    debug_logger = unwrapped_logger.bind.return_value.bind.return_value
+    debug_logger.debug.assert_called_once_with("subprocess_output")
+    unwrapped_logger.bind.return_value.bind.assert_called_once_with(
+        stdout="out", stderr="err"
+    )
+
+
+def test_log_debug_forwards_the_message_and_context(logger, unwrapped_logger):
+    logger.log_debug("debug_event", answer=42)
+
+    unwrapped_logger.debug.assert_called_once_with("debug_event", answer=42)
+
+
+def test_log_debug_without_context(logger, unwrapped_logger):
+    logger.log_debug("debug_event")
+
+    unwrapped_logger.debug.assert_called_once_with("debug_event")
 
 
 # ==============================================================================
@@ -691,3 +728,13 @@ def test_log_exception_records_the_real_traceback(temp_home):
     assert entry["context"] == "failing"
     assert "Traceback (most recent call last)" in entry["exception"]
     assert "ValueError: boom" in entry["exception"]
+
+
+# Property tests for the logfmt value normaliser (#48, #84)
+@given(items=st.lists(st.text(max_size=12), max_size=6))
+def test_logfmt_lists_are_joined_and_commands_survive_shell_splitting(items):
+    import shlex
+
+    assert logging_config._logfmt_value("packages", items) == ",".join(items)
+    command = str(logging_config._logfmt_value("command", items))
+    assert shlex.split(command) == items
