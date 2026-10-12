@@ -30,7 +30,7 @@ dev = [
 test = [
     "faker>=37.11.0",
     "hypothesis>=6.140.3",
-    "pytest>=8.4.2",
+    "pytest>=9.0.3",
     "pytest-cov>=7.0.0",
 ]
 
