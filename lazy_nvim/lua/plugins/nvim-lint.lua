@@ -10,8 +10,11 @@ return {
       opts.linters_by_ft.markdown = { "markdownlint-cli2" }
       opts.linters_by_ft["markdown.mdx"] = { "markdownlint-cli2" }
 
-      -- Empfohlen: keine args überschreiben, damit --stdin/--stdin-filepath erhalten bleiben
-      -- markdownlint-cli2 findet die ~/.markdownlint-cli2.jsonc selbst beim Aufsteigen im Verzeichnisbaum.
+      -- Global config (MD013 off) via --config, which overrides any project config.
+      -- Keep "-" so the buffer is still read from stdin.
+      local config = vim.fn.stdpath("config") .. "/markdownlint-cli2.jsonc"
+      require("lint").linters["markdownlint-cli2"].args = { "--config", config, "-" }
+
       return opts
     end,
   },
